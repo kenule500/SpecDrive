@@ -1,0 +1,7 @@
+{
+  "name": "example-plugin",
+  "version": "1.0.0",
+  "type": "validator",
+  "entry": "index.js",
+  "description": "Example custom validator plugin"
+}

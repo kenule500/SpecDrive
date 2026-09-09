@@ -1,0 +1,20 @@
+{
+  "members": [
+    {
+      "username": "alice",
+      "role": "admin"
+    },
+    {
+      "username": "bob",
+      "role": "developer"
+    },
+    {
+      "username": "carol",
+      "role": "reviewer"
+    }
+  ],
+  "rules": {
+    "approval_required": ["admin", "reviewer"],
+    "implementation_allowed": ["developer", "admin"]
+  }
+}

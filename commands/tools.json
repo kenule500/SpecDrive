@@ -1,0 +1,20 @@
+{
+  "version": "1.0.0",
+  "tools": [
+    { "name": "github-copilot", "adapterPath": ".github/copilot-instructions.md" },
+    { "name": "cline", "adapterPath": ".clinerules/sdrive.md" },
+    { "name": "claude-code", "adapterPath": ".claude/commands/sdrive.md" },
+    { "name": "cursor", "adapterPath": ".cursor/rules/sdrive.md" },
+    { "name": "vscode-native", "adapterPath": ".vscode/sdrive-commands.json" },
+    { "name": "amazon-q", "adapterPath": ".amazonq/rules/sdrive.md" },
+    { "name": "gemini-cli", "adapterPath": ".gemini/commands/sdrive.md" },
+    { "name": "continue", "adapterPath": ".continue/rules/sdrive.md" },
+    { "name": "codex", "adapterPath": ".codex/rules/sdrive.md" },
+    { "name": "windsurf", "adapterPath": ".windsurf/rules/sdrive.md" },
+    { "name": "kilo-code", "adapterPath": ".kilocode/rules/sdrive.md" },
+    { "name": "opencode", "adapterPath": ".opencode/rules/sdrive.md" },
+    { "name": "qoder", "adapterPath": ".qoder/rules/sdrive.md" },
+    { "name": "qwen-code", "adapterPath": ".qwen/rules/sdrive.md" },
+    { "name": "rovo-dev", "adapterPath": ".rovo/rules/sdrive.md" }
+  ]
+}
