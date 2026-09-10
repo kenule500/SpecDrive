@@ -18,6 +18,9 @@
           "currentStep": {
             "enum": ["specification", "planning", "implementation", "review"]
           },
+          "branch": {
+            "type": "string"
+          },
           "gates": {
             "type": "object",
             "properties": {
@@ -49,6 +52,9 @@
                 "event": {
                   "type": "string",
                   "minLength": 3
+                },
+                "by": {
+                  "type": "string"
                 },
                 "timestamp": {
                   "type": "string",

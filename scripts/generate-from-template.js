@@ -3,6 +3,30 @@ const path = require("path");
 
 const projectRoot = process.cwd();
 
+function loadRegistry() {
+  const registryPath = path.join(projectRoot, ".sdrive", "templates", "registry.json");
+
+  if (!fs.existsSync(registryPath)) {
+    console.error("❌ registry.json not found.");
+    process.exit(1);
+  }
+
+  return JSON.parse(fs.readFileSync(registryPath, "utf8")).templates;
+}
+
+function templateExists(templateName) {
+  const registry = loadRegistry();
+  return registry.some((t) => t.name === templateName || t.path === templateName);
+}
+
+function listTemplates() {
+  const registry = loadRegistry();
+  console.log("\nAvailable SpecDrive Templates\n");
+  registry.forEach((t) => {
+    console.log(`  ${t.name} — ${t.description}`);
+  });
+}
+
 function loadTemplate(templateName, fileName) {
   const templatePath = path.join(projectRoot, ".sdrive", "templates", templateName, fileName);
   return fs.readFileSync(templatePath, "utf8");
@@ -22,6 +46,7 @@ function generate(templateName, featureName, variables) {
 
   if (!fs.existsSync(templateDir)) {
     console.error(`❌ Template "${templateName}" not found.`);
+    listTemplates();
     process.exit(1);
   }
 
@@ -59,10 +84,12 @@ const flowDescription = process.argv[8] || "";
 
 if (!templateName || !featureName) {
   console.error("❌ Usage: node generate-from-template.js <template> <feature> [problem] [solution] [audience] [approach] [flow]");
+  listTemplates();
   process.exit(1);
 }
 
 generate(templateName, featureName, {
+  title: featureName,
   problemStatement,
   proposedSolution,
   targetAudience,

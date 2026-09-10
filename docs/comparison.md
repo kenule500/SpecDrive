@@ -14,6 +14,14 @@
 | Deterministic validator | ❌ | ❌ | ✅ |
 | Plugin system | ❌ | ❌ | ✅ |
 | Team collaboration | ❌ | ❌ | ✅ |
+| Template packs | ❌ | ⚠️ | ✅ |
+| Pre-commit hook | ❌ | ⚠️ | ✅ |
+| Migration tool | ❌ | ❌ | ✅ |
+| Diff view | ❌ | ❌ | ✅ |
+| OpenAPI generation | ❌ | ⚠️ | ✅ |
+| GitHub team sync | ❌ | ❌ | ✅ |
+| MCP server | ❌ | ❌ | ✅ |
+| Web dashboard | ❌ | ❌ | ✅ |
 | Tool-agnostic | ⚠️ | ⚠️ | ✅ |
 | CI/CD integration | ⚠️ | ⚠️ | ✅ |
 | Framework-agnostic | ✅ | ⚠️ | ✅ |
@@ -28,5 +36,8 @@ SpecDrive is the only system that combines:
 - Full traceability
 - Enterprise governance
 - Security and performance agents
+- Team collaboration
+- MCP integration
+- Web dashboard
 
 This makes it the safest choice for enterprise AI-assisted development.

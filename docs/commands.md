@@ -1,3 +1,6 @@
+---
+
+```markdown
 # SpecDrive Command Reference
 
 SpecDrive has two types of commands:
@@ -20,6 +23,14 @@ SpecDrive has two types of commands:
 | `sdrive team:remove <username>` | Remove a team member |
 | `sdrive team:list` | List all team members |
 | `sdrive team:update <username> <role>` | Update a member's role |
+| `sdrive team:sync` | Sync team members from GitHub collaborators |
+| `sdrive template:list` | List available templates |
+| `sdrive template:set <name>` | Set default template |
+| `sdrive hooks:install` | Install pre-commit validation hook |
+| `sdrive migrate` | Migrate specs from OpenSpec or Spec-Kit |
+| `sdrive diff <old> <new>` | Show differences between two spec files |
+| `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
+| `sdrive dashboard` | Start local web dashboard |
 
 ---
 
@@ -37,6 +48,7 @@ Creates:
 - `workflow-state.json`
 - `constitution.md`
 - Tool adapters
+- MCP server and config
 
 ---
 
@@ -119,6 +131,98 @@ sdrive team:update carol reviewer
 
 ---
 
+### `sdrive team:sync`
+
+Syncs team members from GitHub collaborators.
+
+```bash
+sdrive team:sync
+```
+
+Requires GitHub CLI (`gh`) and a GitHub remote.
+
+---
+
+### `sdrive template:list`
+
+Lists all available templates.
+
+```bash
+sdrive template:list
+```
+
+---
+
+### `sdrive template:set <name>`
+
+Changes the default template.
+
+```bash
+sdrive template:set nextjs
+```
+
+---
+
+### `sdrive hooks:install`
+
+Installs a pre-commit hook that runs governance validation.
+
+```bash
+sdrive hooks:install
+```
+
+---
+
+### `sdrive migrate`
+
+Migrates existing specs from OpenSpec or Spec-Kit.
+
+```bash
+sdrive migrate
+```
+
+---
+
+### `sdrive diff <old> <new>`
+
+Compares two spec files and shows differences.
+
+```bash
+sdrive diff spec-v1.md spec-v2.md
+```
+
+---
+
+### `sdrive openapi:generate <feature>`
+
+Generates OpenAPI 3.0 spec from `plan.json`.
+
+```bash
+sdrive openapi:generate user-login
+```
+
+Output saved to `.sdrive/governance/<feature>/openapi.json`.
+
+---
+
+### `sdrive dashboard`
+
+Starts a local web dashboard on port `4747`.
+
+```bash
+sdrive dashboard
+```
+
+Open `http://localhost:4747` to view:
+
+- Features and branches
+- Gates and approvals
+- Traceability coverage
+- Team members
+- Recent activity
+
+---
+
 ## Slash Commands
 
 | Command | Agent | Purpose |
@@ -182,3 +286,7 @@ Approve a gate with:
 sdrive approve <gate>
 ```
 ```
+
+---
+
+This is the full updated command reference with all commands.

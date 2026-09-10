@@ -1,3 +1,14 @@
+---
+
+Here is the final `quickstart.md` with MCP, dashboard, and all commands referenced.
+
+Save as:
+
+```text
+.sdrive/docs/quickstart.md
+```
+
+---
 
 ```markdown
 # SpecDrive Quickstart
@@ -22,9 +33,18 @@ Inside your project root:
 sdrive init
 ```
 
-SpecDrive will ask you to select which AI tools you use.
+SpecDrive will ask you to:
 
-Choose the tools you want to generate adapters for.
+1. Select which AI tools you use
+2. Select a default template
+3. Wire MCP clients (optional)
+
+It then creates:
+
+- `.sdrive/` folder structure
+- Tool adapters for selected tools
+- MCP server
+- Default config
 
 ---
 
@@ -110,6 +130,18 @@ Docs outdated?
 /sdrive:docs
 ```
 
+Generate OpenAPI:
+
+```bash
+sdrive openapi:generate user-login
+```
+
+View dashboard:
+
+```bash
+sdrive dashboard
+```
+
 ---
 
 ## Commands Reference
@@ -118,3 +150,5 @@ See [commands.md](commands.md) for all commands.
 ```
 
 ---
+
+This is the final `quickstart.md`.

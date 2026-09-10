@@ -1,1 +1,33 @@
-{ "features": [] }
+{
+  "features": [
+    {
+      "name": "user-login",
+      "phase": "ongoing",
+      "currentStep": "implementation",
+      "branch": "feat/user-login",
+      "gates": {
+        "specification": "approved",
+        "planning": "approved",
+        "implementation": "in_progress",
+        "review": "pending"
+      },
+      "history": [
+        {
+          "event": "feature_created",
+          "by": "alice",
+          "timestamp": "2026-09-10T09:30:00Z"
+        },
+        {
+          "event": "specification_approved",
+          "by": "alice",
+          "timestamp": "2026-09-10T10:00:00Z"
+        },
+        {
+          "event": "planning_approved",
+          "by": "carol",
+          "timestamp": "2026-09-10T10:15:00Z"
+        }
+      ]
+    }
+  ]
+}

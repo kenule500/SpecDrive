@@ -1,3 +1,4 @@
+---
 
 ```markdown
 # SpecDrive
@@ -29,10 +30,13 @@ It adds:
 - [Optional Commands](#optional-commands)
 - [Terminal Commands](#terminal-commands)
 - [Agents](#agents)
+- [Templates](#templates)
 - [Directory Structure](#directory-structure)
 - [Validation](#validation)
 - [CI/CD Integration](#cicd-integration)
+- [MCP Server](#mcp-server)
 - [Tool Support](#tool-support)
+- [Web Dashboard](#web-dashboard)
 - [Team Collaboration](#team-collaboration)
 - [Contributing](#contributing)
 - [License](#license)
@@ -348,6 +352,13 @@ Audits and manages AI skills.
 | `sdrive team:remove <username>` | Remove a team member |
 | `sdrive team:list` | List all team members |
 | `sdrive team:update <username> <role>` | Update a member's role |
+| `sdrive template:list` | List available templates |
+| `sdrive template:set <name>` | Set default template |
+| `sdrive hooks:install` | Install pre-commit validation hook |
+| `sdrive migrate` | Migrate specs from OpenSpec or Spec-Kit |
+| `sdrive diff <old> <new>` | Show differences between two spec files |
+| `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
+| `sdrive team:sync` | Sync team members from GitHub collaborators |
 
 ---
 
@@ -368,6 +379,30 @@ Audits and manages AI skills.
 
 ---
 
+## Templates
+
+SpecDrive includes starter templates for common stacks.
+
+| Template | Stack |
+|----------|-------|
+| `generic` | Any project |
+| `react-node` | React + Node |
+| `nextjs` | Next.js |
+| `expo` | Expo / React Native |
+| `fastapi` | Python FastAPI |
+| `turborepo` | Turborepo monorepo |
+
+The default template is stored in `.sdrive/config.json`.
+
+Manage templates:
+
+```bash
+sdrive template:list
+sdrive template:set nextjs
+```
+
+---
+
 ## Directory Structure
 
 ```text
@@ -380,10 +415,13 @@ Audits and manages AI skills.
 │   ├── ongoing/
 │   └── completed/
 ├── governance/           # Machine-readable JSON
+├── mcp/                  # MCP server for AI chat integration
 ├── prototype/            # UI/UX prototypes
 ├── reports/              # Security, performance, docs reports
 ├── context/              # Discovered project context
+├── dashboard/            # Local web dashboard
 ├── skills/               # AI skills
+├── templates/            # Starter templates
 ├── constitution.md       # Governance source of truth
 └── workflow-state.json   # Feature lifecycle state
 ```
@@ -401,6 +439,41 @@ sdrive validate
 This checks all governance JSON against the schemas.
 
 If anything is invalid, it reports exact errors.
+
+---
+
+### `sdrive openapi:generate <feature>`
+
+Generates an OpenAPI 3.0 specification from the API contracts in `plan.json`.
+
+Useful for importing into Postman, Swagger UI, or client generators.
+
+```bash
+sdrive openapi:generate user-login
+
+### Pre-commit Hook
+
+Automatically validate governance files before every commit:
+
+```bash
+sdrive hooks:install
+```
+
+### `sdrive migrate`
+
+Migrates existing specs from OpenSpec or Spec-Kit into SpecDrive.
+
+```bash
+sdrive migrate
+```
+
+### `sdrive diff <old> <new>`
+
+Compares two spec files and shows differences.
+
+```bash
+sdrive diff spec-v1.md spec-v2.md
+```
 
 ---
 
@@ -437,6 +510,67 @@ jobs:
         run: node .sdrive/scripts/validate-governance.js
 ```
 
+
+## MCP Server
+
+SpecDrive ships with an MCP server so AI tools can call SpecDrive directly from chat.
+
+You can ask in plain language:
+
+```text
+Show me all features
+Is the governance valid?
+Get the traceability for user-login
+```
+
+The AI tool calls SpecDrive automatically through MCP.
+
+### Setup
+
+`sdrive init` creates the MCP server at:
+
+```text
+.sdrive/mcp/server.js
+```
+
+It also asks which MCP clients to wire. Supported:
+
+| Client | Config Path |
+|--------|-------------|
+| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Cursor | `.cursor/mcp.json` |
+| Cline | `.cline/mcp.json` |
+| VS Code | `.vscode/mcp.json` |
+
+SpecDrive never overwrites existing MCP entries. It merges safely.
+
+### Manual Config
+
+If you prefer to wire it yourself, add to your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "specdrive": {
+      "command": "node",
+      "args": [".sdrive/mcp/server.js"]
+    }
+  }
+}
+```
+
+### Available MCP Methods
+
+| Method | Purpose |
+|--------|---------|
+| `specdrive.list_features` | List all features |
+| `specdrive.get_feature` | Get details for a feature |
+| `specdrive.get_spec` | Get `spec.json` for a feature |
+| `specdrive.get_traceability` | Get traceability matrix |
+| `specdrive.validate` | Run governance validator |
+| `specdrive.status` | Get status summary |
+
 ---
 
 ## Tool Support
@@ -467,6 +601,39 @@ During initialization, you select which tools you use. Only selected tools get a
 
 ---
 
+## Web Dashboard
+
+SpecDrive includes a local web dashboard for visual inspection of your specs, features, and team.
+
+### Start the Dashboard
+
+```bash
+sdrive dashboard
+```
+
+Then open:
+
+```text
+http://localhost:4747
+```
+
+### What It Shows
+
+- All features and their phase
+- Branch name for each feature
+- Gate status (spec, plan, implementation, review)
+- Who approved each gate
+- Traceability coverage per feature
+- Team members and roles
+- Recent audit activity
+
+### Notes
+
+- The dashboard runs locally on port `4747`
+- It reads directly from `.sdrive/`
+- No data leaves your machine
+---
+
 ## Team Collaboration
 
 SpecDrive supports team roles.
@@ -486,6 +653,30 @@ sdrive team:update bob reviewer
 sdrive team:remove carol
 ```
 
+### Sync from GitHub
+
+Automatically pull collaborators from your GitHub repository:
+
+```bash
+sdrive team:sync
+```
+
+Requires:
+
+- Git repo with GitHub remote
+- GitHub CLI (`gh`) installed and authenticated
+
+Roles are auto-assigned:
+
+- GitHub admins → `admin`
+- Others → `developer`
+
+Reviewer roles must be assigned manually:
+
+```bash
+sdrive team:update <username> reviewer
+```
+
 ---
 
 ## Contributing
@@ -503,4 +694,4 @@ MIT
 
 ---
 
-This README is now clean and correct.
+This README is now clean, correct, and ready to publish.

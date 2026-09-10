@@ -46,6 +46,7 @@ SpecDrive uses 10 specialized agents. Each agent has one slash command.
 
 - Accepts natural feature description
 - Generates feature name
+- Uses default template from `.sdrive/config.json`
 - Creates spec, plan, tasks, traceability
 - Runs anti-redundancy check
 - Two approval gates
@@ -121,6 +122,7 @@ SpecDrive uses 10 specialized agents. Each agent has one slash command.
 - Asks about base branch and feature branch
 - Implements tasks with tests
 - Commits and pushes
+- Records branch name in workflow state
 
 ---
 

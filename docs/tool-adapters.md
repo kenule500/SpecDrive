@@ -1,6 +1,6 @@
 # SpecDrive Tool Adapter Reference
 
-SpecDrive works with multiple AI coding tools through adapters.
+SpecDrive works with multiple AI coding tools through adapters and MCP.
 
 ---
 
@@ -9,6 +9,7 @@ SpecDrive works with multiple AI coding tools through adapters.
 1. SpecDrive core lives in `.sdrive/`
 2. Each tool gets a small adapter file
 3. The adapter tells the tool how to use `/sdrive:*` commands
+4. Tools that support MCP can also call SpecDrive directly
 
 ---
 
@@ -63,11 +64,65 @@ Only selected tools get adapters.
 
 ---
 
+## MCP Server
+
+For tools that support Model Context Protocol (MCP), SpecDrive also runs an MCP server.
+
+This allows AI tools to call SpecDrive directly from chat.
+
+Example:
+
+```text
+Show me all features
+Is the governance valid?
+Get the traceability for user-login
+```
+
+No slash commands needed.
+
+---
+
+## MCP Setup
+
+`sdrive init` creates:
+
+```text
+.sdrive/mcp/server.js
+.sdrive/mcp/mcp.json
+```
+
+It also asks which MCP clients to wire.
+
+Supported:
+
+| Client | Config Path |
+|--------|-------------|
+| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Cursor | `.cursor/mcp.json` |
+| Cline | `.cline/mcp.json` |
+| VS Code | `.vscode/mcp.json` |
+
+---
+
+## MCP Methods
+
+| Method | Purpose |
+|--------|---------|
+| `specdrive.list_features` | List all features |
+| `specdrive.get_feature` | Get details for a feature |
+| `specdrive.get_spec` | Get `spec.json` for a feature |
+| `specdrive.get_traceability` | Get traceability matrix |
+| `specdrive.validate` | Run governance validator |
+| `specdrive.status` | Get status summary |
+
+---
+
 ## Safety Rule
 
-SpecDrive never overwrites existing files in `.github/`.
+SpecDrive never overwrites existing MCP entries.
 
-If a file exists, the generator skips it.
+If SpecDrive is already in the config, it is skipped.
 
 ---
 
