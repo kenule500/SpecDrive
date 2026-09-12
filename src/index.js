@@ -805,4 +805,66 @@ program
     }
   });
 
+  program
+  .command("reopen <feature>")
+  .description("Reopen a completed feature")
+  .action((feature) => {
+    const projectRoot = process.cwd();
+    const sdriveRoot = path.join(projectRoot, ".sdrive");
+
+    const completedSpecDir = path.join(sdriveRoot, "specs", "completed", feature);
+    const ongoingSpecDir = path.join(sdriveRoot, "specs", "ongoing", feature);
+
+    const completedGovDir = path.join(sdriveRoot, "governance", "completed", feature);
+    const ongoingGovDir = path.join(sdriveRoot, "governance", feature);
+
+    // Move spec folder
+    if (fs.existsSync(completedSpecDir)) {
+      fs.mkdirSync(path.dirname(ongoingSpecDir), { recursive: true });
+      fs.renameSync(completedSpecDir, ongoingSpecDir);
+      console.log(`✅ Moved spec: completed/${feature} → ongoing/${feature}`);
+    } else if (!fs.existsSync(ongoingSpecDir)) {
+      console.error(`❌ Feature "${feature}" not found in completed/ or ongoing/.`);
+      process.exit(1);
+    }
+
+    // Move governance folder if it uses lifecycle subfolders
+    if (fs.existsSync(completedGovDir)) {
+      fs.mkdirSync(path.dirname(ongoingGovDir), { recursive: true });
+      fs.renameSync(completedGovDir, ongoingGovDir);
+      console.log(`✅ Moved governance: completed/${feature} → ${feature}`);
+    }
+
+    // Update workflow state
+    const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
+
+    if (!fs.existsSync(workflowStatePath)) {
+      console.error("❌ workflow-state.json not found.");
+      process.exit(1);
+    }
+
+    const state = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
+    const target = state.features?.find((f) => f.name === feature);
+
+    if (!target) {
+      console.error(`❌ Feature "${feature}" not found in workflow-state.json.`);
+      process.exit(1);
+    }
+
+    target.phase = "ongoing";
+    target.currentStep = "specification";
+    target.gates.review = "pending";
+
+    target.history = target.history || [];
+    target.history.push({
+      event: "feature_reopened",
+      timestamp: new Date().toISOString()
+    });
+
+    fs.writeFileSync(workflowStatePath, JSON.stringify(state, null, 2));
+
+    console.log(`✅ Feature "${feature}" reopened.`);
+    console.log("   Review gate reset to pending.");
+  });
+
 program.parse(process.argv);

@@ -359,6 +359,7 @@ Audits and manages AI skills.
 | `sdrive diff <old> <new>` | Show differences between two spec files |
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
 | `sdrive team:sync` | Sync team members from GitHub collaborators |
+| `sdrive reopen <feature>` | Reopen a completed feature |
 
 ---
 
