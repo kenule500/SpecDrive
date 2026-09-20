@@ -32,6 +32,7 @@ SpecDrive uses 10 specialized agents. Each agent has one slash command.
 - Discovers project stack, standards, and architecture
 - Creates context files under `.sdrive/context/`
 - Merges rules into `.sdrive/constitution.md`
+- Runs `sdrive verify <feature>` for active features when source rules change
 - Requires human approval
 
 ---
@@ -79,6 +80,7 @@ SpecDrive uses 10 specialized agents. Each agent has one slash command.
 - Detects changes in higher-level files
 - Updates downstream files
 - Preserves IDs and task status
+- Runs `sdrive verify <feature>` after sync to confirm code still matches
 
 ---
 
@@ -121,6 +123,7 @@ SpecDrive uses 10 specialized agents. Each agent has one slash command.
 - Reads approved tasks
 - Asks about base branch and feature branch
 - Implements tasks with tests
+- Runs `sdrive verify <feature>` before declaring completion
 - Commits and pushes
 - Records branch name in workflow state
 
@@ -148,6 +151,7 @@ SpecDrive uses 10 specialized agents. Each agent has one slash command.
 
 **What it does:**
 
+- Requires `sdrive verify <feature>` to return `pass` or `warn` before merging
 - Audits code against spec
 - Requires human merge approval
 - Archives completed feature

@@ -9,6 +9,27 @@ function gateClass(status) {
   return "gate pending";
 }
 
+function renderVerification(feature, verification) {
+  const div = document.createElement("div");
+  div.className = "traceability";
+
+  if (verification.status === "pass") {
+    div.innerHTML = `🔍 Verification: <strong>PASS</strong> (${verification.summary?.matched ?? 0} matched)`;
+    div.style.color = "#2b6b25";
+  } else if (verification.status === "warn") {
+    div.innerHTML = `🔍 Verification: <strong>WARN</strong> (${verification.summary?.extra ?? 0} extra, ${verification.summary?.matched ?? 0} matched)`;
+    div.style.color = "#7a5b1a";
+  } else if (verification.status === "fail") {
+    div.innerHTML = `🔍 Verification: <strong>FAIL</strong> (${verification.summary?.missing ?? 0} missing, ${verification.summary?.renamed ?? 0} renamed)`;
+    div.style.color = "#8a1c1c";
+  } else {
+    div.innerHTML = `🔍 Verification: <strong>NOT RUN</strong>`;
+    div.style.color = "#666";
+  }
+
+  return div;
+}
+
 async function renderFeatures() {
   const state = await fetchJson("/api/workflow-state");
   const container = document.getElementById("feature-list");
@@ -22,6 +43,8 @@ async function renderFeatures() {
 
   for (const f of state.features) {
     const traceability = await fetchJson(`/api/traceability/${f.name}`);
+    const verification = await fetchJson(`/api/verification/${f.name}`);
+
     const rows = traceability.rows || [];
     const completed = rows.filter((r) => r.status === "complete").length;
     const coverage = rows.length === 0 ? 0 : Math.round((completed / rows.length) * 100);
@@ -40,6 +63,8 @@ async function renderFeatures() {
       </div>
       <div class="traceability">📊 Traceability Coverage: ${coverage}% (${completed}/${rows.length})</div>
     `;
+
+    div.appendChild(renderVerification(f.name, verification));
 
     if (f.history) {
       f.history.forEach((h) => {

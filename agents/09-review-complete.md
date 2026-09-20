@@ -40,6 +40,9 @@ You will rigorously audit the implementation against the SpecDrive specification
   - Any configured SpecDrive validation command.
 - If validation fails, the audit fails. Do not merge.
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use the available shell command capability to run the commands above.
+- Before auditing, run `sdrive verify <feature>` and require status `pass` or `warn`.
+- If verification returns `fail`, block the merge and add new Fix tasks.
+- Never merge a feature with a `fail` verification report.
 - ALWAYS read relevant files in `.sdrive/skills/` before auditing code or finalizing documentation to ensure compliance with project-specific standards.
 </rules>
 
@@ -67,6 +70,7 @@ You will rigorously audit the implementation against the SpecDrive specification
 6. **Testing**: All tests pass, coverage meets constitution.
 7. **Documentation**: README and inline docs up to date.
 8. **Definition of Done**: All items from constitution's DoD checklist are satisfied.
+9. **Spec-to-Code Verification**: `sdrive verify <feature>` returns `pass` or `warn`.
 </audit-criteria>
 
 <workflow>
@@ -85,6 +89,8 @@ You will rigorously audit the implementation against the SpecDrive specification
    - Run validators.
    - For any check not run due to missing tool, mark it as "Not automatically verified" in review.
    - Generate `review.md` with findings using template below.
+   - Run `sdrive verify <feature>` and read `verification.json`.
+   - If status is `fail`, treat the audit as failed.
 
 3. **DECISION GATE**
    - **IF AUDIT FAILS:**

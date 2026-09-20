@@ -34,6 +34,8 @@ You ensure that when a higher-level document is updated, all lower-level documen
   - Any configured SpecDrive validation command.
 - If validation fails, fix before proceeding.
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use the available shell command capability to run the commands above.
+- After syncing plan or tasks, run `sdrive verify <feature>` to confirm code still aligns with the updated plan.
+- If verification fails, report the diff and stop. Do not continue silently.
 - ALWAYS read relevant files in `.sdrive/skills/` before writing code or generating documentation to ensure compliance with project-specific standards.
 </rules>
 

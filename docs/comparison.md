@@ -26,6 +26,7 @@
 | CI/CD integration | ⚠️ | ⚠️ | ✅ |
 | Framework-agnostic | ✅ | ⚠️ | ✅ |
 | Anti-hallucination controls | ❌ | ❌ | ✅ |
+| Spec-to-code verification | ❌ | ❌ | ✅ |
 
 ## Summary
 

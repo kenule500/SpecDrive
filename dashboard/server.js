@@ -33,6 +33,11 @@ function apiTraceability(name) {
   return loadJson(tracePath, { rows: [] });
 }
 
+function apiVerification(name) {
+  const verificationPath = path.join(sdriveRoot, "governance", name, "verification.json");
+  return loadJson(verificationPath, { status: "not_run", summary: {}, items: {} });
+}
+
 function serveStatic(res, filePath, contentType) {
   if (!fs.existsSync(filePath)) {
     res.writeHead(404);
@@ -65,6 +70,11 @@ const server = http.createServer((req, res) => {
     if (url.startsWith("/api/traceability/")) {
       const name = url.replace("/api/traceability/", "");
       return res.end(JSON.stringify(apiTraceability(name)));
+    }
+
+    if (url.startsWith("/api/verification/")) {
+      const name = url.replace("/api/verification/", "");
+      return res.end(JSON.stringify(apiVerification(name)));
     }
 
     res.writeHead(404);

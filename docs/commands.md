@@ -32,6 +32,7 @@ SpecDrive has two types of commands:
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
 | `sdrive dashboard` | Start local web dashboard |
 | `sdrive reopen <feature>` | Reopen a completed feature |
+| `sdrive verify <feature>` | Verify code matches plan.json |
 
 ---
 

@@ -1,15 +1,5 @@
 ---
 
-Here is the final `quickstart.md` with MCP, dashboard, and all commands referenced.
-
-Save as:
-
-```text
-.sdrive/docs/quickstart.md
-```
-
----
-
 ```markdown
 # SpecDrive Quickstart
 
@@ -25,7 +15,7 @@ npm install -g specdrive-cli@latest
 
 ---
 
-## 2. Initialize Your Project
+## 2. Initialize Your Projectss
 
 Inside your project root:
 
@@ -86,6 +76,14 @@ The agent asks:
 
 Approve and let it work.
 
+After tasks are complete, the agent runs:
+
+```bash
+sdrive verify user-login
+```
+
+This checks that code matches the plan.
+
 ---
 
 ## 6. Review and Merge
@@ -94,13 +92,15 @@ Approve and let it work.
 /sdrive:review
 ```
 
+Review also runs verification before allowing merge.
+
 Approve the final merge.
 
 ---
 
 ## Done
 
-Your first feature is now spec-driven, traceable, and governed.
+Your first feature is now spec-driven, traceable, verified, and governed.
 
 ---
 
@@ -136,6 +136,12 @@ Generate OpenAPI:
 sdrive openapi:generate user-login
 ```
 
+Verify code manually:
+
+```bash
+sdrive verify user-login
+```
+
 View dashboard:
 
 ```bash
@@ -151,4 +157,8 @@ See [commands.md](commands.md) for all commands.
 
 ---
 
-This is the final `quickstart.md`.
+Save as:
+
+```text
+.sdrive/docs/quickstart.md
+```

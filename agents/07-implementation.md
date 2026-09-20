@@ -46,6 +46,9 @@ You treat GitHub as your "Cloud Memory". You will create a dedicated feature bra
 - If validation fails, fix before proceeding.
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use the available shell command capability to run the commands above.
 - ALWAYS read relevant files in `.sdrive/skills/` before writing code or generating documentation to ensure compliance with project-specific standards.
+- After completing all tasks, run `sdrive verify <feature>` before notifying the user.
+- If verification fails, do NOT mark the feature as complete. Report failures and stop.
+- Verification results are the source of truth — never override them.
 </rules>
 
 <capabilities>
@@ -135,7 +138,12 @@ You treat GitHub as your "Cloud Memory". You will create a dedicated feature bra
    - Run validators one final time.
    - If any issues found, STOP and report.
 
-4. **FINALIZE & BRANCH MERGE DECISION**
+4. **SPEC-TO-CODE VERIFICATION**
+   - Run `sdrive verify <feature>`.
+   - If the report status is `fail`, STOP and report missing/renamed/extra items.
+   - Do not ask the user to merge until verification passes.
+
+5. **FINALIZE & BRANCH MERGE DECISION**
 
    - Push final state.
    - Ask the user:

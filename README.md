@@ -37,6 +37,7 @@ It adds:
 - [MCP Server](#mcp-server)
 - [Tool Support](#tool-support)
 - [Web Dashboard](#web-dashboard)
+- [Spec-to-Code Verification](#spec-to-code-verification)
 - [Team Collaboration](#team-collaboration)
 - [Contributing](#contributing)
 - [License](#license)
@@ -360,6 +361,7 @@ Audits and manages AI skills.
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
 | `sdrive team:sync` | Sync team members from GitHub collaborators |
 | `sdrive reopen <feature>` | Reopen a completed feature |
+| `sdrive verify <feature>` | Verify code matches plan.json |
 
 ---
 
@@ -634,6 +636,59 @@ http://localhost:4747
 - It reads directly from `.sdrive/`
 - No data leaves your machine
 ---
+
+## Spec-to-Code Verification
+
+SpecDrive includes a deterministic validator that compares `plan.json` against actual code.
+
+It detects:
+
+- Missing implementation
+- Renamed components, functions, endpoints, fields
+- Extra code not in the plan
+- Dependencies not installed
+
+### Run Verification
+
+```bash
+sdrive verify user-login
+```
+
+### Where It Runs
+
+- After `/sdrive:apply`
+- Before `/sdrive:review`
+- On every `git commit` (if hooks installed)
+- In CI on every PR
+
+### Report
+
+Results saved to:
+
+```text
+.sdrive/governance/<feature>/verification.json
+```
+
+Status can be:
+
+| Status | Meaning |
+|--------|---------|
+| `pass` | Everything matches |
+| `warn` | Extra code detected |
+| `fail` | Missing or renamed code detected |
+
+### Source Roots
+
+SpecDrive reads source folders from the constitution.
+
+If no source root is defined, it scans common folders:
+
+- `src`, `app`, `lib`, `pages`, `server`, `internal`, `cmd`, `pkg`, `api`, `apps`, `packages`
+
+### Dashboard
+
+Verification status appears on the SpecDrive dashboard per feature.
+
 
 ## Team Collaboration
 

@@ -125,7 +125,8 @@ Create or update the following structure:
    - Write or update `.sdrive/constitution.md`.
    - Increment version and update Changelog.
    - Run secret scan.
-   - Optionally run `node .github/scripts/validate-governance.js`.
+   - Run `node .sdrive/scripts/validate-governance.js`.
+   - If any active features exist, run `sdrive verify <feature>` for each and report results.
 
 8. **REPORT**
    - Summarize changes.
@@ -165,6 +166,7 @@ This document is the single source of truth for all project standards, rules, an
 
 ## 6. Git Workflow & Process (CON-6xx)
 - **CON-601:** [Rule text] <!-- source: .sdrive/context/ai-workflow-rules.md -->
+- CON-XXX: No feature may be marked complete unless `sdrive verify <feature>` returns `pass` or `warn`.
 
 ## 7. AI Agent Rules (CON-7xx)
 - **CON-701:** [Rule text] <!-- source: .sdrive/context/ai-workflow-rules.md -->
