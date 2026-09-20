@@ -207,6 +207,38 @@ Output saved to `.sdrive/governance/<feature>/openapi.json`.
 
 ---
 
+
+### `sdrive verify <feature>`
+
+Verifies that code matches the plan.
+
+```bash
+sdrive verify user-login
+```
+
+Detects:
+
+- Missing implementation
+- Renamed components, functions, endpoints, fields
+- Extra code not in the plan
+- Dependencies not installed
+
+Writes a report to:
+
+```text
+.sdrive/governance/<feature>/verification.json
+```
+
+Returns exit code `1` if verification fails.
+
+Status values:
+
+| Status | Meaning |
+|--------|---------|
+| `pass` | Everything matches |
+| `warn` | Extra code detected |
+| `fail` | Missing or renamed code detected |
+
 ### `sdrive dashboard`
 
 Starts a local web dashboard on port `4747`.
