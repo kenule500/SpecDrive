@@ -14,6 +14,71 @@ program
   .description("SpecDrive Enterprise Spec-Driven Development CLI")
   .version("0.1.0");
 
+function copyRecursive(src, dest) {
+  if (!fs.existsSync(src)) return;
+
+  fs.mkdirSync(dest, { recursive: true });
+
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      copyRecursive(srcPath, destPath);
+    } else {
+      if (!fs.existsSync(destPath)) {
+        fs.copyFileSync(srcPath, destPath);
+      }
+    }
+  }
+}
+
+function requirePermission(cliCommand) {
+  const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "check-permission.js");
+
+  if (!fs.existsSync(scriptPath)) return;
+
+  try {
+    execSync(`node "${scriptPath}" cli "${cliCommand}"`, { stdio: "pipe" });
+  } catch (error) {
+    console.error(`❌ Permission denied for 'sdrive ${cliCommand}'.`);
+    if (error.stdout) console.error(error.stdout.toString());
+    if (error.stderr) console.error(error.stderr.toString());
+    process.exit(1);
+  }
+}
+
+function loadConfig() {
+  const configPath = path.join(process.cwd(), ".sdrive", "config.json");
+  const schemaPath = path.join(process.cwd(), ".sdrive", "schemas", "config.schema.json");
+
+  if (!fs.existsSync(configPath)) {
+    console.error("❌ config.json not found. Run `sdrive init` first.");
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(schemaPath)) {
+    console.error("❌ config.schema.json not found. Run `sdrive init` first.");
+    process.exit(1);
+  }
+
+  const Ajv = require("ajv");
+  const ajv = new Ajv({ allErrors: true });
+
+  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
+  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+
+  const valid = ajv.validate(schema, config);
+
+  if (!valid) {
+    console.error("❌ config.json is invalid:");
+    console.error(ajv.errors);
+    process.exit(1);
+  }
+
+  return config;
+}
+
 function adapterContent(toolName) {
   return `# SpecDrive Commands
 
@@ -31,89 +96,6 @@ When the user types a /sdrive:* command, follow these steps:
 6. Stop at human approval gates
 
 Always read the manifest first. Never hardcode the command list.
-`;
-}
-
-function mcpServerContent() {
-  return `#!/usr/bin/env node
-
-const fs = require("fs");
-const path = require("path");
-
-const projectRoot = process.cwd();
-
-function loadWorkflowState() {
-  const statePath = path.join(projectRoot, ".sdrive", "workflow-state.json");
-  if (!fs.existsSync(statePath)) return { features: [] };
-  return JSON.parse(fs.readFileSync(statePath, "utf8"));
-}
-
-function listFeatures() {
-  return loadWorkflowState().features || [];
-}
-
-function getFeature(name) {
-  return listFeatures().find((f) => f.name === name);
-}
-
-function getSpec(name) {
-  const specPath = path.join(projectRoot, ".sdrive", "governance", name, "spec.json");
-  if (!fs.existsSync(specPath)) return null;
-  return JSON.parse(fs.readFileSync(specPath, "utf8"));
-}
-
-function getTraceability(name) {
-  const tracePath = path.join(projectRoot, ".sdrive", "governance", name, "traceability.json");
-  if (!fs.existsSync(tracePath)) return null;
-  return JSON.parse(fs.readFileSync(tracePath, "utf8"));
-}
-
-function runValidator() {
-  const { execSync } = require("child_process");
-  const validatorPath = path.join(projectRoot, ".sdrive", "scripts", "validate-governance.js");
-  try {
-    execSync(\`node "\${validatorPath}"\`, { stdio: "pipe" });
-    return { success: true };
-  } catch (error) {
-    return { success: false, message: error.message };
-  }
-}
-
-const handlers = {
-  "specdrive.list_features": () => ({ features: listFeatures() }),
-  "specdrive.get_feature": ({ name }) => ({ feature: getFeature(name) }),
-  "specdrive.get_spec": ({ name }) => ({ spec: getSpec(name) }),
-  "specdrive.get_traceability": ({ name }) => ({ traceability: getTraceability(name) }),
-  "specdrive.validate": () => runValidator(),
-  "specdrive.status": () => {
-    const features = listFeatures();
-    return {
-      count: features.length,
-      features: features.map((f) => ({
-        name: f.name,
-        phase: f.phase,
-        currentStep: f.currentStep
-      }))
-    };
-  }
-};
-
-const input = process.argv[2] ? JSON.parse(process.argv[2]) : null;
-
-if (!input) {
-  console.error("❌ Usage: node server.js '{\\"method\\": \\"specdrive.list_features\\"}'");
-  process.exit(1);
-}
-
-const handler = handlers[input.method];
-
-if (!handler) {
-  console.error(\`❌ Unknown MCP method: \${input.method}\`);
-  process.exit(1);
-}
-
-const result = handler(input.params || {});
-console.log(JSON.stringify(result, null, 2));
 `;
 }
 
@@ -211,6 +193,10 @@ program
       path.join(sdriveRoot, "agents"),
       path.join(sdriveRoot, "commands"),
       path.join(sdriveRoot, "schemas"),
+      path.join(sdriveRoot, "scripts"),
+      path.join(sdriveRoot, "dashboard"),
+      path.join(sdriveRoot, "mcp"),
+      path.join(sdriveRoot, "templates"),
       path.join(sdriveRoot, "specs", "backlog"),
       path.join(sdriveRoot, "specs", "ongoing"),
       path.join(sdriveRoot, "specs", "completed"),
@@ -221,15 +207,38 @@ program
       path.join(sdriveRoot, "reports", "security"),
       path.join(sdriveRoot, "reports", "performance"),
       path.join(sdriveRoot, "reports", "docs"),
+      path.join(sdriveRoot, "reports", "tests"),
       path.join(sdriveRoot, "context"),
-      path.join(sdriveRoot, "skills"),
-      path.join(sdriveRoot, "templates"),
-      path.join(sdriveRoot, "mcp")
+      path.join(sdriveRoot, "skills")
     ];
 
     dirs.forEach((dir) => {
       fs.mkdirSync(dir, { recursive: true });
       console.log(`  Created: ${path.relative(projectRoot, dir)}`);
+    });
+
+    const packageRoot = path.join(__dirname, "..");
+
+    const dirsToCopy = [
+      "agents",
+      "schemas",
+      "scripts",
+      "commands",
+      "dashboard",
+      "mcp",
+      "templates"
+    ];
+
+    dirsToCopy.forEach((dir) => {
+      const srcDir = path.join(packageRoot, dir);
+      const destDir = path.join(sdriveRoot, dir);
+
+      if (fs.existsSync(srcDir)) {
+        copyRecursive(srcDir, destDir);
+        console.log(`  Copied: .sdrive/${dir}/`);
+      } else {
+        console.log(`  ⚠️  Missing in package: ${dir}/`);
+      }
     });
 
     const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
@@ -269,22 +278,12 @@ program
       console.log("  Created: .sdrive/team.json");
     }
 
-    // MCP server file
-    const mcpServerPath = path.join(sdriveRoot, "mcp", "server.js");
-    if (!fs.existsSync(mcpServerPath)) {
-      fs.writeFileSync(mcpServerPath, mcpServerContent());
-      fs.chmodSync(mcpServerPath, 0o755);
-      console.log("  Created: .sdrive/mcp/server.js");
-    }
-
-    // MCP config template
     const mcpConfigPath = path.join(sdriveRoot, "mcp", "mcp.json");
     if (!fs.existsSync(mcpConfigPath)) {
       fs.writeFileSync(mcpConfigPath, mcpConfigContent());
       console.log("  Created: .sdrive/mcp/mcp.json");
     }
 
-    // Tool selection
     const toolsPath = path.join(sdriveRoot, "commands", "tools.json");
 
     if (!fs.existsSync(toolsPath)) {
@@ -356,7 +355,6 @@ program
 
         console.log(`\n✅ Default template set to: ${selectedTemplate}`);
 
-        // MCP wiring
         const mcpPaths = getMcpConfigPaths();
 
         console.log("\n🔌 MCP Client Wiring\n");
@@ -408,6 +406,8 @@ program
   .command("template:set <name>")
   .description("Set default template")
   .action((name) => {
+    requirePermission("template:set");
+
     const templates = ["generic", "react-node", "nextjs", "expo", "fastapi", "turborepo"];
 
     if (!templates.includes(name)) {
@@ -422,11 +422,30 @@ program
       process.exit(1);
     }
 
-    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    const config = loadConfig();
     config.defaultTemplate = name;
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 
     console.log(`✅ Default template set to: ${name}`);
+  });
+
+// ---------- CONFIG VALIDATE ----------
+program
+  .command("config:validate")
+  .description("Validate .sdrive/config.json")
+  .action(() => {
+    const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "validate-config.js");
+
+    if (!fs.existsSync(scriptPath)) {
+      console.error("❌ validate-config.js not found. Run `sdrive init` first.");
+      process.exit(1);
+    }
+
+    try {
+      execSync(`node "${scriptPath}"`, { stdio: "inherit" });
+    } catch (error) {
+      process.exit(1);
+    }
   });
 
 // ---------- VALIDATE COMMAND ----------
@@ -446,6 +465,25 @@ program
       execSync(`node "${validatorPath}"`, { stdio: "inherit" });
     } catch (error) {
       console.error("\n❌ Validation failed.");
+      process.exit(1);
+    }
+  });
+
+// ---------- VERIFY COMMAND ----------
+program
+  .command("verify <feature>")
+  .description("Verify code matches the plan (spec-to-code diff)")
+  .action((feature) => {
+    const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "verify.js");
+
+    if (!fs.existsSync(scriptPath)) {
+      console.error("❌ verify.js not found. Run `sdrive init` first.");
+      process.exit(1);
+    }
+
+    try {
+      execSync(`node "${scriptPath}" "${feature}"`, { stdio: "inherit" });
+    } catch (error) {
       process.exit(1);
     }
   });
@@ -543,6 +581,8 @@ program
   .command("approve <gate>")
   .description("Approve a workflow gate (specification, planning, implementation, review)")
   .action((gate) => {
+    requirePermission("approve");
+
     const allowedGates = ["specification", "planning", "implementation", "review"];
 
     if (!allowedGates.includes(gate)) {
@@ -588,6 +628,8 @@ program
   .command("team:add <username> <role>")
   .description("Add a new team member")
   .action((username, role) => {
+    requirePermission("team:add");
+
     const teamPath = path.join(process.cwd(), ".sdrive", "team.json");
 
     if (!fs.existsSync(teamPath)) {
@@ -615,6 +657,8 @@ program
   .command("team:remove <username>")
   .description("Remove a team member")
   .action((username) => {
+    requirePermission("team:remove");
+
     const teamPath = path.join(process.cwd(), ".sdrive", "team.json");
 
     if (!fs.existsSync(teamPath)) {
@@ -665,6 +709,8 @@ program
   .command("team:update <username> <role>")
   .description("Update a team member's role")
   .action((username, role) => {
+    requirePermission("team:update");
+
     const teamPath = path.join(process.cwd(), ".sdrive", "team.json");
 
     if (!fs.existsSync(teamPath)) {
@@ -691,6 +737,8 @@ program
   .command("team:sync")
   .description("Sync team members from GitHub collaborators")
   .action(() => {
+    requirePermission("team:sync");
+
     const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "github-team-sync.js");
 
     if (!fs.existsSync(scriptPath)) {
@@ -711,6 +759,8 @@ program
   .command("hooks:install")
   .description("Install SpecDrive pre-commit hook")
   .action(() => {
+    requirePermission("hooks:install");
+
     const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "install-hooks.js");
 
     if (!fs.existsSync(scriptPath)) {
@@ -731,6 +781,8 @@ program
   .command("migrate")
   .description("Migrate specs from OpenSpec or Spec-Kit")
   .action(() => {
+    requirePermission("migrate");
+
     const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "migrate.js");
 
     if (!fs.existsSync(scriptPath)) {
@@ -786,7 +838,8 @@ program
     }
   });
 
-  program
+// ---------- DASHBOARD ----------
+program
   .command("dashboard")
   .description("Start SpecDrive web dashboard")
   .action(() => {
@@ -805,10 +858,13 @@ program
     }
   });
 
-  program
+// ---------- REOPEN ----------
+program
   .command("reopen <feature>")
   .description("Reopen a completed feature")
   .action((feature) => {
+    requirePermission("reopen");
+
     const projectRoot = process.cwd();
     const sdriveRoot = path.join(projectRoot, ".sdrive");
 
@@ -818,7 +874,6 @@ program
     const completedGovDir = path.join(sdriveRoot, "governance", "completed", feature);
     const ongoingGovDir = path.join(sdriveRoot, "governance", feature);
 
-    // Move spec folder
     if (fs.existsSync(completedSpecDir)) {
       fs.mkdirSync(path.dirname(ongoingSpecDir), { recursive: true });
       fs.renameSync(completedSpecDir, ongoingSpecDir);
@@ -828,14 +883,12 @@ program
       process.exit(1);
     }
 
-    // Move governance folder if it uses lifecycle subfolders
     if (fs.existsSync(completedGovDir)) {
       fs.mkdirSync(path.dirname(ongoingGovDir), { recursive: true });
       fs.renameSync(completedGovDir, ongoingGovDir);
       console.log(`✅ Moved governance: completed/${feature} → ${feature}`);
     }
 
-    // Update workflow state
     const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
 
     if (!fs.existsSync(workflowStatePath)) {
@@ -867,4 +920,44 @@ program
     console.log("   Review gate reset to pending.");
   });
 
+  // ---------- VERSION NEW ----------
+program
+  .command("version:new <feature>")
+  .description("Create a new version of a feature")
+  .action((feature) => {
+    requirePermission("version:new");
+
+    const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "version-new.js");
+
+    if (!fs.existsSync(scriptPath)) {
+      console.error("❌ version-new.js not found. Run `sdrive init` first.");
+      process.exit(1);
+    }
+
+    try {
+      execSync(`node "${scriptPath}" "${feature}"`, { stdio: "inherit" });
+    } catch (error) {
+      process.exit(1);
+    }
+  });
+
+// ---------- DIFF VERSION ----------
+program
+  .command("diff:version <feature> <versionA> <versionB>")
+  .description("Compare two versions of a feature")
+  .action((feature, versionA, versionB) => {
+    const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "diff-version.js");
+
+    if (!fs.existsSync(scriptPath)) {
+      console.error("❌ diff-version.js not found. Run `sdrive init` first.");
+      process.exit(1);
+    }
+
+    try {
+      execSync(`node "${scriptPath}" "${feature}" "${versionA}" "${versionB}"`, { stdio: "inherit" });
+    } catch (error) {
+      process.exit(1);
+    }
+  });
+  
 program.parse(process.argv);

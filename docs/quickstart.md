@@ -1,6 +1,3 @@
----
-
-```markdown
 # SpecDrive Quickstart
 
 This guide gets you from zero to your first governed feature in minutes.
@@ -15,7 +12,7 @@ npm install -g specdrive-cli@latest
 
 ---
 
-## 2. Initialize Your Projectss
+## 2. Initialize Your Project
 
 Inside your project root:
 
@@ -48,6 +45,8 @@ In your AI tool:
 
 Approve the generated context files and constitution.
 
+The constitution defines your test framework, run command, and test folder.
+
 ---
 
 ## 4. Propose Your First Feature
@@ -60,6 +59,8 @@ Approve:
 
 - Gate 1: Spec + traceability
 - Gate 2: Plan + tasks
+
+SpecDrive assigns the feature to `v1` automatically.
 
 ---
 
@@ -74,9 +75,9 @@ The agent asks:
 - Which base branch to use
 - Whether to create a new branch
 
-Approve and let it work.
+The agent writes production code only.
 
-After tasks are complete, the agent runs:
+After tasks are complete, it runs:
 
 ```bash
 sdrive verify user-login
@@ -86,13 +87,29 @@ This checks that code matches the plan.
 
 ---
 
-## 6. Review and Merge
+## 6. Write Tests
+
+```text
+/sdrive:test user-login
+```
+
+The Test Agent:
+
+- Writes one test per acceptance criterion
+- Requires approval before writing
+- Runs the tests
+- Updates traceability
+- Generates a coverage report
+
+---
+
+## 7. Review and Merge
 
 ```text
 /sdrive:review
 ```
 
-Review also runs verification before allowing merge.
+Review runs verification and coverage checks before allowing merge.
 
 Approve the final merge.
 
@@ -100,7 +117,32 @@ Approve the final merge.
 
 ## Done
 
-Your first feature is now spec-driven, traceable, verified, and governed.
+Your first feature is now spec-driven, traceable, tested, verified, and governed.
+
+---
+
+## Making Major Changes Later
+
+If you need to change the feature in a structural way:
+
+```bash
+sdrive version:new user-login
+```
+
+This:
+
+- Migrates the current files into `v1/`
+- Creates a new `v2/` folder
+- Preserves v1 history
+- Sets `v2` as the current version
+
+Then run `/sdrive:propose` again to fill in `v2`.
+
+To compare versions:
+
+```bash
+sdrive diff:version user-login v1 v2
+```
 
 ---
 
@@ -157,8 +199,12 @@ See [commands.md](commands.md) for all commands.
 
 ---
 
-Save as:
+## What changed
 
-```text
-.sdrive/docs/quickstart.md
-```
+| Addition | Reason |
+|----------|--------|
+| Step 4 note about automatic `v1` | Users understand versioning kicks in immediately |
+| New "Making Major Changes Later" section | Shows `version:new` and `diff:version` |
+| "Done" line notes version tracking | Reminds user versions are used under the hood |
+
+---

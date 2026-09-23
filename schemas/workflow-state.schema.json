@@ -12,60 +12,78 @@
             "type": "string",
             "pattern": "^[a-z0-9-]+$"
           },
-          "phase": {
-            "enum": ["backlog", "ongoing", "completed", "blocked"]
-          },
-          "currentStep": {
-            "enum": ["specification", "planning", "implementation", "review"]
-          },
           "branch": {
             "type": "string"
           },
-          "gates": {
-            "type": "object",
-            "properties": {
-              "specification": {
-                "enum": ["pending", "approved", "rejected"]
-              },
-              "planning": {
-                "enum": ["pending", "approved", "rejected"]
-              },
-              "implementation": {
-                "enum": ["pending", "in_progress", "approved", "rejected"]
-              },
-              "review": {
-                "enum": ["pending", "approved", "rejected"]
-              }
-            },
-            "required": [
-              "specification",
-              "planning",
-              "implementation",
-              "review"
-            ]
+          "currentVersion": {
+            "type": "string",
+            "pattern": "^v[0-9]+$"
           },
-          "history": {
+          "versions": {
             "type": "array",
+            "minItems": 1,
             "items": {
               "type": "object",
               "properties": {
-                "event": {
+                "id": {
                   "type": "string",
-                  "minLength": 3
+                  "pattern": "^v[0-9]+$"
                 },
-                "by": {
-                  "type": "string"
+                "phase": {
+                  "enum": ["backlog", "ongoing", "completed", "blocked"]
                 },
-                "timestamp": {
-                  "type": "string",
-                  "format": "date-time"
+                "currentStep": {
+                  "enum": ["specification", "planning", "implementation", "review"]
+                },
+                "gates": {
+                  "type": "object",
+                  "properties": {
+                    "specification": {
+                      "enum": ["pending", "approved", "rejected"]
+                    },
+                    "planning": {
+                      "enum": ["pending", "approved", "rejected"]
+                    },
+                    "implementation": {
+                      "enum": ["pending", "in_progress", "approved", "rejected"]
+                    },
+                    "review": {
+                      "enum": ["pending", "approved", "rejected"]
+                    }
+                  },
+                  "required": [
+                    "specification",
+                    "planning",
+                    "implementation",
+                    "review"
+                  ]
+                },
+                "history": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "event": {
+                        "type": "string",
+                        "minLength": 3
+                      },
+                      "by": {
+                        "type": "string"
+                      },
+                      "timestamp": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    },
+                    "required": ["event", "timestamp"]
+                  }
                 }
               },
-              "required": ["event", "timestamp"]
+              "required": ["id", "phase", "currentStep", "gates"]
             }
           }
         },
-        "required": ["name", "phase", "currentStep", "gates"]
+        "required": ["name", "currentVersion", "versions"]
       }
     }
   },

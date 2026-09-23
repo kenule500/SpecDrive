@@ -12,6 +12,9 @@
     "commands/",
     "schemas/",
     "agents/",
+    "dashboard/",
+    "mcp/",
+    "templates/",
     "README.md"
   ],
   "dependencies": {

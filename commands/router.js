@@ -7,6 +7,25 @@ const { getWorkflowState, saveWorkflowState, isGateApproved } = require("./gates
 
 const projectRoot = process.cwd();
 
+function checkPermission(command) {
+  const permScript = path.join(projectRoot, ".sdrive", "scripts", "check-permission.js");
+
+  if (!fs.existsSync(permScript)) {
+    console.warn("⚠️  Permission checker not found. Skipping permission check.");
+    return true;
+  }
+
+  try {
+    execSync(`node "${permScript}" slash "${command.command}"`, { stdio: "pipe" });
+    return true;
+  } catch (error) {
+    console.error(`\n❌ Permission denied for ${command.command}`);
+    if (error.stdout) console.error(error.stdout.toString());
+    if (error.stderr) console.error(error.stderr.toString());
+    return false;
+  }
+}
+
 function loadManifest() {
   const manifestPath = path.join(projectRoot, ".sdrive", "commands", "manifest.json");
 
@@ -76,6 +95,11 @@ function main() {
 
   if (!command) {
     console.error(`❌ Unknown command: ${commandName}`);
+    process.exit(1);
+  }
+
+  // Permission check
+  if (!checkPermission(command)) {
     process.exit(1);
   }
 

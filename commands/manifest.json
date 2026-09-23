@@ -91,6 +91,15 @@
       "acceptsFeature": true,
       "gates": [],
       "validators": ["governance"]
+    },
+    {
+      "command": "/sdrive:test",
+      "agent": "test",
+      "agentFile": ".sdrive/agents/11-test.md",
+      "description": "Write tests for acceptance criteria, run them, and report coverage",
+      "acceptsFeature": true,
+      "gates": [],
+      "validators": ["governance"]
     }
   ]
 }

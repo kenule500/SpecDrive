@@ -100,3 +100,14 @@ h2 {
   font-size: 13px;
   color: #444;
 }
+
+.feature-version {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+}
+
+.feature-version:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}

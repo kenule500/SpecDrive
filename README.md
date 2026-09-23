@@ -1,6 +1,3 @@
----
-
-```markdown
 # SpecDrive
 
 **Enterprise Spec-Driven Development for AI Coding Tools**
@@ -9,11 +6,13 @@ SpecDrive gives AI coding tools like GitHub Copilot, Cline, Claude Code, and Cur
 
 It adds:
 
-- 10 specialized governance agents
+- 11 specialized governance agents
 - Machine-readable JSON schemas
 - Requirement → AC → task → test traceability
+- Per-version lifecycle tracking
 - Human approval gates
 - Anti-redundancy checks
+- Spec-to-code verification
 - Anti-hallucination controls
 - CI/CD integration
 
@@ -31,14 +30,16 @@ It adds:
 - [Terminal Commands](#terminal-commands)
 - [Agents](#agents)
 - [Templates](#templates)
+- [Versions](#versions)
 - [Directory Structure](#directory-structure)
 - [Validation](#validation)
+- [Spec-to-Code Verification](#spec-to-code-verification)
 - [CI/CD Integration](#cicd-integration)
 - [MCP Server](#mcp-server)
 - [Tool Support](#tool-support)
 - [Web Dashboard](#web-dashboard)
-- [Spec-to-Code Verification](#spec-to-code-verification)
 - [Team Collaboration](#team-collaboration)
+- [Permissions](#permissions)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -55,6 +56,8 @@ SpecDrive adds:
 - Human approval at every critical phase
 - Anti-redundancy engine
 - Deterministic governance validator
+- Spec-to-code verification
+- Per-version lifecycle tracking
 
 This makes AI-generated specs and code safe for enterprise use.
 
@@ -91,9 +94,13 @@ Inside your project root, run:
 sdrive init
 ```
 
-SpecDrive will ask you to select which AI tools you use.
+SpecDrive will ask you to:
 
-It then creates the `.sdrive/` folder and tool adapters for the selected tools.
+1. Select which AI tools you use
+2. Select a default template
+3. Wire MCP clients (optional)
+
+It then creates the `.sdrive/` folder, tool adapters, and MCP server.
 
 ---
 
@@ -134,7 +141,13 @@ sdrive init
 /sdrive:apply
 ```
 
-5. Review and merge:
+5. Write tests:
+
+```text
+/sdrive:test user-login
+```
+
+6. Review and merge:
 
 ```text
 /sdrive:review
@@ -150,7 +163,8 @@ Creates or updates the project constitution.
 
 **What it does:**
 
-- Discovers project stack, coding standards, and architecture
+- Discovers project stack, standards, and architecture
+- Detects test framework, command, and folder
 - Creates context files under `.sdrive/context/`
 - Merges rules into `.sdrive/constitution.md`
 - Requires human approval before writing
@@ -170,9 +184,11 @@ Creates the feature specification, traceability matrix, technical plan, and exec
 
 - Accepts a natural feature description
 - Generates a kebab-case feature name
+- Uses default template from `.sdrive/config.json`
 - Creates spec, plan, tasks, and traceability files
 - Runs anti-redundancy check
 - Requires two human approval gates
+- Assigns the feature to `v1` automatically
 
 **When to use:**
 
@@ -190,8 +206,8 @@ Writes production code from the approved tasks.
 - Reads approved tasks and plan
 - Asks which base branch to pull from
 - Creates a feature branch with user approval
-- Implements tasks one by one
-- Runs validators and tests
+- Implements production code only (no tests)
+- Runs `sdrive verify <feature>`
 - Commits and pushes
 
 **When to use:**
@@ -201,20 +217,43 @@ Writes production code from the approved tasks.
 
 ---
 
-### 4. `/sdrive:review`
+### 4. `/sdrive:test`
+
+Writes tests for every acceptance criterion, runs them, and reports coverage.
+
+**What it does:**
+
+- Reads spec, plan, tasks, traceability
+- Detects the project's test framework
+- Writes one test per AC
+- Requires approval before writing
+- Runs tests and updates `traceability.json`
+- Generates a coverage report
+- Runs `sdrive verify <feature>` and the governance validator
+
+**When to use:**
+
+- After `/sdrive:apply`
+- Before `/sdrive:review`
+
+---
+
+### 5. `/sdrive:review`
 
 Final audit, merge, and archive.
 
 **What it does:**
 
+- Verifies coverage: every AC has a linked, existing, passing test
+- Runs spec-to-code verification
 - Audits code against spec and traceability
-- Runs security and quality checks
 - Requires human approval before merging
 - Merges to main and archives the feature
+- Marks the current version as `completed`
 
 **When to use:**
 
-- After implementation is complete
+- After `/sdrive:test`
 - Before shipping to production
 
 ---
@@ -315,6 +354,7 @@ Cascades changes across spec, plan, tasks, and traceability.
 - Detects changes in higher-level files
 - Updates downstream files
 - Preserves task status and IDs
+- Runs `sdrive verify <feature>` after sync
 
 **When to use:**
 
@@ -353,15 +393,19 @@ Audits and manages AI skills.
 | `sdrive team:remove <username>` | Remove a team member |
 | `sdrive team:list` | List all team members |
 | `sdrive team:update <username> <role>` | Update a member's role |
+| `sdrive team:sync` | Sync team members from GitHub collaborators |
 | `sdrive template:list` | List available templates |
 | `sdrive template:set <name>` | Set default template |
 | `sdrive hooks:install` | Install pre-commit validation hook |
 | `sdrive migrate` | Migrate specs from OpenSpec or Spec-Kit |
 | `sdrive diff <old> <new>` | Show differences between two spec files |
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
-| `sdrive team:sync` | Sync team members from GitHub collaborators |
+| `sdrive dashboard` | Start local web dashboard |
 | `sdrive reopen <feature>` | Reopen a completed feature |
 | `sdrive verify <feature>` | Verify code matches plan.json |
+| `sdrive version:new <feature>` | Create a new version of a feature |
+| `sdrive diff:version <feature> <vA> <vB>` | Compare two versions of a feature |
+| `sdrive config:validate` | Validate .sdrive/config.json |
 
 ---
 
@@ -379,6 +423,7 @@ Audits and manages AI skills.
 | Performance | `08-performance.md` | Benchmark and optimize |
 | Review & Complete | `09-review-complete.md` | Final audit and merge |
 | Security | `10-security.md` | Security audit and fixes |
+| Test | `11-test.md` | Write tests, run them, report coverage |
 
 ---
 
@@ -406,27 +451,82 @@ sdrive template:set nextjs
 
 ---
 
+## Versions
+
+Every feature is versioned. Each version has its own phase, gates, tasks, and history.
+
+### Automatic `v1`
+
+When you run `/sdrive:propose` on a new feature, SpecDrive assigns it to `v1` automatically.
+
+### Creating a New Version
+
+For structural changes (new workflow, new user story, behavior change), create a new version:
+
+```bash
+sdrive version:new user-login
+```
+
+This:
+
+- Migrates the current files into `v1/` (if they weren't already)
+- Creates a new `v2/` folder
+- Preserves `v1` history
+- Sets `v2` as the current version
+
+Then run `/sdrive:propose` to fill in `v2`.
+
+### Comparing Versions
+
+```bash
+sdrive diff:version user-login v1 v2
+```
+
+Shows added and removed lines across spec, plan, and tasks.
+
+### When to Use Versions
+
+| Change | Version? |
+|--------|----------|
+| Typo fix | No |
+| Small edge case | No |
+| New user story | Yes |
+| New workflow | Yes |
+| Behavior change | Yes |
+
+### Version Isolation
+
+All agents operate within the **current version** folder only. Older versions are never modified.
+
+---
+
 ## Directory Structure
 
 ```text
 .sdrive/
-├── agents/               # 10 agent definitions
-├── commands/             # Manifest, router, gates
+├── agents/               # 11 agent definitions
+├── commands/             # Manifest, router, gates, permissions
 ├── schemas/              # JSON schemas
 ├── specs/                # Human-readable specs
 │   ├── backlog/
+│   │   └── <feature>/
+│   │       └── <version>/
 │   ├── ongoing/
 │   └── completed/
 ├── governance/           # Machine-readable JSON
+│   └── <feature>/
+│       └── <version>/
 ├── mcp/                  # MCP server for AI chat integration
 ├── prototype/            # UI/UX prototypes
-├── reports/              # Security, performance, docs reports
+├── reports/              # Security, performance, docs, tests reports
 ├── context/              # Discovered project context
 ├── dashboard/            # Local web dashboard
 ├── skills/               # AI skills
 ├── templates/            # Starter templates
 ├── constitution.md       # Governance source of truth
-└── workflow-state.json   # Feature lifecycle state
+├── config.json           # Default template + settings
+├── team.json             # Team roles and rules
+└── workflow-state.json   # Feature lifecycle state (per-version)
 ```
 
 ---
@@ -439,20 +539,17 @@ Run the governance validator:
 sdrive validate
 ```
 
-This checks all governance JSON against the schemas.
+This checks all governance JSON against the schemas, including `config.json`.
 
 If anything is invalid, it reports exact errors.
 
----
-
-### `sdrive openapi:generate <feature>`
-
-Generates an OpenAPI 3.0 specification from the API contracts in `plan.json`.
-
-Useful for importing into Postman, Swagger UI, or client generators.
+### Config Validation
 
 ```bash
-sdrive openapi:generate user-login
+sdrive config:validate
+```
+
+Checks only `.sdrive/config.json`.
 
 ### Pre-commit Hook
 
@@ -462,21 +559,59 @@ Automatically validate governance files before every commit:
 sdrive hooks:install
 ```
 
-### `sdrive migrate`
+---
 
-Migrates existing specs from OpenSpec or Spec-Kit into SpecDrive.
+## Spec-to-Code Verification
+
+SpecDrive includes a deterministic validator that compares `plan.json` against actual code.
+
+It detects:
+
+- Missing implementation
+- Renamed components, functions, endpoints, fields
+- Extra code not in the plan
+- Dependencies not installed
+
+### Run Verification
 
 ```bash
-sdrive migrate
+sdrive verify user-login
 ```
 
-### `sdrive diff <old> <new>`
+### Where It Runs
 
-Compares two spec files and shows differences.
+- After `/sdrive:apply`
+- Before `/sdrive:review`
+- On every `git commit` (if hooks installed)
+- In CI on every PR
 
-```bash
-sdrive diff spec-v1.md spec-v2.md
+### Report
+
+Results saved to:
+
+```text
+.sdrive/governance/<feature>/<version>/verification.json
 ```
+
+Status can be:
+
+| Status | Meaning |
+|--------|---------|
+| `pass` | Everything matches |
+| `warn` | Extra code detected |
+| `fail` | Missing or renamed code detected |
+
+### Source Roots
+
+SpecDrive reads source folders from the constitution.
+
+If no source root is defined, it scans common folders:
+
+- `src`, `app`, `lib`, `pages`, `server`, `internal`, `cmd`, `pkg`, `api`, `apps`, `packages`
+
+### Dashboard
+
+Verification status appears on the SpecDrive dashboard per feature per version.
 
 ---
 
@@ -511,8 +646,11 @@ jobs:
           npm install
       - name: Run Governance Validation
         run: node .sdrive/scripts/validate-governance.js
+      - name: Run Spec-to-Code Verification
+        run: node .sdrive/scripts/verify.js
 ```
 
+---
 
 ## MCP Server
 
@@ -547,21 +685,6 @@ It also asks which MCP clients to wire. Supported:
 | VS Code | `.vscode/mcp.json` |
 
 SpecDrive never overwrites existing MCP entries. It merges safely.
-
-### Manual Config
-
-If you prefer to wire it yourself, add to your MCP client config:
-
-```json
-{
-  "mcpServers": {
-    "specdrive": {
-      "command": "node",
-      "args": [".sdrive/mcp/server.js"]
-    }
-  }
-}
-```
 
 ### Available MCP Methods
 
@@ -622,11 +745,14 @@ http://localhost:4747
 
 ### What It Shows
 
-- All features and their phase
+- All features and their current version
+- All versions per feature, with their own phase and gates
 - Branch name for each feature
-- Gate status (spec, plan, implementation, review)
+- Gate status per version
 - Who approved each gate
-- Traceability coverage per feature
+- Traceability coverage per version
+- Spec-to-code verification status
+- Test coverage per version
 - Team members and roles
 - Recent audit activity
 
@@ -635,60 +761,8 @@ http://localhost:4747
 - The dashboard runs locally on port `4747`
 - It reads directly from `.sdrive/`
 - No data leaves your machine
+
 ---
-
-## Spec-to-Code Verification
-
-SpecDrive includes a deterministic validator that compares `plan.json` against actual code.
-
-It detects:
-
-- Missing implementation
-- Renamed components, functions, endpoints, fields
-- Extra code not in the plan
-- Dependencies not installed
-
-### Run Verification
-
-```bash
-sdrive verify user-login
-```
-
-### Where It Runs
-
-- After `/sdrive:apply`
-- Before `/sdrive:review`
-- On every `git commit` (if hooks installed)
-- In CI on every PR
-
-### Report
-
-Results saved to:
-
-```text
-.sdrive/governance/<feature>/verification.json
-```
-
-Status can be:
-
-| Status | Meaning |
-|--------|---------|
-| `pass` | Everything matches |
-| `warn` | Extra code detected |
-| `fail` | Missing or renamed code detected |
-
-### Source Roots
-
-SpecDrive reads source folders from the constitution.
-
-If no source root is defined, it scans common folders:
-
-- `src`, `app`, `lib`, `pages`, `server`, `internal`, `cmd`, `pkg`, `api`, `apps`, `packages`
-
-### Dashboard
-
-Verification status appears on the SpecDrive dashboard per feature.
-
 
 ## Team Collaboration
 
@@ -717,21 +791,36 @@ Automatically pull collaborators from your GitHub repository:
 sdrive team:sync
 ```
 
-Requires:
-
-- Git repo with GitHub remote
-- GitHub CLI (`gh`) installed and authenticated
-
 Roles are auto-assigned:
 
 - GitHub admins → `admin`
 - Others → `developer`
 
-Reviewer roles must be assigned manually:
+Reviewer roles must be assigned manually.
+
+---
+
+## Permissions
+
+SpecDrive enforces role-based permissions on both slash commands and CLI commands.
+
+Permission rules live in:
+
+```text
+.sdrive/commands/permissions.json
+```
+
+The current Git user is detected via:
 
 ```bash
-sdrive team:update <username> reviewer
+git config user.name
 ```
+
+That user must exist in `.sdrive/team.json`.
+
+If they are not in the team, or their role is not allowed, the command is blocked before execution.
+
+Customize rules by editing `.sdrive/commands/permissions.json`.
 
 ---
 
@@ -750,4 +839,23 @@ MIT
 
 ---
 
-This README is now clean, correct, and ready to publish.
+## What changed
+
+| Section | Change |
+|---------|--------|
+| Header | 10 → 11 agents; added “Per-version lifecycle tracking” |
+| TOC | Added `Versions` entry |
+| Quickstart | Added `/sdrive:test` step |
+| Core Workflow | Added `/sdrive:test`; updated `/sdrive:propose`, `/sdrive:apply`, `/sdrive:review` for versioning |
+| Terminal Commands | Added `version:new`, `diff:version`, `config:validate` |
+| Agents | Added Test Agent as #11 |
+| **Versions** | New section covering automatic `v1`, `version:new`, `diff:version`, when to use |
+| Directory Structure | Now shows `<version>` folders |
+| Validation | Added `config:validate` |
+| Spec-to-Code Verification | Report path now includes `<version>` |
+| Dashboard | Notes per-version display |
+| Team Collaboration | Simplified, no duplicate Permissions reference |
+| **Permissions** | New standalone section |
+| Delegated detail | Trimmed redundant paragraphs to keep the README readable |
+
+---

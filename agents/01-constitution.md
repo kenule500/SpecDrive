@@ -15,6 +15,7 @@ You extract prescriptive rules, standards, and constraints from the discovered c
 
 <rules>
 - ALWAYS read `.sdrive/constitution.md` first if it exists to preserve existing rules and structure.
+- When detecting the project's test framework, populate CON-401 through CON-403 automatically from `package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `pubspec.yaml`, or similar files.
 - NEVER overwrite or delete an existing rule without explicit user approval.
 - If `.sdrive/constitution.md` exists, PRESERVE its existing structure and merge new rules into the appropriate sections. Do not force a full template rewrite. Only apply the full template when creating a new constitution from scratch.
 - Use your available file reading and search tools to discover project facts:
@@ -92,6 +93,7 @@ Create or update the following structure:
      - Architecture patterns
      - Existing code standards
      - Documented workflow rules
+     - Test framework, run command, and test folder (for CON-401 to CON-403)
    - If MCP/skills are available, fetch official best practices for the detected technologies. Cite the source.
    - **Figma Integration (conditional):** If a Figma link is provided/found, follow the `<figma-integration-rules>`.
    - For each context file, create a draft with clearly marked sections:
@@ -155,7 +157,11 @@ This document is the single source of truth for all project standards, rules, an
 - **CON-301:** [Rule text] <!-- source: .sdrive/context/ui-context.md -->
 
 ## 4. Testing & Quality (CON-4xx)
-- **CON-401:** [Rule text] <!-- source: .sdrive/context/code-standards.md -->
+- **CON-401:** Test framework is [FRAMEWORK]. <!-- source: .sdrive/context/code-standards.md -->
+- **CON-402:** Run tests with [COMMAND]. <!-- source: .sdrive/context/code-standards.md -->
+- **CON-403:** Tests live in [FOLDER]. <!-- source: .sdrive/context/code-standards.md -->
+- **CON-404:** Every acceptance criterion MUST have at least one test. <!-- source: SpecDrive -->
+- **CON-405:** Test names MUST include the acceptance criterion ID (e.g., `AC-001`). <!-- source: SpecDrive -->
 
 ## 5. Security & Compliance (CON-5xx)
 - **CON-501:** AI agents MUST NOT read, modify, or commit files containing secrets or private information. <!-- source: Universal Security Default -->
@@ -166,7 +172,10 @@ This document is the single source of truth for all project standards, rules, an
 
 ## 6. Git Workflow & Process (CON-6xx)
 - **CON-601:** [Rule text] <!-- source: .sdrive/context/ai-workflow-rules.md -->
-- CON-XXX: No feature may be marked complete unless `sdrive verify <feature>` returns `pass` or `warn`.
+- **CON-602:** No feature may be marked complete unless `sdrive verify <feature>` returns `pass` or `warn`. <!-- source: SpecDrive -->
+- **CON-603:** Every feature MUST have a version folder (`v1`, `v2`, ...) before implementation begins. <!-- source: SpecDrive -->
+- **CON-604:** New versions MUST only be created for structural changes (new workflow, new user story, behavior change). Minor edits stay in the current version. <!-- source: SpecDrive -->
+- **CON-605:** All agents MUST operate within the feature's `currentVersion` folder only. Older versions MUST NOT be modified. <!-- source: SpecDrive -->
 
 ## 7. AI Agent Rules (CON-7xx)
 - **CON-701:** [Rule text] <!-- source: .sdrive/context/ai-workflow-rules.md -->
@@ -188,6 +197,7 @@ The constitution phase is NOT complete until:
 - [ ] Conflicts detected and resolved with user input.
 - [ ] Universal Security Defaults presented separately and approved.
 - [ ] Rule IDs assigned with continuity, no reuse.
+- [ ] Versioning rules (CON-603 to CON-605) included.
 - [ ] Version and Changelog updated.
 - [ ] Post-write secret scan passed.
 - [ ] User approved final constitution.
@@ -201,4 +211,5 @@ At the end of your work, provide:
 4. ✅ Separate confirmation of "Universal Security Defaults" approval.
 5. ✅ The complete, merged `.sdrive/constitution.md` file content.
 6. ✅ Confirmation that the post-write secret scan passed.
+7. ✅ Confirmation that versioning rules (CON-603 to CON-605) are included.
 </deliverables>

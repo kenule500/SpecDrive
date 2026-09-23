@@ -11,11 +11,18 @@
 | Security agent | ❌ | ❌ | ✅ |
 | Performance agent | ❌ | ❌ | ✅ |
 | UI/UX prototype agent | ❌ | ❌ | ✅ |
+| Test agent | ❌ | ⚠️ partial | ✅ dedicated |
 | Deterministic validator | ❌ | ❌ | ✅ |
+| Spec-to-code verification | ❌ | ❌ | ✅ |
+| Coverage enforcement | ❌ | ❌ | ✅ |
+| Spec versioning | ❌ | ⚠️ | ✅ full per-version tracking |
+| Version diff | ❌ | ❌ | ✅ |
 | Plugin system | ❌ | ❌ | ✅ |
 | Team collaboration | ❌ | ❌ | ✅ |
+| Role-based permissions | ❌ | ❌ | ✅ |
 | Template packs | ❌ | ⚠️ | ✅ |
 | Pre-commit hook | ❌ | ⚠️ | ✅ |
+| Config validation | ❌ | ⚠️ | ✅ |
 | Migration tool | ❌ | ❌ | ✅ |
 | Diff view | ❌ | ❌ | ✅ |
 | OpenAPI generation | ❌ | ⚠️ | ✅ |
@@ -25,8 +32,8 @@
 | Tool-agnostic | ⚠️ | ⚠️ | ✅ |
 | CI/CD integration | ⚠️ | ⚠️ | ✅ |
 | Framework-agnostic | ✅ | ⚠️ | ✅ |
+| Multi-language source scan | ❌ | ❌ | ✅ |
 | Anti-hallucination controls | ❌ | ❌ | ✅ |
-| Spec-to-code verification | ❌ | ❌ | ✅ |
 
 ## Summary
 
@@ -35,8 +42,12 @@ SpecDrive is the only system that combines:
 - Strong human control
 - Strict machine validation
 - Full traceability
+- Per-version lifecycle tracking
 - Enterprise governance
-- Security and performance agents
+- Security, performance, and test agents
+- Spec-to-code verification
+- Coverage enforcement
+- Role-based permissions
 - Team collaboration
 - MCP integration
 - Web dashboard

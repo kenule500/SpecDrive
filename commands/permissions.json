@@ -1,0 +1,37 @@
+{
+  "version": "1.0.0",
+  "rules": {
+    "/sdrive:constitution": ["admin"],
+    "/sdrive:propose": ["admin", "reviewer"],
+    "/sdrive:design": ["admin", "reviewer", "developer"],
+    "/sdrive:sync": ["admin", "reviewer", "developer"],
+    "/sdrive:skills": ["admin"],
+    "/sdrive:docs": ["admin", "reviewer", "developer"],
+    "/sdrive:apply": ["admin", "developer"],
+    "/sdrive:test": ["admin", "developer"],
+    "/sdrive:performance": ["admin", "developer"],
+    "/sdrive:review": ["admin", "reviewer"],
+    "/sdrive:secure": ["admin", "developer"]
+  },
+  "cli": {
+    "init": ["admin"],
+    "create": ["admin", "reviewer", "developer"],
+    "approve": ["admin", "reviewer"],
+    "team:add": ["admin"],
+    "team:remove": ["admin"],
+    "team:update": ["admin"],
+    "team:sync": ["admin"],
+    "template:set": ["admin"],
+    "hooks:install": ["admin"],
+    "migrate": ["admin"],
+    "reopen": ["admin", "reviewer"],
+    "verify": ["admin", "reviewer", "developer"],
+    "validate": ["admin", "reviewer", "developer"],
+    "config:validate": ["admin"],
+    "dashboard": ["admin", "reviewer", "developer"],
+    "diff": ["admin", "reviewer", "developer"],
+    "openapi:generate": ["admin", "reviewer", "developer"],
+    "version:new": ["admin", "reviewer"],
+    "diff:version": ["admin", "reviewer", "developer"]
+  }
+}

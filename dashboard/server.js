@@ -28,14 +28,62 @@ function apiTeam() {
   return loadJson(path.join(sdriveRoot, "team.json"), { members: [] });
 }
 
-function apiTraceability(name) {
-  const tracePath = path.join(sdriveRoot, "governance", name, "traceability.json");
+function apiTraceability(feature, version) {
+  const tracePath = path.join(sdriveRoot, "governance", feature, version, "traceability.json");
   return loadJson(tracePath, { rows: [] });
 }
 
-function apiVerification(name) {
-  const verificationPath = path.join(sdriveRoot, "governance", name, "verification.json");
+function apiVerification(feature, version) {
+  const verificationPath = path.join(sdriveRoot, "governance", feature, version, "verification.json");
   return loadJson(verificationPath, { status: "not_run", summary: {}, items: {} });
+}
+
+function apiTestReport(feature, version) {
+  const reportDir = path.join(sdriveRoot, "reports", "tests");
+
+  if (!fs.existsSync(reportDir)) {
+    return { status: "not_run", summary: {}, tests: [] };
+  }
+
+  const files = fs.readdirSync(reportDir)
+    .filter((f) => f.startsWith(`test-report-${feature}-${version}-`))
+    .sort()
+    .reverse();
+
+  if (files.length === 0) {
+    return { status: "not_run", summary: {}, tests: [] };
+  }
+
+  const latest = path.join(reportDir, files[0]);
+  const content = fs.readFileSync(latest, "utf8");
+
+  const totalMatch = content.match(/Total ACs:\*\*\s*(\d+)/);
+  const testedMatch = content.match(/Tested ACs:\*\*\s*(\d+)/);
+  const coverageMatch = content.match(/Coverage:\*\*\s*(\d+)/);
+  const passedMatch = content.match(/Tests Passed:\*\*\s*(\d+)\/(\d+)/);
+
+  return {
+    status:
+      testedMatch && totalMatch && testedMatch[1] === totalMatch[1]
+        ? "complete"
+        : "partial",
+    file: files[0],
+    summary: {
+      totalACs: totalMatch ? parseInt(totalMatch[1]) : 0,
+      testedACs: testedMatch ? parseInt(testedMatch[1]) : 0,
+      coverage: coverageMatch ? parseInt(coverageMatch[1]) : 0,
+      passed: passedMatch ? parseInt(passedMatch[1]) : 0,
+      total: passedMatch ? parseInt(passedMatch[2]) : 0
+    }
+  };
+}
+
+function parseFeatureVersion(url) {
+  const parts = url.split("/").filter(Boolean);
+  return {
+    feature: parts[parts.length - 2],
+    version: parts[parts.length - 1]
+  };
 }
 
 function serveStatic(res, filePath, contentType) {
@@ -68,13 +116,18 @@ const server = http.createServer((req, res) => {
     }
 
     if (url.startsWith("/api/traceability/")) {
-      const name = url.replace("/api/traceability/", "");
-      return res.end(JSON.stringify(apiTraceability(name)));
+      const { feature, version } = parseFeatureVersion(url);
+      return res.end(JSON.stringify(apiTraceability(feature, version)));
     }
 
     if (url.startsWith("/api/verification/")) {
-      const name = url.replace("/api/verification/", "");
-      return res.end(JSON.stringify(apiVerification(name)));
+      const { feature, version } = parseFeatureVersion(url);
+      return res.end(JSON.stringify(apiVerification(feature, version)));
+    }
+
+    if (url.startsWith("/api/tests/")) {
+      const { feature, version } = parseFeatureVersion(url);
+      return res.end(JSON.stringify(apiTestReport(feature, version)));
     }
 
     res.writeHead(404);

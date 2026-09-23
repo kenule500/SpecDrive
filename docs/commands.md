@@ -207,7 +207,6 @@ Output saved to `.sdrive/governance/<feature>/openapi.json`.
 
 ---
 
-
 ### `sdrive verify <feature>`
 
 Verifies that code matches the plan.
@@ -239,6 +238,8 @@ Status values:
 | `warn` | Extra code detected |
 | `fail` | Missing or renamed code detected |
 
+---
+
 ### `sdrive dashboard`
 
 Starts a local web dashboard on port `4747`.
@@ -252,12 +253,15 @@ Open `http://localhost:4747` to view:
 - Features and branches
 - Gates and approvals
 - Traceability coverage
+- Spec-to-code verification status
 - Team members
 - Recent activity
 
 ---
 
 ## Slash Commands
+
+> **Workflow order:** `/sdrive:propose` → `/sdrive:apply` → `/sdrive:test` → `/sdrive:review`
 
 | Command | Agent | Purpose |
 |---------|-------|---------|
@@ -268,9 +272,42 @@ Open `http://localhost:4747` to view:
 | `/sdrive:skills` | Discover-skills | Manage AI skills |
 | `/sdrive:docs` | Documentation | Generate docs |
 | `/sdrive:apply` | Implementation | Write production code |
+| `/sdrive:test` | Test | Write tests, run them, report coverage |
 | `/sdrive:performance` | Performance | Benchmark and optimize |
 | `/sdrive:review` | Review & Complete | Final audit and merge |
 | `/sdrive:secure` | Security | Security audit |
+
+---
+
+### `/sdrive:test`
+
+Writes tests for every acceptance criterion, runs them, and reports coverage.
+
+```text
+/sdrive:test user-login
+```
+
+**What it does:**
+
+- Reads spec, plan, tasks, and traceability
+- Detects the project's test framework
+- Writes one test per AC
+- Test names include the AC ID
+- Requires approval before writing
+- Runs tests and updates `traceability.json`
+- Generates a coverage report at `.sdrive/reports/tests/`
+- Runs `sdrive verify <feature>` and the governance validator
+
+**When to use:**
+
+- After `/sdrive:apply`
+- Before `/sdrive:review`
+
+**What it does NOT do:**
+
+- Write production code
+- Fix production code
+- Merge
 
 ---
 
@@ -283,6 +320,7 @@ Some commands accept a feature name or description.
 ```text
 /sdrive:propose "User login with email and password"
 /sdrive:apply user-login
+/sdrive:test user-login
 /sdrive:review user-login
 ```
 
@@ -321,6 +359,67 @@ sdrive approve <gate>
 ```
 ```
 
+
+```
+
+## Gated Commands
+
+Some commands require approval before they run.
+
+| Command | Required Gates |
+|---------|----------------|
+| `/sdrive:propose` | specification, planning |
+| `/sdrive:apply` | implementation |
+| `/sdrive:review` | review |
+
+If a gate is not approved, the command is blocked.
+
+Approve a gate with:
+
+```bash
+sdrive approve <gate>
+```
+
 ---
 
-This is the full updated command reference with all commands.
+## Permission Rules
+
+Some commands require specific team roles.
+
+The current Git user is checked against `.sdrive/team.json`.
+
+If the user is not allowed, the command is blocked.
+
+### Default Permissions
+
+| Role | Can do |
+|------|--------|
+| admin | Everything |
+| reviewer | Approve, review, propose |
+| developer | Implement, test, run optimizations |
+
+### Permission File
+
+```text
+.sdrive/commands/permissions.json
+```
+
+Edit this file to customize who can do what.
+
+
+c
+
+## What changed
+
+- Added workflow order note above Slash Commands table
+- Placed `/sdrive:test` right after `/sdrive:apply` in the table
+- Added `/sdrive:test user-login` to feature command examples
+- Added "Spec-to-code verification status" to dashboard list
+
+---
+
+Save as:
+
+```text
+.sdrive/docs/commands.md
+```

@@ -1,6 +1,6 @@
 # SpecDrive Agent Reference
 
-SpecDrive uses 10 specialized agents. Each agent has one slash command.
+SpecDrive uses 11 specialized agents. Each agent has one slash command.
 
 ---
 
@@ -18,6 +18,7 @@ SpecDrive uses 10 specialized agents. Each agent has one slash command.
 | 8 | Performance | `/sdrive:performance` | `08-performance.md` |
 | 9 | Review & Complete | `/sdrive:review` | `09-review-complete.md` |
 | 10 | Security | `/sdrive:secure` | `10-security.md` |
+| 11 | Test | `/sdrive:test` | `11-test.md` |
 
 ---
 
@@ -30,6 +31,7 @@ SpecDrive uses 10 specialized agents. Each agent has one slash command.
 **What it does:**
 
 - Discovers project stack, standards, and architecture
+- Detects test framework, command, and folder
 - Creates context files under `.sdrive/context/`
 - Merges rules into `.sdrive/constitution.md`
 - Runs `sdrive verify <feature>` for active features when source rules change
@@ -122,10 +124,11 @@ SpecDrive uses 10 specialized agents. Each agent has one slash command.
 
 - Reads approved tasks
 - Asks about base branch and feature branch
-- Implements tasks with tests
+- Implements production code only (no tests)
 - Runs `sdrive verify <feature>` before declaring completion
 - Commits and pushes
 - Records branch name in workflow state
+- Recommends `/sdrive:test` as the next step
 
 ---
 
@@ -152,6 +155,8 @@ SpecDrive uses 10 specialized agents. Each agent has one slash command.
 **What it does:**
 
 - Requires `sdrive verify <feature>` to return `pass` or `warn` before merging
+- Verifies coverage: every AC has a linked, existing, passing test
+- Requires the test report to exist
 - Audits code against spec
 - Requires human merge approval
 - Archives completed feature
@@ -170,3 +175,24 @@ SpecDrive uses 10 specialized agents. Each agent has one slash command.
 - OWASP checks
 - Dependency scanning
 - Fixes with approval
+
+---
+
+## Test Agent
+
+**Command:** `/sdrive:test`
+
+**Purpose:** Write tests for acceptance criteria, run them, and report coverage.
+
+**What it does:**
+
+- Reads spec, plan, tasks, traceability
+- Detects the project's test framework from the constitution and project files
+- Writes one test per acceptance criterion
+- Test names include the AC ID (e.g., `AC-001`)
+- Requires user approval before writing tests
+- Runs tests and captures pass/fail
+- Updates `traceability.json` with test IDs and status
+- Generates a coverage report at `.sdrive/reports/tests/test-report-<feature>-<date>.md`
+- Runs `sdrive verify <feature>` and the governance validator
+- Does NOT write production code

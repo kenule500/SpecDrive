@@ -11,6 +11,9 @@ const governanceDir = path.join(projectRoot, ".sdrive", "governance");
 const specsDir = path.join(projectRoot, ".sdrive", "specs");
 const workflowStatePath = path.join(projectRoot, ".sdrive", "workflow-state.json");
 
+const configPath = path.join(projectRoot, ".sdrive", "config.json");
+const configSchemaPath = path.join(schemaDir, "config.schema.json");
+
 function loadJson(filePath) {
   if (!fs.existsSync(filePath)) {
     console.error(`❌ Schema/file not found: ${filePath}`);
@@ -31,6 +34,22 @@ function validateData(data, schema, label) {
     console.log(validate.errors);
     return false;
   }
+}
+
+function validateConfig() {
+  if (!fs.existsSync(configPath)) {
+    console.log("⚠️  config.json not found. Skipping.");
+    return true;
+  }
+
+  if (!fs.existsSync(configSchemaPath)) {
+    console.log("⚠️  config.schema.json not found. Skipping config validation.");
+    return true;
+  }
+
+  const schema = loadJson(configSchemaPath);
+  const data = loadJson(configPath);
+  return validateData(data, schema, "config.json");
 }
 
 function validateWorkflowState() {
@@ -104,6 +123,7 @@ function main() {
 
   let failed = false;
 
+  failed |= !validateConfig();
   failed |= !validateWorkflowState();
 
   const features = discoverFeatures();
