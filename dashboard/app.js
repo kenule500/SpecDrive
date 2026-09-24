@@ -231,6 +231,73 @@ async function renderAudit() {
   });
 }
 
+function renderExternalSystems(detected) {
+  if (!detected) return "";
+
+  const parts = [];
+
+  if (detected.openspec?.detected) {
+    parts.push(`
+      <li>
+        <strong>OpenSpec</strong> — ${detected.openspec.specs || 0} specs,
+        ${detected.openspec.changes || 0} active changes,
+        ${detected.openspec.archived || 0} archived
+      </li>
+    `);
+  }
+
+  if (detected.speckit?.detected) {
+    parts.push(`
+      <li>
+        <strong>Spec-Kit</strong> — ${detected.speckit.specs || 0} specs,
+        constitution: ${detected.speckit.hasConstitution ? "found" : "missing"}
+      </li>
+    `);
+  }
+
+  if (parts.length === 0) return "";
+
+  return `
+    <div style="margin-top: 12px;">
+      <strong>🔎 Detected External Spec Systems</strong>
+      <ul>${parts.join("")}</ul>
+    </div>
+  `;
+}
+
+function renderMigrated(migrated) {
+  if (!migrated || migrated.length === 0) return "";
+
+  const items = migrated.map((m) => {
+    const source = m.from === "openspec" ? "OpenSpec" : m.from === "speckit" ? "Spec-Kit" : m.from;
+    return `<li><strong>${m.feature}</strong> — from ${source} (${m.source})</li>`;
+  });
+
+  return `
+    <div style="margin-top: 12px;">
+      <strong>📦 Migrated Features</strong>
+      <ul>${items.join("")}</ul>
+    </div>
+  `;
+}
+
+function renderSkipped(skipped) {
+  if (!skipped || skipped.length === 0) return "";
+
+  const items = skipped.map((s) => {
+    const system = s.system === "openspec" ? "OpenSpec" : s.system === "speckit" ? "Spec-Kit" : s.system;
+    const reason = s.reason ? ` — ${s.reason}` : "";
+    return `<li><strong>${system}</strong>${reason}</li>`;
+  });
+
+  return `
+    <div style="margin-top: 12px;">
+      <strong>⏭️ Skipped Migrations</strong>
+      <ul>${items.join("")}</ul>
+    </div>
+  `;
+}
+
 function renderOnboarding(onboarding) {
   const div = document.createElement("div");
   div.className = "onboarding";
@@ -249,6 +316,8 @@ function renderOnboarding(onboarding) {
   div.innerHTML = `
     <h2>${isPartial ? "🟡 Brownfield Project — Partial Onboarding" : "🟢 Brownfield Project — Onboarded"}</h2>
     <div>Onboarded: ${new Date(onboarding.date).toLocaleDateString()}</div>
+
+    ${renderExternalSystems(onboarding.detectedSystems)}
 
     ${
       onboarding.missing && onboarding.missing.length
@@ -271,6 +340,9 @@ function renderOnboarding(onboarding) {
     `
         : ""
     }
+
+    ${renderMigrated(onboarding.migrated)}
+    ${renderSkipped(onboarding.skipped)}
 
     <div style="margin-top: 12px;">
       <strong>📊 Coverage</strong>

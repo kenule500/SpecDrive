@@ -96,6 +96,33 @@
           "type": "string",
           "format": "date-time"
         },
+        "detectedSystems": {
+          "type": "object",
+          "properties": {
+            "openspec": {
+              "type": "object",
+              "properties": {
+                "detected": { "type": "boolean" },
+                "specs": { "type": "integer" },
+                "changes": { "type": "integer" },
+                "archived": { "type": "integer" }
+              },
+              "required": ["detected"],
+              "additionalProperties": false
+            },
+            "speckit": {
+              "type": "object",
+              "properties": {
+                "detected": { "type": "boolean" },
+                "specs": { "type": "integer" },
+                "hasConstitution": { "type": "boolean" }
+              },
+              "required": ["detected"],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
         "missing": {
           "type": "array",
           "items": { "type": "string" }
@@ -111,6 +138,39 @@
         "verifiedFeatures": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "migrated": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "feature": { "type": "string" },
+              "from": {
+                "enum": ["openspec", "speckit", "other"]
+              },
+              "date": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "source": { "type": "string" }
+            },
+            "required": ["feature", "from", "date"],
+            "additionalProperties": false
+          }
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "system": {
+                "enum": ["openspec", "speckit", "other"]
+              },
+              "reason": { "type": "string" }
+            },
+            "required": ["system"],
+            "additionalProperties": false
+          }
         },
         "notes": {
           "type": "string"

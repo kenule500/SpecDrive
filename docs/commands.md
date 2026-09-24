@@ -12,7 +12,7 @@ SpecDrive has two types of commands:
 | Command | Purpose |
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive structure and adapters |
-| `sdrive onboard` | Onboard an existing project into SpecDrive |
+| `sdrive onboard` | Onboard an existing project (detects OpenSpec/Spec-Kit) |
 | `sdrive validate` | Validate all governance files |
 | `sdrive config:validate` | Validate `.sdrive/config.json` |
 | `sdrive status` | Show feature lifecycle state |
@@ -26,7 +26,6 @@ SpecDrive has two types of commands:
 | `sdrive template:list` | List available templates |
 | `sdrive template:set <name>` | Set default template |
 | `sdrive hooks:install` | Install pre-commit validation hook |
-| `sdrive migrate` | Migrate specs from OpenSpec or Spec-Kit |
 | `sdrive diff <old> <new>` | Show differences between two spec files |
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
 | `sdrive dashboard` | Start local web dashboard |
@@ -66,11 +65,13 @@ sdrive onboard
 What it does:
 
 - Scans the project for stack, structure, and missing SpecDrive files
+- Detects `openspec/` and `.specify/` folders
+- Records detected external spec systems in the inventory
 - Writes `.sdrive/onboarding/inventory.json` and `report.md`
 - Refuses to run twice (checks for an `onboarding` block in `workflow-state.json`)
 - Prints next steps to run the Onboarding Agent in your AI tool
 
-The CLI only runs the scan. The actual adoption is done by the Onboarding Agent via `/sdrive:onboard`.
+The CLI only runs the scan. Migration and adoption are handled by the Onboarding Agent via `/sdrive:onboard`.
 
 ---
 
@@ -207,16 +208,6 @@ sdrive hooks:install
 
 ---
 
-### `sdrive migrate`
-
-Migrates existing specs from OpenSpec or Spec-Kit.
-
-```bash
-sdrive migrate
-```
-
----
-
 ### `sdrive diff <old> <new>`
 
 Compares two spec files and shows differences.
@@ -315,6 +306,8 @@ sdrive dashboard
 Open `http://localhost:4747` to view:
 
 - Onboarding status
+- Detected external spec systems (OpenSpec, Spec-Kit)
+- Migrated and skipped features
 - Features and versions
 - Gates and approvals per version
 - Traceability coverage per version
@@ -322,6 +315,14 @@ Open `http://localhost:4747` to view:
 - Test coverage per version
 - Team members
 - Recent activity
+
+The dashboard also supports filters:
+
+- Search by feature name
+- Filter by phase
+- Filter by verification status
+- Filter by test coverage
+- Show current version only
 
 ---
 
@@ -331,7 +332,7 @@ Open `http://localhost:4747` to view:
 
 | Command | Agent | Purpose |
 |---------|-------|---------|
-| `/sdrive:onboard` | Onboarding | Adopt SpecDrive into an existing project |
+| `/sdrive:onboard` | Onboarding | Adopt SpecDrive into an existing project, migrate OpenSpec/Spec-Kit |
 | `/sdrive:constitution` | Constitution | Create/update constitution |
 | `/sdrive:propose` | Specification | Create spec, plan, tasks |
 | `/sdrive:design` | UI/UX | Build prototype |
@@ -348,7 +349,7 @@ Open `http://localhost:4747` to view:
 
 ### `/sdrive:onboard`
 
-Adopts SpecDrive into an existing project (brownfield).
+Adopts SpecDrive into an existing project (brownfield) and migrates OpenSpec or Spec-Kit specs.
 
 ```text
 /sdrive:onboard
@@ -360,8 +361,28 @@ Adopts SpecDrive into an existing project (brownfield).
 - Asks the user which missing pieces to fill vs. defer
 - Generates a baseline constitution (if approved)
 - Generates retroactive specs for existing features (if approved)
-- Records missing and deferred items in `workflow-state.json`
+- Migrates OpenSpec and Spec-Kit specs (if detected and approved)
+- Records missing, deferred, migrated, and skipped items in `workflow-state.json`
 - Never overwrites, deletes, or fabricates
+
+**OpenSpec migration:**
+
+- `openspec/specs/<feature>/` → `.sdrive/specs/ongoing/<feature>/v1/`
+- `openspec/changes/<name>/` → `.sdrive/specs/ongoing/<name>/v1/`
+- `openspec/archive/<feature>/` → `.sdrive/specs/completed/<feature>/v1/`
+
+**Spec-Kit migration:**
+
+- `.specify/specs/###-<feature>/` → `.sdrive/specs/ongoing/<feature>/v1/`
+- `.specify/memory/constitution.md` → merged into `.sdrive/constitution.md`
+
+**Preservation rules:**
+
+- Original `openspec/` and `.specify/` folders are never deleted
+- All migrated features are marked `retroactive: true`
+- Every migrated feature records `migratedFrom`
+- Every migration is logged under `onboarding.migrated`
+- Skipped migrations are logged under `onboarding.skipped`
 
 **When to use:**
 

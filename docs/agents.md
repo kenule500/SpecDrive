@@ -27,17 +27,28 @@ SpecDrive uses 12 specialized agents. Each agent has one slash command.
 
 **Command:** `/sdrive:onboard`
 
-**Purpose:** Adopt SpecDrive into an existing project (brownfield) without breaking it.
+**Purpose:** Adopt SpecDrive into an existing project (brownfield) without breaking it, and migrate OpenSpec or Spec-Kit specs.
 
 **What it does:**
 
 - Scans the project and produces an inventory
+- Detects `openspec/` and `.specify/` folders
 - Writes `.sdrive/onboarding/inventory.json` and `report.md`
 - Asks the user what to fill vs. defer
 - Generates a baseline constitution from discovered facts (if approved)
 - Generates retroactive specs for existing features (if approved)
-- Records missing and deferred items in `workflow-state.json` under `onboarding`
+- Migrates OpenSpec specs when detected and approved
+- Migrates Spec-Kit specs and constitution when detected and approved
+- Records missing, deferred, migrated, and skipped items in `workflow-state.json` under `onboarding`
 - Never overwrites, deletes, or fabricates
+
+**Migration rules:**
+
+- Original `openspec/` and `.specify/` folders are never deleted
+- Every migrated feature is marked `retroactive: true`
+- Every migrated feature records `migratedFrom: openspec | speckit`
+- Every migration is logged in `workflow-state.json` under `onboarding.migrated`
+- Skipped migrations are logged under `onboarding.skipped`
 
 **When to use:**
 

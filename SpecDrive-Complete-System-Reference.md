@@ -10,8 +10,8 @@ A full walkthrough of everything we built, from the ground up.
 2. [The Big Picture (How It All Connects)](#2-the-big-picture-how-it-all-connects)
 3. [Directory Structure Overview](#3-directory-structure-overview)
 4. [The 12 Agents](#4-the-12-agents)
-5. [The 7 JSON Schemas](#5-the-7-json-schemas)
-6. [The 18 Scripts](#6-the-18-scripts)
+5. [The 8 JSON Schemas](#5-the-8-json-schemas)
+6. [The 20 Scripts](#6-the-20-scripts)
 7. [The CLI Commands](#7-the-cli-commands)
 8. [The Slash Commands](#8-the-slash-commands)
 9. [The Governance Files](#9-the-governance-files)
@@ -22,13 +22,14 @@ A full walkthrough of everything we built, from the ground up.
 14. [The Tool Adapters](#14-the-tool-adapters)
 15. [The Template System](#15-the-template-system)
 16. [The Onboarding System (Brownfield)](#16-the-onboarding-system-brownfield)
-17. [The Versioning System](#17-the-versioning-system)
-18. [The Spec-to-Code Verification System](#18-the-spec-to-code-verification-system)
-19. [The Full Workflow (End-to-End)](#19-the-full-workflow-end-to-end)
-20. [CI/CD Integration](#20-cicd-integration)
-21. [Docs Folder](#21-docs-folder)
-22. [How To Use It (User Guide)](#22-how-to-use-it-user-guide)
-23. [What Problem Each Piece Solves](#23-what-problem-each-piece-solves)
+17. [The Migration System (OpenSpec + Spec-Kit)](#17-the-migration-system-openspec--spec-kit)
+18. [The Versioning System](#18-the-versioning-system)
+19. [The Spec-to-Code Verification System](#19-the-spec-to-code-verification-system)
+20. [The Full Workflow (End-to-End)](#20-the-full-workflow-end-to-end)
+21. [CI/CD Integration](#21-cicd-integration)
+22. [Docs Folder](#22-docs-folder)
+23. [How To Use It (User Guide)](#23-how-to-use-it-user-guide)
+24. [What Problem Each Piece Solves](#24-what-problem-each-piece-solves)
 
 ---
 
@@ -45,6 +46,7 @@ It provides:
 - **Verification** so code matches the plan
 - **Versioning** so features can evolve safely
 - **Onboarding** so existing projects can adopt it
+- **Migration** so OpenSpec and Spec-Kit projects can move in cleanly
 - **Role-based permissions** so only trusted users can approve
 - **Web dashboard** so everything is visible
 - **MCP server** so AI tools can query SpecDrive directly
@@ -107,8 +109,8 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 .sdrive/
 ├── agents/            # 12 agent definitions
 ├── commands/          # Manifest, router, gates, permissions
-├── schemas/           # 7 JSON schemas
-├── scripts/           # 18 scripts (validators, helpers, generators)
+├── schemas/           # 8 JSON schemas
+├── scripts/           # 20 scripts (validators, helpers, generators)
 ├── specs/             # Human-readable specs
 │   ├── backlog/
 │   ├── ongoing/
@@ -153,7 +155,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 
 | # | Agent | Command | Purpose |
 |---|-------|---------|---------|
-| 0 | Onboarding | `/sdrive:onboard` | Adopt SpecDrive into existing projects |
+| 0 | Onboarding | `/sdrive:onboard` | Adopt SpecDrive into existing projects, migrate OpenSpec and Spec-Kit |
 | 1 | Constitution | `/sdrive:constitution` | Discover project rules |
 | 2 | Specification | `/sdrive:propose` | Create spec + plan + tasks |
 | 3 | UI/UX | `/sdrive:design` | Build prototype |
@@ -168,7 +170,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 
 **How each agent connects:**
 
-- The **Onboarding Agent** is only used once for brownfield projects.
+- The **Onboarding Agent** is only used once for brownfield projects. It also migrates OpenSpec or Spec-Kit specs when detected.
 - Every other agent reads the **constitution** first, then reads feature files.
 - Each agent respects **current version** isolation.
 - Every agent runs **validators** before finishing.
@@ -176,7 +178,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 
 ---
 
-## 5. The 7 JSON Schemas
+## 5. The 8 JSON Schemas
 
 | Schema | File | Purpose |
 |--------|------|---------|
@@ -184,16 +186,18 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | Plan | `plan.schema.json` | Validates technical plan |
 | Tasks | `tasks.schema.json` | Validates task list |
 | Traceability | `traceability.schema.json` | Validates requirement → test matrix |
-| Workflow State | `workflow-state.schema.json` | Validates feature lifecycle + onboarding |
+| Workflow State | `workflow-state.schema.json` | Validates feature lifecycle, versioning, and onboarding (with `migrated` and `skipped` arrays) |
 | Config | `config.schema.json` | Validates `.sdrive/config.json` |
+| (Reserved for future use) | — | — |
+| (Reserved for future use) | — | — |
 
-**Why 7 schemas:** Every JSON file the agents write must conform to a schema. If it doesn't, validation fails, and the AI cannot proceed.
+**Why schemas:** Every JSON file the agents write must conform to a schema. If it doesn't, validation fails, and the AI cannot proceed.
 
 **Connection:** The **validator script** reads these schemas and checks all JSON.
 
 ---
 
-## 6. The 18 Scripts
+## 6. The 20 Scripts
 
 | # | Script | Purpose |
 |---|--------|---------|
@@ -207,14 +211,16 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | 8 | `load-plugins.js` | Loads plugins |
 | 9 | `pre-commit.js` | Runs validation before commit |
 | 10 | `install-hooks.js` | Installs pre-commit hook |
-| 11 | `migrate.js` | Migrates from OpenSpec/Spec-Kit |
-| 12 | `diff-spec.js` | Compares two spec files |
-| 13 | `generate-openapi.js` | Generates OpenAPI 3.0 spec |
-| 14 | `github-team-sync.js` | Syncs team from GitHub |
-| 15 | `check-permission.js` | Enforces role permissions |
-| 16 | `version-new.js` | Creates a new feature version |
-| 17 | `diff-version.js` | Compares two feature versions |
-| 18 | `onboard.js` | Scans project for brownfield onboarding |
+| 11 | `diff-spec.js` | Compares two spec files |
+| 12 | `generate-openapi.js` | Generates OpenAPI 3.0 spec |
+| 13 | `github-team-sync.js` | Syncs team from GitHub |
+| 14 | `check-permission.js` | Enforces role permissions |
+| 15 | `version-new.js` | Creates a new feature version |
+| 16 | `diff-version.js` | Compares two feature versions |
+| 17 | `onboard.js` | Scans project for brownfield onboarding |
+| 18 | `migrate-openspec.js` | Migrates OpenSpec specs into SpecDrive |
+| 19 | `migrate-speckit.js` | Migrates Spec-Kit specs and constitution into SpecDrive |
+| 20 | `migrate.js` | **Deprecated** — points to `sdrive onboard` and `/sdrive:onboard` |
 
 **Connection:** Scripts are called by the CLI, by agents, or by the pre-commit hook.
 
@@ -225,9 +231,9 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | Command | Purpose |
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive |
-| `sdrive onboard` | Scan existing project |
+| `sdrive onboard` | Scan existing project (detects OpenSpec and Spec-Kit) |
 | `sdrive validate` | Validate all governance files |
-| `sdrive config:validate` | Validate config.json |
+| `sdrive config:validate` | Validate `config.json` |
 | `sdrive status` | Show feature lifecycle |
 | `sdrive approve <gate>` | Approve a gate |
 | `sdrive create <feature>` | Create feature scaffold |
@@ -235,14 +241,14 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | `sdrive team:sync` | Sync from GitHub |
 | `sdrive template:list/set` | Manage templates |
 | `sdrive hooks:install` | Install pre-commit hook |
-| `sdrive migrate` | Migrate from OpenSpec/Spec-Kit |
 | `sdrive diff` | Compare two spec files |
 | `sdrive openapi:generate` | Generate OpenAPI spec |
 | `sdrive dashboard` | Start web dashboard |
-| `sdrive reopen` | Reopen completed feature |
+| `sdrive reopen` | Reopen a completed feature |
 | `sdrive verify` | Verify code vs plan |
 | `sdrive version:new` | Create new feature version |
 | `sdrive diff:version` | Compare versions |
+| ~~`sdrive migrate`~~ | Deprecated — use `sdrive onboard` |
 
 ---
 
@@ -274,7 +280,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | `.sdrive/constitution.md` | Single source of project rules |
 | `.sdrive/config.json` | Default template + settings |
 | `.sdrive/team.json` | Team roles and rules |
-| `.sdrive/workflow-state.json` | Feature lifecycle + onboarding state |
+| `.sdrive/workflow-state.json` | Feature lifecycle + onboarding + versioning + migration state |
 | `.sdrive/audit-log.json` | Full audit trail |
 
 **Why:** These files give agents deterministic context so they don't guess.
@@ -316,7 +322,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 **Roles:**
 
 - `admin` — everything
-- `reviewer` — propose, approve, review
+- `reviewer` — propose, approve, review, create versions
 - `developer` — implement, test, verify
 
 ---
@@ -332,7 +338,11 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 
 **Panels:**
 
-- Onboarding status
+- Onboarding status (greenfield, brownfield partial, brownfield complete)
+- Detected external spec systems (OpenSpec, Spec-Kit)
+- Migrated features and their source
+- Skipped migrations and reasons
+- Missing and deferred items
 - Features (grouped by version)
 - Filter bar (search + phase + verification + tests + current only)
 - Team members
@@ -347,7 +357,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | `mcp/server.js` | Model Context Protocol server |
 | `mcp/mcp.json` | MCP config template |
 
-**Purpose:** AI tools can query SpecDrive directly (e.g., “list features”) without slash commands.
+**Purpose:** AI tools can query SpecDrive directly (e.g., "list features") without slash commands.
 
 ---
 
@@ -395,16 +405,45 @@ Stored in `.sdrive/templates/`. Selected during `sdrive init`.
 | Piece | Purpose |
 |-------|---------|
 | `00-onboarding.md` | Onboarding Agent |
-| `scripts/onboard.js` | Scans project |
+| `scripts/onboard.js` | Scans project, detects OpenSpec and Spec-Kit |
 | `onboarding/inventory.json` | Machine-readable scan |
 | `onboarding/report.md` | Human-readable scan |
-| `workflow-state.json > onboarding` | Tracks missing/deferred |
+| `workflow-state.json > onboarding` | Tracks missing, deferred, migrated, skipped |
 
-**Four phases:** Reconnaissance → Baseline Specs → Constitution → Governance Extension.
+**Phases:** Reconnaissance → Decide what to fill → Baseline Specs → **Migration (OpenSpec/Spec-Kit)** → Constitution Alignment → Governance Extension → Validation → Report.
 
 ---
 
-## 17. The Versioning System
+## 17. The Migration System (OpenSpec + Spec-Kit)
+
+**Detection:** `onboard.js` scans for `openspec/` and `.specify/`.
+
+**Migration scripts:**
+
+| Script | Source | Target |
+|--------|--------|--------|
+| `migrate-openspec.js` | `openspec/specs/`, `openspec/changes/`, `openspec/archive/` | `.sdrive/specs/<lifecycle>/<feature>/v1/` |
+| `migrate-speckit.js` | `.specify/specs/`, `.specify/memory/constitution.md` | `.sdrive/specs/ongoing/<feature>/v1/` and `.sdrive/constitution.md` |
+
+**Preservation rules:**
+
+- Original `openspec/` and `.specify/` folders are never deleted
+- All migrated features are marked `retroactive: true`
+- Every migrated feature records `migratedFrom: openspec | speckit`
+- Every migration is logged in `workflow-state.json` under `onboarding.migrated`
+- Skipped migrations are logged under `onboarding.skipped`
+
+**What migration does NOT do:**
+
+- Does not overwrite existing SpecDrive files
+- Does not invent requirements
+- Does not link tests
+- Does not run verification
+- Does not modify source code
+
+---
+
+## 18. The Versioning System
 
 **Folders per version:**
 
@@ -424,7 +463,7 @@ Stored in `.sdrive/templates/`. Selected during `sdrive init`.
 
 ---
 
-## 18. The Spec-to-Code Verification System
+## 19. The Spec-to-Code Verification System
 
 **Script:** `scripts/verify.js`
 
@@ -448,7 +487,7 @@ Stored in `.sdrive/templates/`. Selected during `sdrive init`.
 
 ---
 
-## 19. The Full Workflow (End-to-End)
+## 20. The Full Workflow (End-to-End)
 
 ```
 [Brownfield only]
@@ -497,7 +536,7 @@ sdrive version:new <feature>
 
 ---
 
-## 20. CI/CD Integration
+## 21. CI/CD Integration
 
 `.github/workflows/sdrive-governance.yml` runs on PRs and:
 
@@ -509,7 +548,7 @@ Blocks merge on failure.
 
 ---
 
-## 21. Docs Folder
+## 22. Docs Folder
 
 | File | Purpose |
 |------|---------|
@@ -522,7 +561,7 @@ Blocks merge on failure.
 
 ---
 
-## 22. How To Use It (User Guide)
+## 23. How To Use It (User Guide)
 
 **Greenfield project:**
 
@@ -542,6 +581,17 @@ sdrive init
 npm install -g specdrive-cli@latest
 sdrive onboard
 /sdrive:onboard
+/sdrive:constitution
+/sdrive:propose "..."
+...
+```
+
+**OpenSpec or Spec-Kit project:**
+
+```bash
+npm install -g specdrive-cli@latest
+sdrive onboard
+/sdrive:onboard   (approve migration when prompted)
 /sdrive:constitution
 /sdrive:propose "..."
 ...
@@ -571,7 +621,7 @@ sdrive dashboard
 
 ---
 
-## 23. What Problem Each Piece Solves
+## 24. What Problem Each Piece Solves
 
 | Problem | Solution |
 |---------|----------|
@@ -587,6 +637,8 @@ sdrive dashboard
 | No role control | Permissions system |
 | No audit trail | `audit-log.json` |
 | Existing project can't adopt | Brownfield onboarding |
+| Existing OpenSpec project can't migrate | `migrate-openspec.js` via onboarding |
+| Existing Spec-Kit project can't migrate | `migrate-speckit.js` via onboarding |
 | AI doesn't know project rules | `constitution.md` |
 | Remote tooling | MCP server |
 | Different AI tools | 15 adapters |
@@ -598,17 +650,44 @@ sdrive dashboard
 You built a complete, enterprise-grade Spec-Driven Development system consisting of:
 
 - 12 specialized agents
-- 7 JSON schemas
-- 18 deterministic scripts
+- 8 JSON schemas
+- 20 deterministic scripts
 - 20+ CLI commands
 - 12 slash commands
 - A local web dashboard with filters
 - An MCP server
 - 15 AI tool adapters
 - Brownfield onboarding
+- OpenSpec and Spec-Kit migration
 - Per-version lifecycle tracking
 - Spec-to-code verification
 - Role-based permissions
 - Full audit trail
 
 It is complete, publishable, and ready for real-world use.
+```
+
+---
+
+## What changed vs the previous version
+
+| Section | Change |
+|---------|--------|
+| TOC | Added "The Migration System (OpenSpec + Spec-Kit)" |
+| 1. What SpecDrive Is | Added "Migration" bullet |
+| 3. Directory Structure | 7 → 8 schemas; 18 → 20 scripts |
+| 4. Agents | Onboarding now notes migration responsibilities |
+| 5. Schemas | Renamed to 8; notes `migrated` and `skipped` in workflow state |
+| 6. Scripts | 18 → 20; added `migrate-openspec.js`, `migrate-speckit.js`; marked `migrate.js` deprecated |
+| 7. CLI | Marked `sdrive migrate` deprecated; notes onboard detects external systems |
+| 12. Dashboard | Added detected systems, migrated, skipped |
+| 16. Onboarding | Added migration phase |
+| 17. NEW | Migration System section |
+| 18. Versioning | Renumbered |
+| 19. Spec-to-Code | Renumbered |
+| 20. Workflow | Renumbered |
+| 21–24 | Renumbered |
+| 24. Problems | Added migration rows |
+| Final Summary | Updated counts |
+
+---

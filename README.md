@@ -14,6 +14,7 @@ It adds:
 - Anti-redundancy checks
 - Spec-to-code verification
 - Brownfield onboarding for existing projects
+- OpenSpec and Spec-Kit migration
 - Anti-hallucination controls
 - CI/CD integration
 
@@ -27,6 +28,7 @@ It adds:
 - [Where to Run Commands](#where-to-run-commands)
 - [Quickstart](#quickstart)
 - [Onboarding an Existing Project](#onboarding-an-existing-project)
+- [Migrating from OpenSpec or Spec-Kit](#migrating-from-openspec-or-spec-kit)
 - [Core Workflow](#core-workflow)
 - [Optional Commands](#optional-commands)
 - [Terminal Commands](#terminal-commands)
@@ -61,6 +63,7 @@ SpecDrive adds:
 - Spec-to-code verification
 - Per-version lifecycle tracking
 - Brownfield onboarding without breaking existing code
+- OpenSpec and Spec-Kit migration
 
 This makes AI-generated specs and code safe for enterprise use.
 
@@ -191,6 +194,7 @@ The agent will:
 - Ask which missing pieces to fill vs. defer
 - Optionally generate a baseline constitution
 - Optionally generate retroactive specs for existing features
+- Optionally migrate OpenSpec or Spec-Kit specs
 - Record onboarding state in `workflow-state.json`
 
 ### What onboarding does NOT do
@@ -199,6 +203,75 @@ The agent will:
 - Does not delete anything
 - Does not modify code
 - Does not fabricate spec IDs or history
+
+---
+
+## Migrating from OpenSpec or Spec-Kit
+
+If your project already uses OpenSpec or Spec-Kit, SpecDrive can migrate those specs into its own structure.
+
+Migration happens automatically during Brownfield Onboarding.
+
+### Step 1: Detect
+
+When you run:
+
+```bash
+sdrive onboard
+```
+
+The scanner checks for:
+
+- `openspec/` folder
+- `.specify/` folder
+
+If found, it records them in `.sdrive/onboarding/inventory.json` under `detectedSystems`.
+
+### Step 2: Migrate
+
+Then run:
+
+```text
+/sdrive:onboard
+```
+
+The Onboarding Agent will ask:
+
+> "I found an OpenSpec project with 3 specs and 2 changes. Migrate them into SpecDrive?"
+
+Options:
+
+1. Migrate all
+2. Skip migration
+
+### What Migration Does
+
+**OpenSpec → SpecDrive:**
+
+- `openspec/specs/<feature>/` → `.sdrive/specs/ongoing/<feature>/v1/`
+- `openspec/changes/<name>/` → `.sdrive/specs/ongoing/<name>/v1/`
+- `openspec/archive/<feature>/` → `.sdrive/specs/completed/<feature>/v1/`
+
+**Spec-Kit → SpecDrive:**
+
+- `.specify/specs/###-<feature>/` → `.sdrive/specs/ongoing/<feature>/v1/`
+- `.specify/memory/constitution.md` → merged into `.sdrive/constitution.md`
+
+### What Migration Preserves
+
+- Original `openspec/` and `.specify/` folders are never deleted
+- All migrated features are marked `retroactive: true`
+- Every migrated feature records `migratedFrom: openspec` or `migratedFrom: speckit`
+- Every migration is logged in `workflow-state.json` under `onboarding.migrated`
+- Skipped migrations are logged under `onboarding.skipped`
+
+### What Migration Does NOT Do
+
+- Does not overwrite existing SpecDrive files
+- Does not invent requirements
+- Does not link tests
+- Does not run verification
+- Does not modify source code
 
 ---
 
@@ -434,7 +507,7 @@ Audits and manages AI skills.
 | Command | Purpose |
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive structure |
-| `sdrive onboard` | Onboard an existing project into SpecDrive |
+| `sdrive onboard` | Onboard an existing project (detects OpenSpec/Spec-Kit) |
 | `sdrive validate` | Validate governance files |
 | `sdrive config:validate` | Validate `.sdrive/config.json` |
 | `sdrive status` | Show feature lifecycle state |
@@ -448,7 +521,6 @@ Audits and manages AI skills.
 | `sdrive template:list` | List available templates |
 | `sdrive template:set <name>` | Set default template |
 | `sdrive hooks:install` | Install pre-commit validation hook |
-| `sdrive migrate` | Migrate specs from OpenSpec or Spec-Kit |
 | `sdrive diff <old> <new>` | Show differences between two spec files |
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
 | `sdrive dashboard` | Start local web dashboard |
@@ -463,7 +535,7 @@ Audits and manages AI skills.
 
 | Agent | File | Role |
 |-------|------|------|
-| Onboarding | `00-onboarding.md` | Adopt SpecDrive into an existing project |
+| Onboarding | `00-onboarding.md` | Adopt SpecDrive into an existing project, migrate OpenSpec and Spec-Kit |
 | Constitution | `01-constitution.md` | Discover project rules, merge into constitution |
 | Specification | `02-specification.md` | Generate spec, plan, tasks, traceability |
 | UI/UX | `03-uiux.md` | Build interactive prototype |
@@ -567,7 +639,7 @@ All agents operate within the **current version** folder only. Older versions ar
 ├── governance/           # Machine-readable JSON
 │   └── <feature>/
 │       └── <version>/
-├── onboarding/           # Brownfield onboarding inventory
+├── onboarding/           # Brownfield onboarding inventory + migration results
 ├── mcp/                  # MCP server for AI chat integration
 ├── prototype/            # UI/UX prototypes
 ├── reports/              # Security, performance, docs, tests reports
@@ -794,6 +866,9 @@ http://localhost:4747
 ### What It Shows
 
 - Onboarding status (greenfield, brownfield partial, brownfield complete)
+- Detected external spec systems (OpenSpec, Spec-Kit)
+- Migrated features and their source
+- Skipped migrations and reasons
 - Missing and deferred items
 - All features and their current version
 - All versions per feature, with their own phase and gates
@@ -805,6 +880,16 @@ http://localhost:4747
 - Test coverage per version
 - Team members and roles
 - Recent audit activity
+
+### Filters
+
+The dashboard includes a filter bar:
+
+- Search by feature name
+- Filter by phase
+- Filter by verification status
+- Filter by test coverage
+- Show current version only
 
 ### Notes
 

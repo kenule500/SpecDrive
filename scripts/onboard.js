@@ -10,7 +10,6 @@ const onboardingDir = path.join(sdriveRoot, "onboarding");
 const inventoryPath = path.join(onboardingDir, "inventory.json");
 const reportPath = path.join(onboardingDir, "report.md");
 
-// Files we look for to detect the project stack and conventions.
 const DETECT_FILES = {
   manifests: [
     "package.json",
@@ -71,6 +70,15 @@ const DETECT_FILES = {
     ".sdrive/agents",
     ".sdrive/dashboard",
     ".sdrive/mcp"
+  ],
+  externalSpecSystems: [
+    "openspec",
+    "openspec/specs",
+    "openspec/changes",
+    "openspec/archive",
+    ".specify",
+    ".specify/specs",
+    ".specify/memory"
   ]
 };
 
@@ -115,6 +123,71 @@ function scanSection(list) {
   return result;
 }
 
+function detectExternalSpecSystems() {
+  const detection = {
+    openspec: {
+      detected: false,
+      specs: 0,
+      changes: 0,
+      archived: 0
+    },
+    speckit: {
+      detected: false,
+      specs: 0,
+      hasConstitution: false
+    }
+  };
+
+  // OpenSpec detection
+  const openspecDir = path.join(projectRoot, "openspec");
+  if (fs.existsSync(openspecDir)) {
+    detection.openspec.detected = true;
+
+    const specsDir = path.join(openspecDir, "specs");
+    const changesDir = path.join(openspecDir, "changes");
+    const archiveDir = path.join(openspecDir, "archive");
+
+    if (fs.existsSync(specsDir)) {
+      detection.openspec.specs = fs
+        .readdirSync(specsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory()).length;
+    }
+
+    if (fs.existsSync(changesDir)) {
+      detection.openspec.changes = fs
+        .readdirSync(changesDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory()).length;
+    }
+
+    if (fs.existsSync(archiveDir)) {
+      detection.openspec.archived = fs
+        .readdirSync(archiveDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory()).length;
+    }
+  }
+
+  // Spec-Kit detection
+  const speckitDir = path.join(projectRoot, ".specify");
+  if (fs.existsSync(speckitDir)) {
+    detection.speckit.detected = true;
+
+    const specsDir = path.join(speckitDir, "specs");
+    const constitutionPath = path.join(speckitDir, "memory", "constitution.md");
+
+    if (fs.existsSync(specsDir)) {
+      detection.speckit.specs = fs
+        .readdirSync(specsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory()).length;
+    }
+
+    if (fs.existsSync(constitutionPath)) {
+      detection.speckit.hasConstitution = true;
+    }
+  }
+
+  return detection;
+}
+
 function buildInventory() {
   const inventory = {
     projectRoot,
@@ -127,8 +200,10 @@ function buildInventory() {
       ci: scanSection(DETECT_FILES.ci),
       tests: scanSection(DETECT_FILES.tests),
       configs: scanSection(DETECT_FILES.configs),
-      specdrive: scanSection(DETECT_FILES.specdrive)
+      specdrive: scanSection(DETECT_FILES.specdrive),
+      externalSpecSystems: scanSection(DETECT_FILES.externalSpecSystems)
     },
+    detectedSystems: detectExternalSpecSystems(),
     missing: [],
     present: [],
     deferred: []
@@ -165,6 +240,27 @@ function buildReport(inventory) {
   lines.push(`Scanned at: ${inventory.scannedAt}`);
   lines.push(`Project root: ${inventory.projectRoot}`);
   lines.push("");
+
+  // External Spec Systems
+  const ext = inventory.detectedSystems || {};
+  if (ext.openspec?.detected || ext.speckit?.detected) {
+    lines.push("## Detected External Spec Systems");
+    if (ext.openspec?.detected) {
+      lines.push(`- ✅ OpenSpec`);
+      lines.push(`  - Specs: ${ext.openspec.specs}`);
+      lines.push(`  - Active changes: ${ext.openspec.changes}`);
+      lines.push(`  - Archived: ${ext.openspec.archived}`);
+    }
+    if (ext.speckit?.detected) {
+      lines.push(`- ✅ Spec-Kit`);
+      lines.push(`  - Specs: ${ext.speckit.specs}`);
+      lines.push(`  - Constitution: ${ext.speckit.hasConstitution ? "found" : "missing"}`);
+    }
+    lines.push("");
+    lines.push("> These can be migrated into SpecDrive during onboarding via the Onboarding Agent.");
+    lines.push("");
+  }
+
   lines.push("## Present");
   inventory.present.forEach((p) => lines.push(`- ✅ ${p}`));
   lines.push("");
@@ -197,6 +293,20 @@ function main() {
   console.log(`Present:  ${inventory.present.length}`);
   console.log(`Missing:  ${inventory.missing.length}`);
   console.log(`Deferred: ${inventory.deferred.length}`);
+
+  const ext = inventory.detectedSystems || {};
+  if (ext.openspec?.detected || ext.speckit?.detected) {
+    console.log("");
+    console.log("🔍 External Spec Systems Detected:");
+    if (ext.openspec?.detected) {
+      console.log(`   - OpenSpec (${ext.openspec.specs} specs, ${ext.openspec.changes} changes)`);
+    }
+    if (ext.speckit?.detected) {
+      console.log(`   - Spec-Kit (${ext.speckit.specs} specs)`);
+    }
+    console.log("");
+    console.log("   Run /sdrive:onboard to migrate them.");
+  }
 }
 
 main();
