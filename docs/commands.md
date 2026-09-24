@@ -1,6 +1,3 @@
----
-
-```markdown
 # SpecDrive Command Reference
 
 SpecDrive has two types of commands:
@@ -15,7 +12,9 @@ SpecDrive has two types of commands:
 | Command | Purpose |
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive structure and adapters |
+| `sdrive onboard` | Onboard an existing project into SpecDrive |
 | `sdrive validate` | Validate all governance files |
+| `sdrive config:validate` | Validate `.sdrive/config.json` |
 | `sdrive status` | Show feature lifecycle state |
 | `sdrive approve <gate>` | Approve a workflow gate |
 | `sdrive create <feature>` | Create feature scaffold (internal) |
@@ -33,6 +32,8 @@ SpecDrive has two types of commands:
 | `sdrive dashboard` | Start local web dashboard |
 | `sdrive reopen <feature>` | Reopen a completed feature |
 | `sdrive verify <feature>` | Verify code matches plan.json |
+| `sdrive version:new <feature>` | Create a new version of a feature |
+| `sdrive diff:version <feature> <vA> <vB>` | Compare two versions of a feature |
 
 ---
 
@@ -54,6 +55,25 @@ Creates:
 
 ---
 
+### `sdrive onboard`
+
+Adopts SpecDrive into an existing project (brownfield onboarding).
+
+```bash
+sdrive onboard
+```
+
+What it does:
+
+- Scans the project for stack, structure, and missing SpecDrive files
+- Writes `.sdrive/onboarding/inventory.json` and `report.md`
+- Refuses to run twice (checks for an `onboarding` block in `workflow-state.json`)
+- Prints next steps to run the Onboarding Agent in your AI tool
+
+The CLI only runs the scan. The actual adoption is done by the Onboarding Agent via `/sdrive:onboard`.
+
+---
+
 ### `sdrive validate`
 
 Runs the governance validator.
@@ -62,7 +82,19 @@ Runs the governance validator.
 sdrive validate
 ```
 
-Checks all JSON files against schemas.
+Checks all JSON files against schemas, including `config.json`.
+
+---
+
+### `sdrive config:validate`
+
+Validates only `.sdrive/config.json`.
+
+```bash
+sdrive config:validate
+```
+
+Checks that `defaultTemplate` is a valid template and that no unknown keys exist.
 
 ---
 
@@ -203,7 +235,7 @@ Generates OpenAPI 3.0 spec from `plan.json`.
 sdrive openapi:generate user-login
 ```
 
-Output saved to `.sdrive/governance/<feature>/openapi.json`.
+Output saved to `.sdrive/governance/<feature>/<version>/openapi.json`.
 
 ---
 
@@ -225,7 +257,7 @@ Detects:
 Writes a report to:
 
 ```text
-.sdrive/governance/<feature>/verification.json
+.sdrive/governance/<feature>/<version>/verification.json
 ```
 
 Returns exit code `1` if verification fails.
@@ -240,6 +272,38 @@ Status values:
 
 ---
 
+### `sdrive version:new <feature>`
+
+Creates a new version of a feature.
+
+```bash
+sdrive version:new user-login
+```
+
+What it does:
+
+- Migrates current files into `v1/` if no versions exist
+- Creates the next version folder (e.g., `v2/`)
+- Preserves older versions
+- Sets `currentVersion` in `workflow-state.json`
+- Logs the event
+
+Use for structural changes only (new workflow, new user story, behavior change).
+
+---
+
+### `sdrive diff:version <feature> <vA> <vB>`
+
+Compares two versions of a feature.
+
+```bash
+sdrive diff:version user-login v1 v2
+```
+
+Shows added and removed lines across `spec.md`, `plan.md`, and `tasks.md`.
+
+---
+
 ### `sdrive dashboard`
 
 Starts a local web dashboard on port `4747`.
@@ -250,10 +314,12 @@ sdrive dashboard
 
 Open `http://localhost:4747` to view:
 
-- Features and branches
-- Gates and approvals
-- Traceability coverage
-- Spec-to-code verification status
+- Onboarding status
+- Features and versions
+- Gates and approvals per version
+- Traceability coverage per version
+- Spec-to-code verification status per version
+- Test coverage per version
 - Team members
 - Recent activity
 
@@ -261,10 +327,11 @@ Open `http://localhost:4747` to view:
 
 ## Slash Commands
 
-> **Workflow order:** `/sdrive:propose` → `/sdrive:apply` → `/sdrive:test` → `/sdrive:review`
+> **Workflow order:** `/sdrive:onboard` (brownfield only) → `/sdrive:constitution` → `/sdrive:propose` → `/sdrive:apply` → `/sdrive:test` → `/sdrive:review`
 
 | Command | Agent | Purpose |
 |---------|-------|---------|
+| `/sdrive:onboard` | Onboarding | Adopt SpecDrive into an existing project |
 | `/sdrive:constitution` | Constitution | Create/update constitution |
 | `/sdrive:propose` | Specification | Create spec, plan, tasks |
 | `/sdrive:design` | UI/UX | Build prototype |
@@ -279,6 +346,30 @@ Open `http://localhost:4747` to view:
 
 ---
 
+### `/sdrive:onboard`
+
+Adopts SpecDrive into an existing project (brownfield).
+
+```text
+/sdrive:onboard
+```
+
+**What it does:**
+
+- Reads `.sdrive/onboarding/inventory.json` produced by `sdrive onboard`
+- Asks the user which missing pieces to fill vs. defer
+- Generates a baseline constitution (if approved)
+- Generates retroactive specs for existing features (if approved)
+- Records missing and deferred items in `workflow-state.json`
+- Never overwrites, deletes, or fabricates
+
+**When to use:**
+
+- Only once per existing project
+- Never on greenfield projects
+
+---
+
 ### `/sdrive:test`
 
 Writes tests for every acceptance criterion, runs them, and reports coverage.
@@ -289,13 +380,13 @@ Writes tests for every acceptance criterion, runs them, and reports coverage.
 
 **What it does:**
 
-- Reads spec, plan, tasks, and traceability
+- Reads spec, plan, tasks, and traceability from the current version
 - Detects the project's test framework
 - Writes one test per AC
 - Test names include the AC ID
 - Requires approval before writing
-- Runs tests and updates `traceability.json`
-- Generates a coverage report at `.sdrive/reports/tests/`
+- Runs tests and updates `traceability.json` in the current version
+- Generates a coverage report at `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md`
 - Runs `sdrive verify <feature>` and the governance validator
 
 **When to use:**
@@ -357,28 +448,6 @@ Approve a gate with:
 ```bash
 sdrive approve <gate>
 ```
-```
-
-
-```
-
-## Gated Commands
-
-Some commands require approval before they run.
-
-| Command | Required Gates |
-|---------|----------------|
-| `/sdrive:propose` | specification, planning |
-| `/sdrive:apply` | implementation |
-| `/sdrive:review` | review |
-
-If a gate is not approved, the command is blocked.
-
-Approve a gate with:
-
-```bash
-sdrive approve <gate>
-```
 
 ---
 
@@ -395,31 +464,11 @@ If the user is not allowed, the command is blocked.
 | Role | Can do |
 |------|--------|
 | admin | Everything |
-| reviewer | Approve, review, propose |
-| developer | Implement, test, run optimizations |
+| reviewer | Approve, review, propose, create versions |
+| developer | Implement, test, run optimizations, verify |
 
 ### Permission File
 
 ```text
 .sdrive/commands/permissions.json
-```
-
-Edit this file to customize who can do what.
-
-
-c
-
-## What changed
-
-- Added workflow order note above Slash Commands table
-- Placed `/sdrive:test` right after `/sdrive:apply` in the table
-- Added `/sdrive:test user-login` to feature command examples
-- Added "Spec-to-code verification status" to dashboard list
-
----
-
-Save as:
-
-```text
-.sdrive/docs/commands.md
 ```

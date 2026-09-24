@@ -9,6 +9,48 @@ function gateClass(status) {
   return "gate pending";
 }
 
+function getFilterValues() {
+  return {
+    search: document.getElementById("filter-search").value.trim().toLowerCase(),
+    phase: document.getElementById("filter-phase").value,
+    verification: document.getElementById("filter-verification").value,
+    tests: document.getElementById("filter-tests").value,
+    currentVersionOnly: document.getElementById("filter-current-version").checked
+  };
+}
+
+function featureMatchesFilters(feature, version, filters, verification, tests) {
+  if (filters.search && !feature.name.toLowerCase().includes(filters.search)) {
+    return false;
+  }
+
+  if (filters.phase && version.phase !== filters.phase) {
+    return false;
+  }
+
+  if (filters.verification) {
+    const status =
+      verification.status === "not_run" || !verification.status
+        ? "not_run"
+        : verification.status;
+
+    if (status !== filters.verification) {
+      return false;
+    }
+  }
+
+  if (filters.tests) {
+    const testStatus =
+      tests.status === "not_run" || !tests.status ? "not_run" : tests.status;
+
+    if (testStatus !== filters.tests) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function renderVerification(verification) {
   const div = document.createElement("div");
   div.className = "traceability";
@@ -80,26 +122,38 @@ async function renderFeatures() {
     return;
   }
 
+  const filters = getFilterValues();
   container.innerHTML = "";
 
-  for (const f of state.features) {
-    const div = document.createElement("div");
-    div.className = "feature";
+  let rendered = 0;
 
-    div.innerHTML = `
+  for (const f of state.features) {
+    const featureDiv = document.createElement("div");
+    featureDiv.className = "feature";
+
+    featureDiv.innerHTML = `
       <div class="feature-name">${f.name}</div>
       ${f.branch ? `<div class="feature-branch">🌿 ${f.branch}</div>` : ""}
       <div>Current Version: ${f.currentVersion}</div>
     `;
 
     const versions = f.versions || [];
+    let versionRendered = 0;
 
     for (const version of versions) {
       const isCurrent = version.id === f.currentVersion;
 
+      if (filters.currentVersionOnly && !isCurrent) {
+        continue;
+      }
+
       const traceability = await fetchJson(`/api/traceability/${f.name}/${version.id}`);
       const verification = await fetchJson(`/api/verification/${f.name}/${version.id}`);
       const tests = await fetchJson(`/api/tests/${f.name}/${version.id}`);
+
+      if (!featureMatchesFilters(f, version, filters, verification, tests)) {
+        continue;
+      }
 
       const rows = traceability.rows || [];
       const completed = rows.filter((r) => r.status === "complete").length;
@@ -126,10 +180,18 @@ async function renderFeatures() {
         });
       }
 
-      div.appendChild(versionDiv);
+      featureDiv.appendChild(versionDiv);
+      versionRendered++;
     }
 
-    container.appendChild(div);
+    if (versionRendered > 0) {
+      container.appendChild(featureDiv);
+      rendered++;
+    }
+  }
+
+  if (rendered === 0) {
+    container.textContent = "No features match the current filters.";
   }
 }
 
@@ -169,7 +231,89 @@ async function renderAudit() {
   });
 }
 
+function renderOnboarding(onboarding) {
+  const div = document.createElement("div");
+  div.className = "onboarding";
+
+  if (!onboarding) {
+    div.innerHTML = `
+      <h2>🟢 Greenfield Project</h2>
+      <div>Fully SpecDrive-native. No onboarding needed.</div>
+    `;
+    return div;
+  }
+
+  const isPartial = onboarding.missing && onboarding.missing.length > 0;
+  const isDeferred = onboarding.deferred && onboarding.deferred.length > 0;
+
+  div.innerHTML = `
+    <h2>${isPartial ? "🟡 Brownfield Project — Partial Onboarding" : "🟢 Brownfield Project — Onboarded"}</h2>
+    <div>Onboarded: ${new Date(onboarding.date).toLocaleDateString()}</div>
+
+    ${
+      onboarding.missing && onboarding.missing.length
+        ? `
+      <div style="margin-top: 12px;">
+        <strong>❌ Missing</strong>
+        <ul>${onboarding.missing.map((m) => `<li>${m}</li>`).join("")}</ul>
+      </div>
+    `
+        : ""
+    }
+
+    ${
+      isDeferred
+        ? `
+      <div style="margin-top: 12px;">
+        <strong>⚠️ Deferred</strong>
+        <ul>${onboarding.deferred.map((m) => `<li>${m}</li>`).join("")}</ul>
+      </div>
+    `
+        : ""
+    }
+
+    <div style="margin-top: 12px;">
+      <strong>📊 Coverage</strong>
+      <ul>
+        <li>Retroactive features: ${onboarding.retroactiveFeatures?.length || 0}</li>
+        <li>Verified features: ${onboarding.verifiedFeatures?.length || 0}</li>
+      </ul>
+    </div>
+
+    ${
+      onboarding.notes
+        ? `<div style="margin-top: 12px;"><em>${onboarding.notes}</em></div>`
+        : ""
+    }
+  `;
+
+  return div;
+}
+
 async function main() {
+  const onboarding = await fetchJson("/api/onboarding");
+  const onboardingContainer = document.getElementById("onboarding-panel");
+
+  if (onboardingContainer) {
+    onboardingContainer.innerHTML = "";
+    onboardingContainer.appendChild(renderOnboarding(onboarding));
+  }
+
+  // Attach filter listeners
+  [
+    "filter-search",
+    "filter-phase",
+    "filter-verification",
+    "filter-tests",
+    "filter-current-version"
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener("input", renderFeatures);
+      el.addEventListener("change", renderFeatures);
+    }
+  });
+
   await renderFeatures();
   await renderTeam();
   await renderAudit();

@@ -959,5 +959,56 @@ program
       process.exit(1);
     }
   });
+
+  // ---------- ONBOARD ----------
+program
+  .command("onboard")
+  .description("Onboard an existing project into SpecDrive (brownfield adoption)")
+  .action(() => {
+    requirePermission("onboard");
+
+    const projectRoot = process.cwd();
+    const sdriveRoot = path.join(projectRoot, ".sdrive");
+    const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
+
+    // Guard: refuse to run twice
+    if (fs.existsSync(workflowStatePath)) {
+      try {
+        const state = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
+
+        if (state.onboarding && state.onboarding.date) {
+          console.error(
+            `❌ Onboarding already ran on ${state.onboarding.date}. Refusing to re-run.`
+          );
+          console.error("   If you want to re-run, remove the 'onboarding' block from workflow-state.json.");
+          process.exit(1);
+        }
+      } catch (error) {
+        // ignore parse errors and continue
+      }
+    }
+
+    const scriptPath = path.join(sdriveRoot, "scripts", "onboard.js");
+
+    if (!fs.existsSync(scriptPath)) {
+      console.error("❌ onboard.js not found. Run `sdrive init` first.");
+      process.exit(1);
+    }
+
+    try {
+      execSync(`node "${scriptPath}"`, { stdio: "inherit" });
+
+      console.log("");
+      console.log("📋 Next steps:");
+      console.log("   1. Review .sdrive/onboarding/report.md");
+      console.log("   2. Run the Onboarding Agent in your AI tool:");
+      console.log("      /sdrive:onboard");
+      console.log("");
+      console.log("   The agent will ask you what to fill vs. defer.");
+    } catch (error) {
+      console.error("❌ Onboarding scan failed.");
+      process.exit(1);
+    }
+  });
   
 program.parse(process.argv);

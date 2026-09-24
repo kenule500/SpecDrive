@@ -11,8 +11,50 @@
   </header>
 
   <main>
+    <section id="onboarding">
+      <div id="onboarding-panel">Loading...</div>
+    </section>
+
     <section id="features">
       <h2>Features</h2>
+
+      <div id="feature-filters" style="margin-bottom: 16px;">
+        <input
+          id="filter-search"
+          type="text"
+          placeholder="Search features..."
+          style="padding: 6px 10px; font-size: 13px; margin-right: 8px; border: 1px solid #ddd; border-radius: 4px;"
+        />
+
+        <select id="filter-phase" style="padding: 6px 10px; font-size: 13px; margin-right: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          <option value="">All phases</option>
+          <option value="backlog">backlog</option>
+          <option value="ongoing">ongoing</option>
+          <option value="completed">completed</option>
+          <option value="blocked">blocked</option>
+        </select>
+
+        <select id="filter-verification" style="padding: 6px 10px; font-size: 13px; margin-right: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          <option value="">All verification</option>
+          <option value="pass">pass</option>
+          <option value="warn">warn</option>
+          <option value="fail">fail</option>
+          <option value="not_run">not run</option>
+        </select>
+
+        <select id="filter-tests" style="padding: 6px 10px; font-size: 13px; margin-right: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          <option value="">All test coverage</option>
+          <option value="complete">complete (100%)</option>
+          <option value="partial">partial</option>
+          <option value="not_run">not run</option>
+        </select>
+
+        <label style="font-size: 13px; margin-right: 8px;">
+          <input id="filter-current-version" type="checkbox" />
+          Current version only
+        </label>
+      </div>
+
       <div id="feature-list">Loading...</div>
     </section>
 

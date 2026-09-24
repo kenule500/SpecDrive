@@ -97,6 +97,11 @@ function serveStatic(res, filePath, contentType) {
   res.end(fs.readFileSync(filePath));
 }
 
+function apiOnboarding() {
+  const state = loadJson(path.join(sdriveRoot, "workflow-state.json"), { features: [] });
+  return state.onboarding || null;
+}
+
 const server = http.createServer((req, res) => {
   const url = req.url;
 
@@ -128,6 +133,10 @@ const server = http.createServer((req, res) => {
     if (url.startsWith("/api/tests/")) {
       const { feature, version } = parseFeatureVersion(url);
       return res.end(JSON.stringify(apiTestReport(feature, version)));
+    }
+
+    if (url === "/api/onboarding") {
+      return res.end(JSON.stringify(apiOnboarding()));
     }
 
     res.writeHead(404);

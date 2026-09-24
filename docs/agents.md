@@ -1,6 +1,6 @@
 # SpecDrive Agent Reference
 
-SpecDrive uses 11 specialized agents. Each agent has one slash command.
+SpecDrive uses 12 specialized agents. Each agent has one slash command.
 
 ---
 
@@ -8,6 +8,7 @@ SpecDrive uses 11 specialized agents. Each agent has one slash command.
 
 | # | Agent | Command | File |
 |---|-------|---------|------|
+| 0 | Onboarding | `/sdrive:onboard` | `00-onboarding.md` |
 | 1 | Constitution | `/sdrive:constitution` | `01-constitution.md` |
 | 2 | Specification | `/sdrive:propose` | `02-specification.md` |
 | 3 | UI/UX | `/sdrive:design` | `03-uiux.md` |
@@ -19,6 +20,29 @@ SpecDrive uses 11 specialized agents. Each agent has one slash command.
 | 9 | Review & Complete | `/sdrive:review` | `09-review-complete.md` |
 | 10 | Security | `/sdrive:secure` | `10-security.md` |
 | 11 | Test | `/sdrive:test` | `11-test.md` |
+
+---
+
+## Onboarding Agent
+
+**Command:** `/sdrive:onboard`
+
+**Purpose:** Adopt SpecDrive into an existing project (brownfield) without breaking it.
+
+**What it does:**
+
+- Scans the project and produces an inventory
+- Writes `.sdrive/onboarding/inventory.json` and `report.md`
+- Asks the user what to fill vs. defer
+- Generates a baseline constitution from discovered facts (if approved)
+- Generates retroactive specs for existing features (if approved)
+- Records missing and deferred items in `workflow-state.json` under `onboarding`
+- Never overwrites, deletes, or fabricates
+
+**When to use:**
+
+- When introducing SpecDrive to an existing project
+- Only once per project
 
 ---
 
@@ -34,6 +58,8 @@ SpecDrive uses 11 specialized agents. Each agent has one slash command.
 - Detects test framework, command, and folder
 - Creates context files under `.sdrive/context/`
 - Merges rules into `.sdrive/constitution.md`
+- Includes versioning rules (`CON-603` to `CON-605`)
+- Includes verify-completion rule (`CON-602`)
 - Runs `sdrive verify <feature>` for active features when source rules change
 - Requires human approval
 
@@ -50,7 +76,9 @@ SpecDrive uses 11 specialized agents. Each agent has one slash command.
 - Accepts natural feature description
 - Generates feature name
 - Uses default template from `.sdrive/config.json`
-- Creates spec, plan, tasks, traceability
+- Detects the current version from `workflow-state.json`
+- Creates spec, plan, tasks, traceability in `.sdrive/specs/<status>/<feature>/<version>/`
+- Assigns the feature to `v1` automatically if new
 - Runs anti-redundancy check
 - Two approval gates
 
@@ -64,10 +92,12 @@ SpecDrive uses 11 specialized agents. Each agent has one slash command.
 
 **What it does:**
 
+- Reads spec and traceability from the current version folder
 - Creates design system in `.sdrive/prototype/`
 - Builds screens with vanilla HTML/CSS/JS
 - Supports light/dark mode
 - Maps screens to user stories
+- Updates traceability in the current version folder
 
 ---
 
@@ -82,7 +112,8 @@ SpecDrive uses 11 specialized agents. Each agent has one slash command.
 - Detects changes in higher-level files
 - Updates downstream files
 - Preserves IDs and task status
-- Runs `sdrive verify <feature>` after sync to confirm code still matches
+- Operates only within the current version
+- Runs `sdrive verify <feature>` after sync
 
 ---
 
@@ -108,9 +139,12 @@ SpecDrive uses 11 specialized agents. Each agent has one slash command.
 
 **What it does:**
 
+- Reads spec, plan, tasks, and traceability from the current version
 - Adds inline docs with traceability IDs
 - Updates README
 - Detects code/spec drift
+- Generates coverage report
+- Only writes to the current version folder if feature-scoped
 
 ---
 
@@ -122,7 +156,7 @@ SpecDrive uses 11 specialized agents. Each agent has one slash command.
 
 **What it does:**
 
-- Reads approved tasks
+- Reads approved tasks and plan from the current version
 - Asks about base branch and feature branch
 - Implements production code only (no tests)
 - Runs `sdrive verify <feature>` before declaring completion
@@ -140,9 +174,12 @@ SpecDrive uses 11 specialized agents. Each agent has one slash command.
 
 **What it does:**
 
+- Reads NFRs from spec.json in the current version
 - Measures baseline
 - Identifies bottlenecks
 - Optimizes after approval
+- Writes report with version in filename
+- Updates traceability only for performance NFR rows in the current version
 
 ---
 
@@ -150,16 +187,19 @@ SpecDrive uses 11 specialized agents. Each agent has one slash command.
 
 **Command:** `/sdrive:review`
 
-**Purpose:** Final audit and merge.
+**Purpose:** Final audit, merge, and archive.
 
 **What it does:**
 
 - Requires `sdrive verify <feature>` to return `pass` or `warn` before merging
 - Verifies coverage: every AC has a linked, existing, passing test
-- Requires the test report to exist
+- Requires the test report for the current version
 - Audits code against spec
 - Requires human merge approval
-- Archives completed feature
+- Merges the current version and marks it as `completed`
+- Preserves other versions
+- Moves feature folder from `ongoing/` to `completed/`
+- Verifies permission before and after merge
 
 ---
 
@@ -171,10 +211,13 @@ SpecDrive uses 11 specialized agents. Each agent has one slash command.
 
 **What it does:**
 
+- Reads spec, plan, tasks, and traceability from the current version
 - Threat modeling
 - OWASP checks
 - Dependency scanning
 - Fixes with approval
+- Writes report with version in filename
+- Updates traceability only for security NFR rows in the current version
 
 ---
 
@@ -186,13 +229,13 @@ SpecDrive uses 11 specialized agents. Each agent has one slash command.
 
 **What it does:**
 
-- Reads spec, plan, tasks, traceability
+- Reads spec, plan, tasks, and traceability from the current version
 - Detects the project's test framework from the constitution and project files
 - Writes one test per acceptance criterion
 - Test names include the AC ID (e.g., `AC-001`)
 - Requires user approval before writing tests
 - Runs tests and captures pass/fail
-- Updates `traceability.json` with test IDs and status
-- Generates a coverage report at `.sdrive/reports/tests/test-report-<feature>-<date>.md`
+- Updates `traceability.json` with test IDs and status in the current version
+- Generates a coverage report at `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md`
 - Runs `sdrive verify <feature>` and the governance validator
 - Does NOT write production code

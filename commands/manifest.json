@@ -100,6 +100,15 @@
       "acceptsFeature": true,
       "gates": [],
       "validators": ["governance"]
+    },
+    {
+      "command": "/sdrive:onboard",
+      "agent": "onboarding",
+      "agentFile": ".sdrive/agents/00-onboarding.md",
+      "description": "Onboard an existing project into SpecDrive",
+      "acceptsFeature": false,
+      "gates": [],
+      "validators": ["governance"]
     }
   ]
 }

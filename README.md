@@ -6,13 +6,14 @@ SpecDrive gives AI coding tools like GitHub Copilot, Cline, Claude Code, and Cur
 
 It adds:
 
-- 11 specialized governance agents
+- 12 specialized governance agents
 - Machine-readable JSON schemas
 - Requirement → AC → task → test traceability
 - Per-version lifecycle tracking
 - Human approval gates
 - Anti-redundancy checks
 - Spec-to-code verification
+- Brownfield onboarding for existing projects
 - Anti-hallucination controls
 - CI/CD integration
 
@@ -25,6 +26,7 @@ It adds:
 - [Installation](#installation)
 - [Where to Run Commands](#where-to-run-commands)
 - [Quickstart](#quickstart)
+- [Onboarding an Existing Project](#onboarding-an-existing-project)
 - [Core Workflow](#core-workflow)
 - [Optional Commands](#optional-commands)
 - [Terminal Commands](#terminal-commands)
@@ -58,6 +60,7 @@ SpecDrive adds:
 - Deterministic governance validator
 - Spec-to-code verification
 - Per-version lifecycle tracking
+- Brownfield onboarding without breaking existing code
 
 This makes AI-generated specs and code safe for enterprise use.
 
@@ -155,6 +158,50 @@ sdrive init
 
 ---
 
+## Onboarding an Existing Project
+
+If your project already has code but no SpecDrive governance, use Brownfield Onboarding.
+
+### Step 1: Scan the project
+
+```bash
+sdrive onboard
+```
+
+This scans the project and writes:
+
+- `.sdrive/onboarding/inventory.json`
+- `.sdrive/onboarding/report.md`
+
+It also refuses to run twice. If onboarding already ran, remove the `onboarding` block from `.sdrive/workflow-state.json` to re-run.
+
+### Step 2: Review the report
+
+Open `.sdrive/onboarding/report.md` to see what was found and what is missing.
+
+### Step 3: Run the Onboarding Agent
+
+```text
+/sdrive:onboard
+```
+
+The agent will:
+
+- Show the inventory
+- Ask which missing pieces to fill vs. defer
+- Optionally generate a baseline constitution
+- Optionally generate retroactive specs for existing features
+- Record onboarding state in `workflow-state.json`
+
+### What onboarding does NOT do
+
+- Does not overwrite existing files
+- Does not delete anything
+- Does not modify code
+- Does not fabricate spec IDs or history
+
+---
+
 ## Core Workflow
 
 ### 1. `/sdrive:constitution`
@@ -167,6 +214,7 @@ Creates or updates the project constitution.
 - Detects test framework, command, and folder
 - Creates context files under `.sdrive/context/`
 - Merges rules into `.sdrive/constitution.md`
+- Includes versioning rules (`CON-603` to `CON-605`)
 - Requires human approval before writing
 
 **When to use:**
@@ -186,9 +234,9 @@ Creates the feature specification, traceability matrix, technical plan, and exec
 - Generates a kebab-case feature name
 - Uses default template from `.sdrive/config.json`
 - Creates spec, plan, tasks, and traceability files
+- Assigns the feature to `v1` automatically if new
 - Runs anti-redundancy check
 - Requires two human approval gates
-- Assigns the feature to `v1` automatically
 
 **When to use:**
 
@@ -203,7 +251,7 @@ Writes production code from the approved tasks.
 
 **What it does:**
 
-- Reads approved tasks and plan
+- Reads approved tasks and plan from the current version
 - Asks which base branch to pull from
 - Creates a feature branch with user approval
 - Implements production code only (no tests)
@@ -223,7 +271,7 @@ Writes tests for every acceptance criterion, runs them, and reports coverage.
 
 **What it does:**
 
-- Reads spec, plan, tasks, traceability
+- Reads spec, plan, tasks, and traceability from the current version
 - Detects the project's test framework
 - Writes one test per AC
 - Requires approval before writing
@@ -250,6 +298,7 @@ Final audit, merge, and archive.
 - Requires human approval before merging
 - Merges to main and archives the feature
 - Marks the current version as `completed`
+- Preserves older versions
 
 **When to use:**
 
@@ -385,7 +434,9 @@ Audits and manages AI skills.
 | Command | Purpose |
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive structure |
+| `sdrive onboard` | Onboard an existing project into SpecDrive |
 | `sdrive validate` | Validate governance files |
+| `sdrive config:validate` | Validate `.sdrive/config.json` |
 | `sdrive status` | Show feature lifecycle state |
 | `sdrive approve <gate>` | Approve a workflow gate |
 | `sdrive create <feature>` | Create feature scaffold (internal) |
@@ -405,7 +456,6 @@ Audits and manages AI skills.
 | `sdrive verify <feature>` | Verify code matches plan.json |
 | `sdrive version:new <feature>` | Create a new version of a feature |
 | `sdrive diff:version <feature> <vA> <vB>` | Compare two versions of a feature |
-| `sdrive config:validate` | Validate .sdrive/config.json |
 
 ---
 
@@ -413,6 +463,7 @@ Audits and manages AI skills.
 
 | Agent | File | Role |
 |-------|------|------|
+| Onboarding | `00-onboarding.md` | Adopt SpecDrive into an existing project |
 | Constitution | `01-constitution.md` | Discover project rules, merge into constitution |
 | Specification | `02-specification.md` | Generate spec, plan, tasks, traceability |
 | UI/UX | `03-uiux.md` | Build interactive prototype |
@@ -504,7 +555,7 @@ All agents operate within the **current version** folder only. Older versions ar
 
 ```text
 .sdrive/
-├── agents/               # 11 agent definitions
+├── agents/               # 12 agent definitions
 ├── commands/             # Manifest, router, gates, permissions
 ├── schemas/              # JSON schemas
 ├── specs/                # Human-readable specs
@@ -516,6 +567,7 @@ All agents operate within the **current version** folder only. Older versions ar
 ├── governance/           # Machine-readable JSON
 │   └── <feature>/
 │       └── <version>/
+├── onboarding/           # Brownfield onboarding inventory
 ├── mcp/                  # MCP server for AI chat integration
 ├── prototype/            # UI/UX prototypes
 ├── reports/              # Security, performance, docs, tests reports
@@ -526,7 +578,7 @@ All agents operate within the **current version** folder only. Older versions ar
 ├── constitution.md       # Governance source of truth
 ├── config.json           # Default template + settings
 ├── team.json             # Team roles and rules
-└── workflow-state.json   # Feature lifecycle state (per-version)
+└── workflow-state.json   # Feature lifecycle state (per-version + onboarding)
 ```
 
 ---
@@ -608,10 +660,6 @@ SpecDrive reads source folders from the constitution.
 If no source root is defined, it scans common folders:
 
 - `src`, `app`, `lib`, `pages`, `server`, `internal`, `cmd`, `pkg`, `api`, `apps`, `packages`
-
-### Dashboard
-
-Verification status appears on the SpecDrive dashboard per feature per version.
 
 ---
 
@@ -745,13 +793,15 @@ http://localhost:4747
 
 ### What It Shows
 
+- Onboarding status (greenfield, brownfield partial, brownfield complete)
+- Missing and deferred items
 - All features and their current version
 - All versions per feature, with their own phase and gates
 - Branch name for each feature
 - Gate status per version
 - Who approved each gate
 - Traceability coverage per version
-- Spec-to-code verification status
+- Spec-to-code verification status per version
 - Test coverage per version
 - Team members and roles
 - Recent audit activity
@@ -836,26 +886,3 @@ Please read the constitution and agent definitions before contributing.
 
 MIT
 ```
-
----
-
-## What changed
-
-| Section | Change |
-|---------|--------|
-| Header | 10 → 11 agents; added “Per-version lifecycle tracking” |
-| TOC | Added `Versions` entry |
-| Quickstart | Added `/sdrive:test` step |
-| Core Workflow | Added `/sdrive:test`; updated `/sdrive:propose`, `/sdrive:apply`, `/sdrive:review` for versioning |
-| Terminal Commands | Added `version:new`, `diff:version`, `config:validate` |
-| Agents | Added Test Agent as #11 |
-| **Versions** | New section covering automatic `v1`, `version:new`, `diff:version`, when to use |
-| Directory Structure | Now shows `<version>` folders |
-| Validation | Added `config:validate` |
-| Spec-to-Code Verification | Report path now includes `<version>` |
-| Dashboard | Notes per-version display |
-| Team Collaboration | Simplified, no duplicate Permissions reference |
-| **Permissions** | New standalone section |
-| Delegated detail | Trimmed redundant paragraphs to keep the README readable |
-
----

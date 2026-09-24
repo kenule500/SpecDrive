@@ -85,6 +85,39 @@
         },
         "required": ["name", "currentVersion", "versions"]
       }
+    },
+    "onboarding": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": ["greenfield", "brownfield"]
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "missing": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "deferred": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "retroactiveFeatures": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "verifiedFeatures": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "required": ["mode", "date"],
+      "additionalProperties": false
     }
   },
   "required": ["features"],
