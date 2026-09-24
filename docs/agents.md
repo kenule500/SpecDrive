@@ -27,13 +27,13 @@ SpecDrive uses 12 specialized agents. Each agent has one slash command.
 
 **Command:** `/sdrive:onboard`
 
-**Purpose:** Adopt SpecDrive into an existing project (brownfield) without breaking it, and migrate OpenSpec or Spec-Kit specs.
+**Purpose:** Adopt SpecDrive into an existing project (brownfield) without breaking it, and migrate OpenSpec or Spec-Kit specs. This is the only command needed for brownfield onboarding.
 
 **What it does:**
 
-- Scans the project and produces an inventory
-- Detects `openspec/` and `.specify/` folders
-- Writes `.sdrive/onboarding/inventory.json` and `report.md`
+- If no inventory exists, runs `node .sdrive/scripts/onboard.js` internally to scan the project
+- If an inventory exists but is stale, asks the user whether to rescan
+- Reads `.sdrive/onboarding/inventory.json`
 - Asks the user what to fill vs. defer
 - Generates a baseline constitution from discovered facts (if approved)
 - Generates retroactive specs for existing features (if approved)

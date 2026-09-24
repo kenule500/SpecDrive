@@ -121,9 +121,39 @@ Your first feature is now spec-driven, traceable, tested, verified, and governed
 
 ---
 
+## Onboarding an Existing Project
+
+If your project already has code but no SpecDrive governance, run this instead of step 2:
+
+```text
+/sdrive:onboard
+```
+
+That is the only command you need.
+
+The Onboarding Agent will:
+
+1. Scan your project automatically
+2. Detect OpenSpec or Spec-Kit folders
+3. Show an inventory for your approval
+4. Ask what to fill vs. defer
+5. Optionally generate a baseline constitution
+6. Optionally generate retroactive specs for existing features
+7. Optionally migrate OpenSpec or Spec-Kit specs
+
+If you prefer to scan from the terminal before opening your AI tool:
+
+```bash
+sdrive onboard
+```
+
+But this is optional. The agent will run the scan itself if needed.
+
+---
+
 ## Making Major Changes Later
 
-If you need to change the feature in a structural way:
+If you need to change a feature in a structural way:
 
 ```bash
 sdrive version:new user-login
@@ -196,15 +226,3 @@ sdrive dashboard
 
 See [commands.md](commands.md) for all commands.
 ```
-
----
-
-## What changed
-
-| Addition | Reason |
-|----------|--------|
-| Step 4 note about automatic `v1` | Users understand versioning kicks in immediately |
-| New "Making Major Changes Later" section | Shows `version:new` and `diff:version` |
-| "Done" line notes version tracking | Reminds user versions are used under the hood |
-
----

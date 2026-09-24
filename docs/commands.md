@@ -12,7 +12,7 @@ SpecDrive has two types of commands:
 | Command | Purpose |
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive structure and adapters |
-| `sdrive onboard` | Onboard an existing project (detects OpenSpec/Spec-Kit) |
+| `sdrive onboard` | Scan an existing project (usually run automatically by `/sdrive:onboard`) |
 | `sdrive validate` | Validate all governance files |
 | `sdrive config:validate` | Validate `.sdrive/config.json` |
 | `sdrive status` | Show feature lifecycle state |
@@ -56,7 +56,7 @@ Creates:
 
 ### `sdrive onboard`
 
-Adopts SpecDrive into an existing project (brownfield onboarding).
+Scans the project for onboarding. Usually run automatically by `/sdrive:onboard`.
 
 ```bash
 sdrive onboard
@@ -69,9 +69,8 @@ What it does:
 - Records detected external spec systems in the inventory
 - Writes `.sdrive/onboarding/inventory.json` and `report.md`
 - Refuses to run twice (checks for an `onboarding` block in `workflow-state.json`)
-- Prints next steps to run the Onboarding Agent in your AI tool
 
-The CLI only runs the scan. Migration and adoption are handled by the Onboarding Agent via `/sdrive:onboard`.
+You do not need to run this manually. The Onboarding Agent runs it internally if needed.
 
 ---
 
@@ -107,6 +106,8 @@ Shows all features and their lifecycle state.
 sdrive status
 ```
 
+For each feature, it lists every version and its phase, step, and gate status.
+
 ---
 
 ### `sdrive approve <gate>`
@@ -123,6 +124,8 @@ Allowed gates:
 - `planning`
 - `implementation`
 - `review`
+
+Approval applies to the feature's current version.
 
 ---
 
@@ -349,7 +352,7 @@ The dashboard also supports filters:
 
 ### `/sdrive:onboard`
 
-Adopts SpecDrive into an existing project (brownfield) and migrates OpenSpec or Spec-Kit specs.
+Adopts SpecDrive into an existing project (brownfield) and migrates OpenSpec or Spec-Kit specs. This is the only command needed for brownfield onboarding.
 
 ```text
 /sdrive:onboard
@@ -357,7 +360,9 @@ Adopts SpecDrive into an existing project (brownfield) and migrates OpenSpec or 
 
 **What it does:**
 
-- Reads `.sdrive/onboarding/inventory.json` produced by `sdrive onboard`
+- If `.sdrive/onboarding/inventory.json` does not exist, runs `node .sdrive/scripts/onboard.js` internally to scan the project
+- If the inventory exists but is older than `workflow-state.json`, asks the user whether to rescan
+- Reads `.sdrive/onboarding/inventory.json`
 - Asks the user which missing pieces to fill vs. defer
 - Generates a baseline constitution (if approved)
 - Generates retroactive specs for existing features (if approved)

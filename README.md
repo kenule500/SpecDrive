@@ -163,39 +163,25 @@ sdrive init
 
 ## Onboarding an Existing Project
 
-If your project already has code but no SpecDrive governance, use Brownfield Onboarding.
-
-### Step 1: Scan the project
-
-```bash
-sdrive onboard
-```
-
-This scans the project and writes:
-
-- `.sdrive/onboarding/inventory.json`
-- `.sdrive/onboarding/report.md`
-
-It also refuses to run twice. If onboarding already ran, remove the `onboarding` block from `.sdrive/workflow-state.json` to re-run.
-
-### Step 2: Review the report
-
-Open `.sdrive/onboarding/report.md` to see what was found and what is missing.
-
-### Step 3: Run the Onboarding Agent
+If your project already has code but no SpecDrive governance, run:
 
 ```text
 /sdrive:onboard
 ```
 
-The agent will:
+That is the only command you need.
 
-- Show the inventory
-- Ask which missing pieces to fill vs. defer
-- Optionally generate a baseline constitution
-- Optionally generate retroactive specs for existing features
-- Optionally migrate OpenSpec or Spec-Kit specs
-- Record onboarding state in `workflow-state.json`
+The Onboarding Agent will:
+
+1. Scan your project automatically
+2. Detect any `openspec/` or `.specify/` folders
+3. Write `.sdrive/onboarding/inventory.json` and `report.md`
+4. Show the inventory for your approval
+5. Ask which missing pieces to fill vs. defer
+6. Optionally generate a baseline constitution
+7. Optionally generate retroactive specs for existing features
+8. Optionally migrate OpenSpec or Spec-Kit specs
+9. Record onboarding state in `workflow-state.json`
 
 ### What onboarding does NOT do
 
@@ -204,23 +190,25 @@ The agent will:
 - Does not modify code
 - Does not fabricate spec IDs or history
 
----
+### Optional: manual scan
 
-## Migrating from OpenSpec or Spec-Kit
-
-If your project already uses OpenSpec or Spec-Kit, SpecDrive can migrate those specs into its own structure.
-
-Migration happens automatically during Brownfield Onboarding.
-
-### Step 1: Detect
-
-When you run:
+If you prefer to scan from the terminal before opening your AI tool:
 
 ```bash
 sdrive onboard
 ```
 
-The scanner checks for:
+This only writes the inventory. Adoption still happens via `/sdrive:onboard`.
+
+---
+
+## Migrating from OpenSpec or Spec-Kit
+
+Migration is part of onboarding. It runs automatically when OpenSpec or Spec-Kit is detected and the user approves.
+
+### Step 1: Detect
+
+When the Onboarding Agent runs, it scans for:
 
 - `openspec/` folder
 - `.specify/` folder
@@ -229,13 +217,7 @@ If found, it records them in `.sdrive/onboarding/inventory.json` under `detected
 
 ### Step 2: Migrate
 
-Then run:
-
-```text
-/sdrive:onboard
-```
-
-The Onboarding Agent will ask:
+The agent will ask:
 
 > "I found an OpenSpec project with 3 specs and 2 changes. Migrate them into SpecDrive?"
 
@@ -507,7 +489,7 @@ Audits and manages AI skills.
 | Command | Purpose |
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive structure |
-| `sdrive onboard` | Onboard an existing project (detects OpenSpec/Spec-Kit) |
+| `sdrive onboard` | Scan an existing project (usually run automatically by `/sdrive:onboard`) |
 | `sdrive validate` | Validate governance files |
 | `sdrive config:validate` | Validate `.sdrive/config.json` |
 | `sdrive status` | Show feature lifecycle state |

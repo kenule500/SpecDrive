@@ -565,13 +565,18 @@ program
 
     state.features.forEach((f) => {
       console.log(`📁 ${f.name}`);
-      console.log(`   Phase:        ${f.phase}`);
-      console.log(`   Current Step: ${f.currentStep}`);
-      console.log(`   Gates:`);
-      console.log(`     specification: ${f.gates?.specification ?? "pending"}`);
-      console.log(`     planning:      ${f.gates?.planning ?? "pending"}`);
-      console.log(`     implementation: ${f.gates?.implementation ?? "pending"}`);
-      console.log(`     review:        ${f.gates?.review ?? "pending"}`);
+      console.log(`   Current Version: ${f.currentVersion}`);
+
+      (f.versions || []).forEach((v) => {
+        console.log(`   Version ${v.id}:`);
+        console.log(`     Phase:        ${v.phase}`);
+        console.log(`     Current Step: ${v.currentStep}`);
+        console.log(`     Gates:`);
+        console.log(`       specification: ${v.gates?.specification ?? "pending"}`);
+        console.log(`       planning:      ${v.gates?.planning ?? "pending"}`);
+        console.log(`       implementation: ${v.gates?.implementation ?? "pending"}`);
+        console.log(`       review:        ${v.gates?.review ?? "pending"}`);
+      });
       console.log("");
     });
   });
@@ -606,21 +611,29 @@ program
     }
 
     const feature = state.features[0];
+    const versionId = feature.currentVersion;
 
-    if (!feature.gates) {
-      feature.gates = {};
+    if (!feature.versions || feature.versions.length === 0) {
+      console.error("❌ No versions found.");
+      process.exit(1);
     }
 
-    feature.gates[gate] = "approved";
-    feature.history = feature.history || [];
-    feature.history.push({
+    const version = feature.versions.find((v) => v.id === versionId) || feature.versions[0];
+
+    if (!version.gates) {
+      version.gates = {};
+    }
+
+    version.gates[gate] = "approved";
+    version.history = version.history || [];
+    version.history.push({
       event: `${gate}_approved`,
       timestamp: new Date().toISOString()
     });
 
     fs.writeFileSync(workflowStatePath, JSON.stringify(state, null, 2));
 
-    console.log(`✅ Gate "${gate}" approved for feature "${feature.name}".`);
+    console.log(`✅ Gate "${gate}" approved for feature "${feature.name}" version "${version.id}".`);
   });
 
 // ---------- TEAM COMMANDS ----------
@@ -776,28 +789,6 @@ program
     }
   });
 
-// ---------- MIGRATE ----------
-program
-  .command("migrate")
-  .description("Migrate specs from OpenSpec or Spec-Kit")
-  .action(() => {
-    requirePermission("migrate");
-
-    const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "migrate.js");
-
-    if (!fs.existsSync(scriptPath)) {
-      console.error("❌ migrate.js not found. Run `sdrive init` first.");
-      process.exit(1);
-    }
-
-    try {
-      execSync(`node "${scriptPath}"`, { stdio: "inherit" });
-    } catch (error) {
-      console.error("❌ Migration failed.");
-      process.exit(1);
-    }
-  });
-
 // ---------- DIFF ----------
 program
   .command("diff <oldFile> <newFile>")
@@ -904,15 +895,23 @@ program
       process.exit(1);
     }
 
-    target.phase = "ongoing";
-    target.currentStep = "specification";
-    target.gates.review = "pending";
+    if (!target.versions || target.versions.length === 0) {
+      console.error(`❌ Feature "${feature}" has no versions.`);
+      process.exit(1);
+    }
 
-    target.history = target.history || [];
-    target.history.push({
-      event: "feature_reopened",
-      timestamp: new Date().toISOString()
-    });
+    const currentVersion = target.versions.find((v) => v.id === target.currentVersion);
+
+    if (currentVersion) {
+      currentVersion.phase = "ongoing";
+      currentVersion.currentStep = "specification";
+      currentVersion.gates.review = "pending";
+      currentVersion.history = currentVersion.history || [];
+      currentVersion.history.push({
+        event: "feature_reopened",
+        timestamp: new Date().toISOString()
+      });
+    }
 
     fs.writeFileSync(workflowStatePath, JSON.stringify(state, null, 2));
 
@@ -920,7 +919,56 @@ program
     console.log("   Review gate reset to pending.");
   });
 
-  // ---------- VERSION NEW ----------
+// ---------- ONBOARD COMMAND ----------
+// Internal helper. Usually run automatically by the Onboarding Agent.
+program
+  .command("onboard")
+  .description("Scan an existing project for onboarding (usually run automatically by /sdrive:onboard)")
+  .action(() => {
+    requirePermission("onboard");
+
+    const projectRoot = process.cwd();
+    const sdriveRoot = path.join(projectRoot, ".sdrive");
+    const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
+
+    // Guard: refuse to run twice
+    if (fs.existsSync(workflowStatePath)) {
+      try {
+        const state = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
+
+        if (state.onboarding && state.onboarding.date) {
+          console.error(
+            `❌ Onboarding already ran on ${state.onboarding.date}. Refusing to re-run.`
+          );
+          console.error("   If you want to re-run, remove the 'onboarding' block from workflow-state.json.");
+          process.exit(1);
+        }
+      } catch (error) {
+        // ignore parse errors and continue
+      }
+    }
+
+    const scriptPath = path.join(sdriveRoot, "scripts", "onboard.js");
+
+    if (!fs.existsSync(scriptPath)) {
+      console.error("❌ onboard.js not found. Run `sdrive init` first.");
+      process.exit(1);
+    }
+
+    try {
+      execSync(`node "${scriptPath}"`, { stdio: "inherit" });
+
+      console.log("");
+      console.log("📋 The scan is complete.");
+      console.log("   You can now run `/sdrive:onboard` in your AI tool,");
+      console.log("   or the agent will run this scan for you if needed.");
+    } catch (error) {
+      console.error("❌ Onboarding scan failed.");
+      process.exit(1);
+    }
+  });
+
+// ---------- VERSION NEW ----------
 program
   .command("version:new <feature>")
   .description("Create a new version of a feature")
@@ -960,55 +1008,4 @@ program
     }
   });
 
-  // ---------- ONBOARD ----------
-program
-  .command("onboard")
-  .description("Onboard an existing project into SpecDrive (brownfield adoption)")
-  .action(() => {
-    requirePermission("onboard");
-
-    const projectRoot = process.cwd();
-    const sdriveRoot = path.join(projectRoot, ".sdrive");
-    const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
-
-    // Guard: refuse to run twice
-    if (fs.existsSync(workflowStatePath)) {
-      try {
-        const state = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
-
-        if (state.onboarding && state.onboarding.date) {
-          console.error(
-            `❌ Onboarding already ran on ${state.onboarding.date}. Refusing to re-run.`
-          );
-          console.error("   If you want to re-run, remove the 'onboarding' block from workflow-state.json.");
-          process.exit(1);
-        }
-      } catch (error) {
-        // ignore parse errors and continue
-      }
-    }
-
-    const scriptPath = path.join(sdriveRoot, "scripts", "onboard.js");
-
-    if (!fs.existsSync(scriptPath)) {
-      console.error("❌ onboard.js not found. Run `sdrive init` first.");
-      process.exit(1);
-    }
-
-    try {
-      execSync(`node "${scriptPath}"`, { stdio: "inherit" });
-
-      console.log("");
-      console.log("📋 Next steps:");
-      console.log("   1. Review .sdrive/onboarding/report.md");
-      console.log("   2. Run the Onboarding Agent in your AI tool:");
-      console.log("      /sdrive:onboard");
-      console.log("");
-      console.log("   The agent will ask you what to fill vs. defer.");
-    } catch (error) {
-      console.error("❌ Onboarding scan failed.");
-      process.exit(1);
-    }
-  });
-  
 program.parse(process.argv);

@@ -170,7 +170,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 
 **How each agent connects:**
 
-- The **Onboarding Agent** is only used once for brownfield projects. It also migrates OpenSpec or Spec-Kit specs when detected.
+- The **Onboarding Agent** is only used once for brownfield projects. It runs the scan internally and migrates OpenSpec or Spec-Kit specs.
 - Every other agent reads the **constitution** first, then reads feature files.
 - Each agent respects **current version** isolation.
 - Every agent runs **validators** before finishing.
@@ -231,7 +231,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | Command | Purpose |
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive |
-| `sdrive onboard` | Scan existing project (detects OpenSpec and Spec-Kit) |
+| `sdrive onboard` | Scan existing project (usually run automatically by `/sdrive:onboard`) |
 | `sdrive validate` | Validate all governance files |
 | `sdrive config:validate` | Validate `config.json` |
 | `sdrive status` | Show feature lifecycle |
@@ -248,7 +248,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | `sdrive verify` | Verify code vs plan |
 | `sdrive version:new` | Create new feature version |
 | `sdrive diff:version` | Compare versions |
-| ~~`sdrive migrate`~~ | Deprecated — use `sdrive onboard` |
+| ~~`sdrive migrate`~~ | Deprecated — use `/sdrive:onboard` |
 
 ---
 
@@ -410,13 +410,23 @@ Stored in `.sdrive/templates/`. Selected during `sdrive init`.
 | `onboarding/report.md` | Human-readable scan |
 | `workflow-state.json > onboarding` | Tracks missing, deferred, migrated, skipped |
 
-**Phases:** Reconnaissance → Decide what to fill → Baseline Specs → **Migration (OpenSpec/Spec-Kit)** → Constitution Alignment → Governance Extension → Validation → Report.
+**How the user triggers it:**
+
+```text
+/sdrive:onboard
+```
+
+That is the only command needed.
+
+The Onboarding Agent runs `node .sdrive/scripts/onboard.js` internally if the inventory is missing, or rescans if the inventory is stale.
+
+**Phases:** Internal Scan → Decide what to fill → Baseline Specs → Migration (OpenSpec/Spec-Kit) → Constitution Alignment → Governance Extension → Validation → Report.
 
 ---
 
 ## 17. The Migration System (OpenSpec + Spec-Kit)
 
-**Detection:** `onboard.js` scans for `openspec/` and `.specify/`.
+**Detection:** `onboard.js` scans for `openspec/` and `.specify/`. The Onboarding Agent reads `detectedSystems`.
 
 **Migration scripts:**
 
@@ -491,8 +501,11 @@ Stored in `.sdrive/templates/`. Selected during `sdrive init`.
 
 ```
 [Brownfield only]
-   sdrive onboard
    /sdrive:onboard
+     → agent runs onboard.js internally if needed
+     → asks what to fill vs. defer
+     → asks whether to migrate OpenSpec / Spec-Kit
+     → records everything in workflow-state.json
 
 [All projects]
    /sdrive:constitution
@@ -579,23 +592,26 @@ sdrive init
 
 ```bash
 npm install -g specdrive-cli@latest
-sdrive onboard
+```
+
+Then in your AI tool:
+
+```text
 /sdrive:onboard
 /sdrive:constitution
 /sdrive:propose "..."
 ...
 ```
 
-**OpenSpec or Spec-Kit project:**
+The Onboarding Agent scans the project, detects OpenSpec or Spec-Kit, and handles migration when approved.
+
+**Optional manual scan (terminal):**
 
 ```bash
-npm install -g specdrive-cli@latest
 sdrive onboard
-/sdrive:onboard   (approve migration when prompted)
-/sdrive:constitution
-/sdrive:propose "..."
-...
 ```
+
+But this is not required. The agent will run it internally.
 
 **Structural change:**
 
@@ -636,9 +652,9 @@ sdrive dashboard
 | No visibility | Web dashboard |
 | No role control | Permissions system |
 | No audit trail | `audit-log.json` |
-| Existing project can't adopt | Brownfield onboarding |
-| Existing OpenSpec project can't migrate | `migrate-openspec.js` via onboarding |
-| Existing Spec-Kit project can't migrate | `migrate-speckit.js` via onboarding |
+| Existing project can't adopt | `/sdrive:onboard` (single command) |
+| Existing OpenSpec project can't migrate | `migrate-openspec.js` via `/sdrive:onboard` |
+| Existing Spec-Kit project can't migrate | `migrate-speckit.js` via `/sdrive:onboard` |
 | AI doesn't know project rules | `constitution.md` |
 | Remote tooling | MCP server |
 | Different AI tools | 15 adapters |
@@ -657,7 +673,7 @@ You built a complete, enterprise-grade Spec-Driven Development system consisting
 - A local web dashboard with filters
 - An MCP server
 - 15 AI tool adapters
-- Brownfield onboarding
+- Brownfield onboarding as a single command
 - OpenSpec and Spec-Kit migration
 - Per-version lifecycle tracking
 - Spec-to-code verification
@@ -666,28 +682,3 @@ You built a complete, enterprise-grade Spec-Driven Development system consisting
 
 It is complete, publishable, and ready for real-world use.
 ```
-
----
-
-## What changed vs the previous version
-
-| Section | Change |
-|---------|--------|
-| TOC | Added "The Migration System (OpenSpec + Spec-Kit)" |
-| 1. What SpecDrive Is | Added "Migration" bullet |
-| 3. Directory Structure | 7 → 8 schemas; 18 → 20 scripts |
-| 4. Agents | Onboarding now notes migration responsibilities |
-| 5. Schemas | Renamed to 8; notes `migrated` and `skipped` in workflow state |
-| 6. Scripts | 18 → 20; added `migrate-openspec.js`, `migrate-speckit.js`; marked `migrate.js` deprecated |
-| 7. CLI | Marked `sdrive migrate` deprecated; notes onboard detects external systems |
-| 12. Dashboard | Added detected systems, migrated, skipped |
-| 16. Onboarding | Added migration phase |
-| 17. NEW | Migration System section |
-| 18. Versioning | Renumbered |
-| 19. Spec-to-Code | Renumbered |
-| 20. Workflow | Renumbered |
-| 21–24 | Renumbered |
-| 24. Problems | Added migration rows |
-| Final Summary | Updated counts |
-
----
