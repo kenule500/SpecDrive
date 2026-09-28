@@ -9,10 +9,22 @@ const readline = require("readline");
 
 const program = new Command();
 
+function getCliVersion() {
+  try {
+    return require("../package.json").version;
+  } catch (error) {
+    const mcpConfigPath = path.join(process.cwd(), ".sdrive", "mcp", "mcp.json");
+    if (fs.existsSync(mcpConfigPath)) {
+      return JSON.parse(fs.readFileSync(mcpConfigPath, "utf8")).version || "0.1.10";
+    }
+    return "0.1.10";
+  }
+}
+
 program
   .name("sdrive")
   .description("SpecDrive Enterprise Spec-Driven Development CLI")
-  .version("0.1.0");
+  .version(getCliVersion());
 
 function copyRecursive(src, dest) {
   if (!fs.existsSync(src)) return;

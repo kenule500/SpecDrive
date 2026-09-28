@@ -5,8 +5,21 @@ const path = require("path");
 const { execSync } = require("child_process");
 
 const SERVER_NAME = "specdrive";
-const SERVER_VERSION = require("../package.json").version;
 const PROTOCOL_VERSION = "2024-11-05";
+
+function getServerVersion() {
+  try {
+    return require("../package.json").version;
+  } catch (error) {
+    const metadataPath = path.join(__dirname, "mcp.json");
+    if (fs.existsSync(metadataPath)) {
+      return JSON.parse(fs.readFileSync(metadataPath, "utf8")).version || "0.1.10";
+    }
+    return "0.1.10";
+  }
+}
+
+const SERVER_VERSION = getServerVersion();
 
 function logDebug(message) {
   if (process.env.SPECDRIVE_DEBUG === "1") {

@@ -1,8 +1,10 @@
 const Ajv = require("ajv");
+const addFormats = require("ajv-formats");
 const fs = require("fs");
 const path = require("path");
 
 const ajv = new Ajv({ allErrors: true });
+addFormats(ajv);
 
 const projectRoot = path.join(__dirname, "..", "..");
 

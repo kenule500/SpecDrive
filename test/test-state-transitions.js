@@ -10,18 +10,24 @@ function resetState() {
     features: [
       {
         name: "test-feature",
-        phase: "backlog",
-        currentStep: "specification",
-        gates: {
-          specification: "pending",
-          planning: "pending",
-          implementation: "pending",
-          review: "pending"
-        },
-        history: [
+        currentVersion: "v1",
+        versions: [
           {
-            event: "feature_created",
-            timestamp: new Date().toISOString()
+            id: "v1",
+            phase: "backlog",
+            currentStep: "specification",
+            gates: {
+              specification: "pending",
+              planning: "pending",
+              implementation: "pending",
+              review: "pending"
+            },
+            history: [
+              {
+                event: "feature_created",
+                timestamp: new Date().toISOString()
+              }
+            ]
           }
         ]
       }
@@ -51,12 +57,13 @@ function testInitialState() {
   resetState();
   const state = readState();
   const feature = state.features[0];
+  const version = feature.versions[0];
 
   if (
-    feature.gates.specification === "pending" &&
-    feature.gates.planning === "pending" &&
-    feature.gates.implementation === "pending" &&
-    feature.gates.review === "pending"
+    version.gates.specification === "pending" &&
+    version.gates.planning === "pending" &&
+    version.gates.implementation === "pending" &&
+    version.gates.review === "pending"
   ) {
     console.log("✅ PASS: All gates are pending initially.");
     return true;
@@ -78,9 +85,9 @@ function testGateApproval() {
   }
 
   const state = readState();
-  const feature = state.features[0];
+  const version = state.features[0].versions[0];
 
-  if (feature.gates.specification === "approved") {
+  if (version.gates.specification === "approved") {
     console.log("✅ PASS: specification gate approved.");
     return true;
   }
@@ -112,9 +119,9 @@ function testHistory() {
   approveGate("specification");
 
   const state = readState();
-  const feature = state.features[0];
+  const version = state.features[0].versions[0];
 
-  if (feature.history.some((event) => event.event === "specification_approved")) {
+  if (version.history.some((event) => event.event === "specification_approved")) {
     console.log("✅ PASS: History recorded approval.");
     return true;
   }

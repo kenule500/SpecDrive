@@ -79,3 +79,7 @@ module.exports = {
   generateSelected,
   loadTools
 };
+
+if (require.main === module) {
+  generateAll();
+}

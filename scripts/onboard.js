@@ -287,6 +287,19 @@ function main() {
   const report = buildReport(inventory);
   fs.writeFileSync(reportPath, report);
 
+  const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
+  const workflowState = fs.existsSync(workflowStatePath)
+    ? JSON.parse(fs.readFileSync(workflowStatePath, "utf8"))
+    : { features: [] };
+  workflowState.onboarding = {
+    mode: inventory.mode,
+    date: inventory.scannedAt,
+    detectedSystems: inventory.detectedSystems,
+    missing: inventory.missing,
+    deferred: inventory.deferred
+  };
+  fs.writeFileSync(workflowStatePath, JSON.stringify(workflowState, null, 2));
+
   console.log(`✅ Inventory written: ${path.relative(projectRoot, inventoryPath)}`);
   console.log(`✅ Report written:    ${path.relative(projectRoot, reportPath)}`);
   console.log("");

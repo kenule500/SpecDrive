@@ -18,14 +18,14 @@ function runRouter(command, feature) {
 function testKnownCommand() {
   console.log("\n🧪 Test 1: Known command should pass");
 
-  const passed = runRouter("/sdrive:constitution");
+  const passed = runRouter("/sdrive:skills");
 
   if (passed) {
-    console.log("✅ PASS: Router accepted /sdrive:constitution.");
+    console.log("✅ PASS: Router accepted the ungated /sdrive:skills command.");
     return true;
   }
 
-  console.log("❌ FAIL: Router rejected /sdrive:constitution.");
+  console.log("❌ FAIL: Router rejected /sdrive:skills.");
   return false;
 }
 

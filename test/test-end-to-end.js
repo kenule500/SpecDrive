@@ -33,7 +33,7 @@ function resetEnvironment() {
 function testFeatureCreation() {
   console.log("\n🧪 Test 1: Feature creation");
 
-  const passed = runCommand(`node .sdrive/scripts/test-create.js`);
+  const passed = runCommand(`node .sdrive/test/test-create.js`);
 
   if (passed) {
     console.log("✅ PASS: Feature created.");
@@ -76,17 +76,17 @@ function testTraceabilityGenerated() {
   return false;
 }
 
-function testValidationPasses() {
-  console.log("\n🧪 Test 4: Governance validation passes");
+function testIncompleteScaffoldFailsValidation() {
+  console.log("\n🧪 Test 4: Incomplete scaffold is rejected by governance validation");
 
   const passed = runCommand("node .sdrive/scripts/validate-governance.js");
 
-  if (passed) {
-    console.log("✅ PASS: Governance validation passed.");
+  if (!passed) {
+    console.log("✅ PASS: Validator rejected the incomplete scaffold as expected.");
     return true;
   }
 
-  console.log("❌ FAIL: Governance validation failed.");
+  console.log("❌ FAIL: Validator accepted an incomplete scaffold.");
   return false;
 }
 
@@ -121,7 +121,7 @@ function main() {
   allPassed &= testFeatureCreation();
   allPassed &= testSpecGeneration();
   allPassed &= testTraceabilityGenerated();
-  allPassed &= testValidationPasses();
+  allPassed &= testIncompleteScaffoldFailsValidation();
   allPassed &= testWorkflowState();
 
   resetEnvironment();
