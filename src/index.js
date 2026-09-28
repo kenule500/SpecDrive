@@ -48,6 +48,15 @@ function requirePermission(cliCommand) {
   }
 }
 
+function audit(event, details = {}) {
+  try {
+    const { logEvent } = require(path.join(process.cwd(), ".sdrive", "scripts", "audit-log.js"));
+    logEvent(event, details);
+  } catch (error) {
+    // Ignore audit failures so the CLI still works when logging is unavailable.
+  }
+}
+
 function loadConfig() {
   const configPath = path.join(process.cwd(), ".sdrive", "config.json");
   const schemaPath = path.join(process.cwd(), ".sdrive", "schemas", "config.schema.json");
@@ -538,6 +547,7 @@ program
       JSON.stringify({ feature, version: 1, rows: [] }, null, 2)
     );
 
+    audit("feature_created", { feature });
     console.log(`✅ Feature "${feature}" created in backlog.`);
   });
 
@@ -632,6 +642,7 @@ program
     });
 
     fs.writeFileSync(workflowStatePath, JSON.stringify(state, null, 2));
+    audit("gate_approved", { feature: feature.name, version: version.id, gate });
 
     console.log(`✅ Gate "${gate}" approved for feature "${feature.name}" version "${version.id}".`);
   });
@@ -984,6 +995,7 @@ program
 
     try {
       execSync(`node "${scriptPath}" "${feature}"`, { stdio: "inherit" });
+      audit("version_created", { feature });
     } catch (error) {
       process.exit(1);
     }

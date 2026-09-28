@@ -31,5 +31,14 @@
     "cli",
     "specflow"
   ],
-  "license": "MIT"
+  "author": "SpecDrive",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kenule500/SpecDrive.git"
+  },
+  "homepage": "https://github.com/kenule500/SpecDrive#readme",
+  "bugs": {
+    "url": "https://github.com/kenule500/SpecDrive/issues"
+  }
 }
