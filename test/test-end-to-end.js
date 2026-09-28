@@ -33,7 +33,8 @@ function resetEnvironment() {
 function testFeatureCreation() {
   console.log("\n🧪 Test 1: Feature creation");
 
-  const passed = runCommand(`node .sdrive/test/test-create.js`);
+  const createTestPath = path.join(__dirname, "test-create.js");
+  const passed = runCommand(`node "${createTestPath}"`);
 
   if (passed) {
     console.log("✅ PASS: Feature created.");

@@ -202,11 +202,32 @@ function getMcpConfigPaths() {
   return paths;
 }
 
+function printInitWelcome() {
+  const useColor = Boolean(process.stdout.isTTY && !process.env.NO_COLOR && process.env.TERM !== "dumb");
+  const reset = useColor ? "\u001b[0m" : "";
+  const specColor = useColor ? "\u001b[1;96m" : "";
+  const driveColor = useColor ? "\u001b[1;94m" : "";
+  const headingColor = useColor ? "\u001b[1m" : "";
+  const taglineColor = useColor ? "\u001b[2m" : "";
+
+  console.log("");
+  console.log(`  ${specColor}Spec${reset}${driveColor}Drive${reset}`);
+  console.log(`  ${taglineColor}Spec-driven development with built-in governance${reset}`);
+  console.log("");
+  console.log(`  ${headingColor}This setup will configure:${reset}`);
+  console.log("  - SpecDrive project structure and governance");
+  console.log("  - AI tool adapters and workflow commands");
+  console.log("  - Optional MCP client connections");
+  console.log("");
+}
+
 // ---------- INIT COMMAND ----------
 program
   .command("init")
   .description("Initialize SpecDrive structure, tool adapters, and default template")
   .action(() => {
+    printInitWelcome();
+
     const projectRoot = process.cwd();
     const sdriveRoot = path.join(projectRoot, ".sdrive");
 
