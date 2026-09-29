@@ -362,6 +362,74 @@ function renderOnboarding(onboarding) {
   return div;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function renderProduct(product) {
+  const div = document.createElement("div");
+  div.className = "product";
+
+  if (!product || !product.exists) {
+    div.innerHTML = `
+      <div class="product-empty">
+        No product blueprint yet. Run <code>/sdrive:blueprint</code> to create a product overview,
+        conceptual mockup, roadmap, and feature backlog.
+      </div>
+    `;
+    return div;
+  }
+
+  const backlog = product.backlog || [];
+  const pending = backlog.filter((item) => /pending/i.test(item.status)).length;
+  const deferred = backlog.filter((item) => /deferred/i.test(item.status)).length;
+
+  const backlogRows = backlog.length
+    ? backlog
+        .map(
+          (item) => `
+        <tr>
+          <td class="backlog-id">${escapeHtml(item.id)}</td>
+          <td>${escapeHtml(item.feature)}</td>
+          <td><span class="backlog-status ${/pending/i.test(item.status) ? "pending" : /deferred/i.test(item.status) ? "deferred" : "other"}">${escapeHtml(item.status)}</span></td>
+        </tr>`
+        )
+        .join("")
+    : `<tr><td colspan="3" class="product-empty">No backlog items yet.</td></tr>`;
+
+  div.innerHTML = `
+    <div class="product-summary">
+      <span class="product-stat">📋 Backlog: <strong>${backlog.length}</strong></span>
+      <span class="product-stat">⏳ Pending: <strong>${pending}</strong></span>
+      <span class="product-stat">💤 Deferred: <strong>${deferred}</strong></span>
+    </div>
+
+    <div class="product-artifacts">
+      ${product.overview ? `<span class="product-artifact">📄 overview.md</span>` : ""}
+      ${product.mockup ? `<span class="product-artifact">🗺️ mockup.md</span>` : ""}
+      ${product.designSystem ? `<span class="product-artifact">🎨 design-system.md</span>` : ""}
+      ${product.roadmap ? `<span class="product-artifact">🛣️ roadmap.md</span>` : ""}
+    </div>
+
+    <table class="backlog-table">
+      <thead>
+        <tr><th>ID</th><th>Feature</th><th>Status</th></tr>
+      </thead>
+      <tbody>${backlogRows}</tbody>
+    </table>
+
+    <div class="product-note">
+      Backlog items are product-level candidates. Promote one with <code>/sdrive:propose</code> to start detailed planning.
+    </div>
+  `;
+
+  return div;
+}
+
 async function main() {
   const onboarding = await fetchJson("/api/onboarding");
   const onboardingContainer = document.getElementById("onboarding-panel");
@@ -369,6 +437,14 @@ async function main() {
   if (onboardingContainer) {
     onboardingContainer.innerHTML = "";
     onboardingContainer.appendChild(renderOnboarding(onboarding));
+  }
+
+  const product = await fetchJson("/api/product");
+  const productContainer = document.getElementById("product-panel");
+
+  if (productContainer) {
+    productContainer.innerHTML = "";
+    productContainer.appendChild(renderProduct(product));
   }
 
   // Attach filter listeners

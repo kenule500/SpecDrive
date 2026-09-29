@@ -45,6 +45,56 @@ function copyRecursive(src, dest) {
   }
 }
 
+function mergeBundledSlashCommands(packageRoot, sdriveRoot) {
+  const packagedManifestPath = path.join(packageRoot, "commands", "manifest.json");
+  const installedManifestPath = path.join(sdriveRoot, "commands", "manifest.json");
+  const packagedPermissionsPath = path.join(packageRoot, "commands", "permissions.json");
+  const installedPermissionsPath = path.join(sdriveRoot, "commands", "permissions.json");
+
+  if (!fs.existsSync(packagedManifestPath) || !fs.existsSync(installedManifestPath)) return;
+
+  try {
+    const packagedManifest = JSON.parse(fs.readFileSync(packagedManifestPath, "utf8"));
+    const installedManifest = JSON.parse(fs.readFileSync(installedManifestPath, "utf8"));
+    if (!Array.isArray(installedManifest.commands)) {
+      throw new Error("Installed command manifest must contain a commands array.");
+    }
+
+    const knownCommands = new Set(installedManifest.commands.map((command) => command.command));
+    const addedCommands = (packagedManifest.commands || []).filter((command) => {
+      if (knownCommands.has(command.command)) return false;
+      knownCommands.add(command.command);
+      installedManifest.commands.push(command);
+      return true;
+    });
+
+    let installedPermissions;
+    if (addedCommands.length > 0 && fs.existsSync(packagedPermissionsPath) && fs.existsSync(installedPermissionsPath)) {
+      const packagedPermissions = JSON.parse(fs.readFileSync(packagedPermissionsPath, "utf8"));
+      installedPermissions = JSON.parse(fs.readFileSync(installedPermissionsPath, "utf8"));
+      installedPermissions.rules = installedPermissions.rules || {};
+
+      for (const command of addedCommands) {
+        const roles = packagedPermissions.rules?.[command.command];
+        if (roles && !installedPermissions.rules[command.command]) {
+          installedPermissions.rules[command.command] = roles;
+        }
+      }
+    }
+
+    if (installedPermissions) {
+      fs.writeFileSync(installedPermissionsPath, JSON.stringify(installedPermissions, null, 2));
+    }
+
+    if (addedCommands.length > 0) {
+      fs.writeFileSync(installedManifestPath, JSON.stringify(installedManifest, null, 2));
+      console.log(`  Updated: .sdrive/commands/manifest.json (${addedCommands.length} new command(s))`);
+    }
+  } catch (error) {
+    console.warn("  ⚠️  Could not merge bundled slash commands. Check .sdrive/commands/manifest.json and permissions.json.");
+  }
+}
+
 function requirePermission(cliCommand) {
   const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "check-permission.js");
 
@@ -282,6 +332,8 @@ program
         console.log(`  ⚠️  Missing in package: ${dir}/`);
       }
     });
+
+    mergeBundledSlashCommands(packageRoot, sdriveRoot);
 
     const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
     if (!fs.existsSync(workflowStatePath)) {

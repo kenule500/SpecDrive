@@ -1,6 +1,6 @@
 # SpecDrive Agent Reference
 
-SpecDrive uses 12 specialized agents. Each agent has one slash command.
+SpecDrive uses 13 specialized agents. Each agent has one slash command.
 
 ---
 
@@ -20,6 +20,7 @@ SpecDrive uses 12 specialized agents. Each agent has one slash command.
 | 9 | Review & Complete | `/sdrive:review` | `09-review-complete.md` |
 | 10 | Security | `/sdrive:secure` | `10-security.md` |
 | 11 | Test | `/sdrive:test` | `11-test.md` |
+| 12 | Blueprint | `/sdrive:blueprint` | `12-blueprint.md` |
 
 ---
 
@@ -73,6 +74,29 @@ SpecDrive uses 12 specialized agents. Each agent has one slash command.
 - Includes verify-completion rule (`CON-602`)
 - Runs `sdrive verify <feature>` for active features when source rules change
 - Requires human approval
+
+---
+
+## Blueprint Agent
+
+**Command:** `/sdrive:blueprint` (optional)
+
+**Purpose:** Turn an early product idea into an approved product overview, conceptual app mockup, high-level design-system plan, roadmap, milestones, and product-level feature backlog.
+
+**What it does:**
+
+- Interviews the user and records confirmed information separately from assumptions and recommendations
+- Captures inspiration references and high-level design guidance without copying protected work
+- Creates a non-interactive, conceptual app map/mockup; it does not build a working prototype
+- Proposes milestones, roadmap order, dependencies, and candidate features
+- Asks the user whether to add, change, or defer feature candidates before saving
+- Saves approved documents under `.sdrive/product/`
+- Leaves each backlog item for `/sdrive:propose` to detail later; it does not create feature specs or workflow-state entries
+
+**When to use:**
+
+- When a developer has an app idea but lacks a product plan or roadmap
+- Skip it when a suitable plan already exists and use `/sdrive:propose` for a specific feature
 
 ---
 

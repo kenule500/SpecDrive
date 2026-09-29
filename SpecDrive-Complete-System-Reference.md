@@ -9,7 +9,7 @@ A full walkthrough of everything we built, from the ground up.
 1. [What SpecDrive Is](#1-what-specdrive-is)
 2. [The Big Picture (How It All Connects)](#2-the-big-picture-how-it-all-connects)
 3. [Directory Structure Overview](#3-directory-structure-overview)
-4. [The 12 Agents](#4-the-12-agents)
+4. [The 13 Agents](#4-the-13-agents)
 5. [The 8 JSON Schemas](#5-the-8-json-schemas)
 6. [The 20 Scripts](#6-the-20-scripts)
 7. [The CLI Commands](#7-the-cli-commands)
@@ -71,7 +71,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
                     └───┬──────────────────────┬─┘
                         │                      │
           ┌─────────────▼───────┐   ┌─────────▼─────────┐
-          │   12 Agent Files    │   │  Permission Check │
+          │   13 Agent Files    │   │  Permission Check │
           │  (.sdrive/agents/)  │   │  + Gate Check     │
           └──────────┬──────────┘   └─────────┬─────────┘
                      │                        │
@@ -107,7 +107,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 
 ```
 .sdrive/
-├── agents/            # 12 agent definitions
+├── agents/            # 13 agent definitions
 ├── commands/          # Manifest, router, gates, permissions
 ├── schemas/           # 8 JSON schemas
 ├── scripts/           # 20 scripts (validators, helpers, generators)
@@ -134,7 +134,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 
 | Folder | Purpose |
 |--------|---------|
-| `agents/` | The 12 AI agents that do the actual work |
+| `agents/` | The 13 AI agents that do the actual work |
 | `commands/` | Manifests, routing, gates, permissions |
 | `schemas/` | Machine-readable rules for validation |
 | `scripts/` | Deterministic tools used by agents and CLI |
@@ -151,7 +151,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 
 ---
 
-## 4. The 12 Agents
+## 4. The 13 Agents
 
 | # | Agent | Command | Purpose |
 |---|-------|---------|---------|
@@ -167,11 +167,12 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | 9 | Review & Complete | `/sdrive:review` | Audit + merge |
 | 10 | Security | `/sdrive:secure` | Security audit |
 | 11 | Test | `/sdrive:test` | Write tests |
+| 12 | Blueprint | `/sdrive:blueprint` | Optionally create a product overview, conceptual mockup, design-system plan, roadmap, milestones, and backlog |
 
 **How each agent connects:**
 
 - The **Onboarding Agent** is only used once for brownfield projects. It runs the scan internally and migrates OpenSpec or Spec-Kit specs.
-- Every other agent reads the **constitution** first, then reads feature files.
+- Feature-focused agents read the **constitution** and current feature files; Blueprint instead works from product context and user input.
 - Each agent respects **current version** isolation.
 - Every agent runs **validators** before finishing.
 - Every agent stops at **human approval gates**.
@@ -258,6 +259,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 |---------|-------|
 | `/sdrive:onboard` | Onboarding |
 | `/sdrive:constitution` | Constitution |
+| `/sdrive:blueprint` | Blueprint |
 | `/sdrive:propose` | Specification |
 | `/sdrive:design` | UI/UX |
 | `/sdrive:sync` | Cascade |
@@ -665,7 +667,7 @@ sdrive dashboard
 
 You built a complete, enterprise-grade Spec-Driven Development system consisting of:
 
-- 12 specialized agents
+- 13 specialized agents
 - 8 JSON schemas
 - 20 deterministic scripts
 - 20+ CLI commands

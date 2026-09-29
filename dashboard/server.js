@@ -102,6 +102,58 @@ function apiOnboarding() {
   return state.onboarding || null;
 }
 
+function readProductFile(fileName) {
+  const filePath = path.join(sdriveRoot, "product", fileName);
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    return fs.readFileSync(filePath, "utf8");
+  } catch (error) {
+    return null;
+  }
+}
+
+function parseBacklog(markdown) {
+  if (!markdown) return [];
+
+  const rows = [];
+  for (const line of markdown.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("|")) continue;
+    if (/^\|[\s:|-]+\|$/.test(trimmed)) continue;
+
+    const cells = trimmed
+      .split("|")
+      .slice(1, -1)
+      .map((cell) => cell.trim());
+
+    if (cells.length < 3) continue;
+    if (/^id$/i.test(cells[0])) continue;
+
+    rows.push({ id: cells[0], feature: cells[1], status: cells[2] });
+  }
+
+  return rows;
+}
+
+function apiProduct() {
+  const overview = readProductFile("overview.md");
+  const mockup = readProductFile("mockup.md");
+  const designSystem = readProductFile("design-system.md");
+  const roadmap = readProductFile("roadmap.md");
+  const backlogMarkdown = readProductFile("backlog.md");
+
+  const exists = Boolean(overview || mockup || designSystem || roadmap || backlogMarkdown);
+
+  return {
+    exists,
+    overview,
+    mockup,
+    designSystem,
+    roadmap,
+    backlog: parseBacklog(backlogMarkdown)
+  };
+}
+
 const server = http.createServer((req, res) => {
   const url = req.url;
 
@@ -137,6 +189,10 @@ const server = http.createServer((req, res) => {
 
     if (url === "/api/onboarding") {
       return res.end(JSON.stringify(apiOnboarding()));
+    }
+
+    if (url === "/api/product") {
+      return res.end(JSON.stringify(apiProduct()));
     }
 
     res.writeHead(404);

@@ -331,12 +331,13 @@ The dashboard also supports filters:
 
 ## Slash Commands
 
-> **Workflow order:** `/sdrive:onboard` (brownfield only) → `/sdrive:constitution` → `/sdrive:propose` → `/sdrive:apply` → `/sdrive:test` → `/sdrive:review`
+> **Typical workflow:** `/sdrive:onboard` (brownfield only) → `/sdrive:constitution` → optionally `/sdrive:blueprint` → `/sdrive:propose` → `/sdrive:apply` → `/sdrive:test` → `/sdrive:review`
 
 | Command | Agent | Purpose |
 |---------|-------|---------|
 | `/sdrive:onboard` | Onboarding | Adopt SpecDrive into an existing project, migrate OpenSpec/Spec-Kit |
 | `/sdrive:constitution` | Constitution | Create/update constitution |
+| `/sdrive:blueprint` | Blueprint | Optionally draft an app overview, conceptual mockup, roadmap, milestones, and backlog |
 | `/sdrive:propose` | Specification | Create spec, plan, tasks |
 | `/sdrive:design` | UI/UX | Build prototype |
 | `/sdrive:sync` | Cascade | Sync downstream files |
@@ -347,6 +348,26 @@ The dashboard also supports filters:
 | `/sdrive:performance` | Performance | Benchmark and optimize |
 | `/sdrive:review` | Review & Complete | Final audit and merge |
 | `/sdrive:secure` | Security | Security audit |
+
+---
+
+### `/sdrive:blueprint` (optional)
+
+Use this when you have an application idea but need help shaping the product-level plan. Developers who already have a suitable plan can skip it and go directly to `/sdrive:propose`.
+
+```text
+/sdrive:blueprint
+```
+
+After gathering user input and any inspiration references, Blueprint proposes:
+
+- `.sdrive/product/overview.md` — product purpose, users, guidance, references, assumptions, and open questions
+- `.sdrive/product/mockup.md` — a conceptual app map, key areas/screens, navigation, and user journeys (not a working prototype)
+- `.sdrive/product/design-system.md` — sourced design principles and proposed visual/component guidance (no implementation tokens or UI code)
+- `.sdrive/product/roadmap.md` — suggested milestones, sequencing, and dependencies
+- `.sdrive/product/backlog.md` — user-approved product-level feature candidates, initially pending
+
+Blueprint asks whether to add, change, or defer feature ideas and gets approval before writing. It does not generate interactive prototypes, detailed feature specs, implementation tasks, or workflow-state entries. Select an approved backlog item later and run `/sdrive:propose "<feature description>"` to create its detailed plan.
 
 ---
 
@@ -490,7 +511,7 @@ If the user is not allowed, the command is blocked.
 | Role | Can do |
 |------|--------|
 | admin | Everything |
-| reviewer | Approve, review, propose, create versions |
+| reviewer | Approve, review, propose, blueprint, create versions |
 | developer | Implement, test, run optimizations, verify |
 
 ### Permission File

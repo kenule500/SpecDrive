@@ -135,6 +135,8 @@ sdrive init
 /sdrive:constitution
 ```
 
+Optional: If you have an app idea but no product roadmap yet, run `/sdrive:blueprint` to draft a conceptual app overview and approved backlog. Skip it if you already have a plan.
+
 3. Propose a feature:
 
 ```text
@@ -519,6 +521,7 @@ Audits and manages AI skills.
 |-------|------|------|
 | Onboarding | `00-onboarding.md` | Adopt SpecDrive into an existing project, migrate OpenSpec and Spec-Kit |
 | Constitution | `01-constitution.md` | Discover project rules, merge into constitution |
+| Blueprint | `12-blueprint.md` | Optionally create a product overview, conceptual mockup, design-system plan, roadmap, and backlog |
 | Specification | `02-specification.md` | Generate spec, plan, tasks, traceability |
 | UI/UX | `03-uiux.md` | Build interactive prototype |
 | Cascade | `04-cascade.md` | Sync spec → plan → tasks |
@@ -609,7 +612,7 @@ All agents operate within the **current version** folder only. Older versions ar
 
 ```text
 .sdrive/
-├── agents/               # 12 agent definitions
+├── agents/               # 13 agent definitions
 ├── commands/             # Manifest, router, gates, permissions
 ├── schemas/              # JSON schemas
 ├── specs/                # Human-readable specs

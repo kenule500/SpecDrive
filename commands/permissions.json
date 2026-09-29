@@ -2,6 +2,7 @@
   "version": "1.0.0",
   "rules": {
     "/sdrive:constitution": ["admin"],
+    "/sdrive:blueprint": ["admin", "reviewer"],
     "/sdrive:propose": ["admin", "reviewer"],
     "/sdrive:design": ["admin", "reviewer", "developer"],
     "/sdrive:sync": ["admin", "reviewer", "developer"],
