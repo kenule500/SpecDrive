@@ -84,10 +84,20 @@ This makes AI-generated specs and code safe for enterprise use.
 
 ## Installation
 
-### Global Install
+Install the CLI **globally** so the `sdrive` command is available everywhere.
+
+### npm
 
 ```bash
 npm install -g specdrive-cli@latest
+```
+
+### Bun
+
+Bun installs the CLI but still needs Node.js on your machine to run it:
+
+```bash
+bun add -g specdrive-cli@latest
 ```
 
 ### Verify Install
@@ -95,6 +105,8 @@ npm install -g specdrive-cli@latest
 ```bash
 sdrive --version
 ```
+
+If that prints a version number, you're set.
 
 ### Initialize a Project
 
@@ -107,10 +119,35 @@ sdrive init
 SpecDrive will ask you to:
 
 1. Select which AI tools you use
-2. Select a default template
-3. Wire MCP clients (optional)
+
+MCP wiring is applied automatically for the tools you pick — no second prompt.
 
 It then creates the `.sdrive/` folder, tool adapters, and MCP server.
+
+### Non-Interactive Setup
+
+For CI, scripts, or agent-driven setup, pass `--tools` to skip the prompt:
+
+```bash
+sdrive init --tools github-copilot
+sdrive init --tools github-copilot,cursor,cline
+sdrive init --tools all
+sdrive init --tools none
+```
+
+### Local Install (Not Recommended)
+
+A local install puts the binary in `node_modules/.bin`, which is **not on your PATH**,
+so bare `sdrive` will not work. If you must install locally, invoke it through your
+package manager:
+
+| Install method | How to invoke |
+|----------------|---------------|
+| `npm install specdrive-cli` | `npx sdrive init` |
+| `bun add specdrive-cli` | `bunx sdrive init` |
+| `yarn add specdrive-cli` | `yarn sdrive init` |
+
+For the simplest experience, use a global install.
 
 ---
 

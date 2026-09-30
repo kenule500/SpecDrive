@@ -170,42 +170,70 @@ Always read the manifest first. Never hardcode the command list.
 `;
 }
 
-function mcpConfigContent() {
-  return JSON.stringify(
-    {
-      mcpServers: {
-        specdrive: {
-          command: "node",
-          args: [".sdrive/mcp/server.js"]
-        }
-      }
-    },
-    null,
-    2
-  );
+// Absolute path to the SpecDrive MCP server entry point. Absolute paths keep the
+// server resolvable regardless of the client's working directory.
+function mcpServerPath() {
+  return path.join(process.cwd(), ".sdrive", "mcp", "server.js");
 }
 
-function safeMergeMcpConfig(configPath, mcpContent) {
+// Each MCP client uses a different config schema. VS Code (GitHub Copilot) uses
+// `servers` + an explicit `type`, while Claude Desktop / Cursor / Cline use
+// `mcpServers`. Writing the wrong shape fails silently, so the shape is per-client.
+const MCP_CLIENTS = {
+  "Claude Desktop": {
+    key: "mcpServers",
+    entry: () => ({ command: "node", args: [mcpServerPath()] })
+  },
+  Cursor: {
+    key: "mcpServers",
+    entry: () => ({ command: "node", args: [mcpServerPath()] })
+  },
+  Cline: {
+    key: "mcpServers",
+    entry: () => ({ command: "node", args: [mcpServerPath()] })
+  },
+  "GitHub Copilot (VS Code)": {
+    key: "servers",
+    entry: () => ({ type: "stdio", command: "node", args: [mcpServerPath()] })
+  }
+};
+
+// Maps a selected AI tool (from commands/tools.json) to the MCP clients that
+// should be wired automatically. Tools without an MCP client are file-adapter only.
+const TOOL_TO_MCP_CLIENTS = {
+  "github-copilot": ["GitHub Copilot (VS Code)"],
+  "vscode-native": ["GitHub Copilot (VS Code)"],
+  "kilo-code": ["GitHub Copilot (VS Code)"],
+  cursor: ["Cursor"],
+  cline: ["Cline"],
+  "claude-code": ["Claude Desktop"]
+};
+
+function mcpConfigContent(clientName) {
+  const client = MCP_CLIENTS[clientName] || MCP_CLIENTS["Claude Desktop"];
+  return JSON.stringify({ [client.key]: { specdrive: client.entry() } }, null, 2);
+}
+
+function safeMergeMcpConfig(configPath, clientName) {
+  const client = MCP_CLIENTS[clientName] || MCP_CLIENTS["Claude Desktop"];
+
   if (!fs.existsSync(configPath)) {
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(configPath, mcpContent);
+    fs.writeFileSync(configPath, mcpConfigContent(clientName));
     console.log(`✅ Created: ${configPath}`);
     return;
   }
 
   try {
     const existing = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    existing.mcpServers = existing.mcpServers || {};
+    existing[client.key] = existing[client.key] || {};
 
-    if (existing.mcpServers.specdrive) {
+    if (existing[client.key].specdrive) {
       console.log(`⚠️  SpecDrive already configured in ${configPath}`);
       return;
     }
 
-    existing.mcpServers.specdrive = {
-      command: "node",
-      args: [".sdrive/mcp/server.js"]
-    };
+    existing[client.key].specdrive = client.entry();
 
     fs.writeFileSync(configPath, JSON.stringify(existing, null, 2));
     console.log(`✅ Merged SpecDrive into: ${configPath}`);
@@ -245,37 +273,105 @@ function getMcpConfigPaths() {
   });
 
   paths.push({
-    name: "VS Code",
+    name: "GitHub Copilot (VS Code)",
     path: path.join(process.cwd(), ".vscode", "mcp.json")
   });
 
   return paths;
 }
 
+// Wires every MCP client implied by the selected tools, without prompting.
+function autoWireMcp(selectedTools) {
+  const clientNames = new Set();
+
+  selectedTools.forEach((tool) => {
+    (TOOL_TO_MCP_CLIENTS[tool.name] || []).forEach((client) => clientNames.add(client));
+  });
+
+  if (clientNames.size === 0) return;
+
+  const available = getMcpConfigPaths();
+  const targets = available.filter((p) => clientNames.has(p.name));
+
+  if (targets.length === 0) return;
+
+  console.log("\n🔌 MCP Wiring\n");
+
+  targets.forEach((p) => {
+    safeMergeMcpConfig(p.path, p.name);
+  });
+}
+
+// Detects whether the console can render Unicode block characters. Windows
+// consoles default to legacy code pages (CP437/Windows-1252) that mangle them,
+// so we fall back to an ASCII banner instead of printing garbage.
+function supportsUnicodeBanner() {
+  if (process.env.SDRIVE_ASCII === "1") return false;
+  if (process.env.SDRIVE_UNICODE === "1") return true;
+
+  if (process.platform !== "win32") return true;
+
+  // Windows Terminal, VS Code, and ConEmu set WT_SESSION / TERM_PROGRAM.
+  if (process.env.WT_SESSION || process.env.TERM_PROGRAM) return true;
+
+  // Modern Windows consoles report a UTF-8 code page (65001).
+  try {
+    const { execSync } = require("child_process");
+    const output = execSync("chcp", { stdio: ["ignore", "pipe", "ignore"] }).toString();
+    return output.includes("65001");
+  } catch (error) {
+    return false;
+  }
+}
+
 function printInitWelcome() {
   const useColor = Boolean(process.stdout.isTTY && !process.env.NO_COLOR && process.env.TERM !== "dumb");
   const reset = useColor ? "\u001b[0m" : "";
   const specColor = useColor ? "\u001b[1;96m" : "";
-  const driveColor = useColor ? "\u001b[1;94m" : "";
   const headingColor = useColor ? "\u001b[1m" : "";
   const taglineColor = useColor ? "\u001b[2m" : "";
 
+  const unicodeLogo = [
+    "  ███████╗██████╗ ███████╗ ██████╗██████╗ ██████╗ ██╗██╗   ██╗███████╗",
+    "  ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔══██╗██║██║   ██║██╔════╝",
+    "  ███████╗██████╔╝█████╗  ██║     ██║  ██║██████╔╝██║██║   ██║█████╗  ",
+    "  ╚════██║██╔═══╝ ██╔══╝  ██║     ██║  ██║██╔══██╗██║╚██╗ ██╔╝██╔══╝  ",
+    "  ███████║██║     ███████╗╚██████╗██████╔╝██║  ██║██║ ╚████╔╝ ███████╗",
+    "  ╚══════╝╚═╝     ╚══════╝ ╚═════╝╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝  ╚══════╝"
+  ];
+
+  const asciiLogo = [
+    "   _____                 ____       _          ",
+    "  / ____|               |  _ \\     (_)         ",
+    " | (___  _ __   ___  ___| | | |_ __ _ ___  ___ ",
+    "  \\___ \\| '_ \\ / _ \\/ __| | | | '__| / __|/ _ \\",
+    "  ____) | |_) |  __/ (__| |_| | |  | \\__ \\  __/",
+    " |_____/| .__/ \\___|\\___|____/|_|  |_|___/\\___|",
+    "        | |                                    ",
+    "        |_|                                    "
+  ];
+
+  const logo = supportsUnicodeBanner() ? unicodeLogo : asciiLogo;
+
   console.log("");
-  console.log(`  ${specColor}Spec${reset}${driveColor}Drive${reset}`);
+  logo.forEach((line) => console.log(`${specColor}${line}${reset}`));
+  console.log("");
   console.log(`  ${taglineColor}Spec-driven development with built-in governance${reset}`);
+  console.log(`  ${taglineColor}v${getCliVersion()}${reset}`);
   console.log("");
   console.log(`  ${headingColor}This setup will configure:${reset}`);
   console.log("  - SpecDrive project structure and governance");
   console.log("  - AI tool adapters and workflow commands");
-  console.log("  - Optional MCP client connections");
+  console.log("  - MCP connections for your selected AI tools (automatic)");
   console.log("");
 }
 
 // ---------- INIT COMMAND ----------
 program
   .command("init")
-  .description("Initialize SpecDrive structure, tool adapters, and default template")
-  .action(() => {
+  .description("Initialize SpecDrive structure and tool adapters")
+  .option("--tools <list>", "Configure AI tools non-interactively. Use all, none, or a comma-separated list")
+  .action((options) => {
     printInitWelcome();
 
     const projectRoot = process.cwd();
@@ -374,7 +470,7 @@ program
 
     const mcpConfigPath = path.join(sdriveRoot, "mcp", "mcp.json");
     if (!fs.existsSync(mcpConfigPath)) {
-      fs.writeFileSync(mcpConfigPath, mcpConfigContent());
+      fs.writeFileSync(mcpConfigPath, mcpConfigContent("Claude Desktop"));
       console.log("  Created: .sdrive/mcp/mcp.json");
     }
 
@@ -388,11 +484,77 @@ program
 
     const tools = JSON.parse(fs.readFileSync(toolsPath, "utf8")).tools;
 
-    console.log("\n🔧 Select tools to set up (comma-separated numbers):\n");
+    // Generates adapters for the selected tools and wires MCP automatically.
+    const applySelection = (selectedTools) => {
+      selectedTools.forEach((tool) => {
+        const adapterFullPath = path.join(projectRoot, tool.adapterPath);
+        const adapterDir = path.dirname(adapterFullPath);
+
+        if (!fs.existsSync(adapterDir)) {
+          fs.mkdirSync(adapterDir, { recursive: true });
+        }
+
+        if (fs.existsSync(adapterFullPath)) {
+          console.log(`⚠️  Skipped existing: ${tool.adapterPath}`);
+          return;
+        }
+
+        fs.writeFileSync(adapterFullPath, adapterContent(tool.name));
+        console.log(`✅ Generated: ${tool.adapterPath}`);
+      });
+
+      autoWireMcp(selectedTools);
+
+      console.log("\n✅ SpecDrive initialized successfully.");
+    };
+
+    // Resolves a --tools value (all, none, or comma-separated names) to tool objects.
+    const resolveToolsFlag = (value) => {
+      const normalized = value.trim().toLowerCase();
+
+      if (normalized === "all") return tools;
+      if (normalized === "none" || normalized === "") return [];
+
+      const requested = normalized.split(",").map((name) => name.trim()).filter(Boolean);
+      const matched = [];
+      const unknown = [];
+
+      requested.forEach((name) => {
+        const tool = tools.find((t) => t.name.toLowerCase() === name);
+        if (tool) {
+          matched.push(tool);
+        } else {
+          unknown.push(name);
+        }
+      });
+
+      if (unknown.length > 0) {
+        console.log(`\n⚠️  Unknown tool(s): ${unknown.join(", ")}`);
+        console.log(`   Available: ${tools.map((t) => t.name).join(", ")}\n`);
+      }
+
+      return matched;
+    };
+
+    if (options.tools !== undefined) {
+      const selectedTools = resolveToolsFlag(options.tools);
+
+      if (selectedTools.length === 0) {
+        console.log("\n⚠️  No tools selected. Skipping adapter generation.");
+        console.log("\n✅ SpecDrive initialized successfully.");
+        return;
+      }
+
+      applySelection(selectedTools);
+      return;
+    }
+
+    console.log("\n🔧 Select your AI tool(s) (comma-separated numbers):\n");
     tools.forEach((tool, index) => {
       console.log(`  ${index + 1}. ${tool.name}`);
     });
     console.log("  Or press Enter to generate all.\n");
+    console.log("  MCP wiring is applied automatically for the tools you pick.\n");
 
     const rl = readline.createInterface({
       input: process.stdin,
@@ -411,78 +573,7 @@ program
           .map((i) => tools[i]);
       }
 
-      selectedTools.forEach((tool) => {
-        const adapterFullPath = path.join(projectRoot, tool.adapterPath);
-        const adapterDir = path.dirname(adapterFullPath);
-
-        if (!fs.existsSync(adapterDir)) {
-          fs.mkdirSync(adapterDir, { recursive: true });
-        }
-
-        if (fs.existsSync(adapterFullPath)) {
-          console.log(`⚠️  Skipped existing: ${tool.adapterPath}`);
-          return;
-        }
-
-        fs.writeFileSync(adapterFullPath, adapterContent(tool.name));
-        console.log(`✅ Generated: ${tool.adapterPath}`);
-      });
-
-      const templates = ["generic", "react-node", "nextjs", "expo", "fastapi", "turborepo"];
-
-      console.log("\n📦 Select default template:\n");
-      templates.forEach((t, i) => console.log(`  ${i + 1}. ${t}`));
-
-      const rl2 = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-
-      rl2.question("Template (default: 1): ", (templateAnswer) => {
-        rl2.close();
-
-        const idx = templateAnswer.trim() === "" ? 0 : parseInt(templateAnswer.trim()) - 1;
-        const selectedTemplate = templates[idx] || "generic";
-
-        const cfgPath = path.join(sdriveRoot, "config.json");
-        fs.writeFileSync(cfgPath, JSON.stringify({ defaultTemplate: selectedTemplate }, null, 2));
-
-        console.log(`\n✅ Default template set to: ${selectedTemplate}`);
-
-        const mcpPaths = getMcpConfigPaths();
-
-        console.log("\n🔌 MCP Client Wiring\n");
-        mcpPaths.forEach((p, i) => {
-          console.log(`  ${i + 1}. ${p.name} (${p.path})`);
-        });
-        console.log("  Or press Enter to skip MCP wiring.\n");
-
-        const rl3 = readline.createInterface({
-          input: process.stdin,
-          output: process.stdout
-        });
-
-        rl3.question("Wire MCP clients: ", (mcpAnswer) => {
-          rl3.close();
-
-          if (mcpAnswer.trim() === "") {
-            console.log("\n⚠️  MCP wiring skipped.");
-            console.log("\n✅ SpecDrive initialized successfully.");
-            return;
-          }
-
-          const selectedIndexes = mcpAnswer.split(",").map((n) => parseInt(n.trim()) - 1);
-          const selectedPaths = selectedIndexes
-            .filter((i) => i >= 0 && i < mcpPaths.length)
-            .map((i) => mcpPaths[i]);
-
-          selectedPaths.forEach((p) => {
-            safeMergeMcpConfig(p.path, mcpConfigContent());
-          });
-
-          console.log("\n✅ SpecDrive initialized successfully.");
-        });
-      });
+      applySelection(selectedTools);
     });
   });
 
