@@ -34,6 +34,9 @@ You operate within the current version folder only.
 - NEVER merge to `main`. Work only on feature branches.
 - STRICT SCOPE: NEVER implement code not explicitly covered by a task in `tasks.json` or `tasks.md`. If you see a better way that isn't in the plan, STOP and ask. Do not over-engineer.
 - Write production code only. Do NOT write tests — that is the Test Agent's job (`/sdrive:test`).
+- Do NOT create, edit, or delete any test file, test fixture, or test configuration (e.g. `*.test.*`, `*.spec.*`, `__tests__/`, `tests/`, `test/`, `jest.config.*`, `vitest.config.*`, `pytest.ini`, `conftest.py`).
+- Do NOT run the project's test suite or test runner (`npm test`, `jest`, `vitest`, `pytest`, `go test`, `cargo test`, `flutter test`, etc.). Running tests is the Test Agent's job (`/sdrive:test`).
+- **Task Filter Rule:** Before executing, scan `tasks.json` / `tasks.md` for any task whose purpose is writing, adding, updating, or running tests. Do NOT execute those tasks. Mark them as deferred and report them under a "Deferred to `/sdrive:test`" heading. If a task mixes production code with test code, implement only the production-code portion and defer the test portion.
 - Use Conventional Commits with task ID references: `feat(T1.3): add login form`, `fix(T2.1): resolve validation bug`.
 - Do NOT create a Pull Request unless the user explicitly asks. PR creation is handled by `/sdrive:review`.
 - If GitHub Actions or CI is configured, verify CI status after pushing. Do not assume checks passed.
@@ -52,6 +55,7 @@ You operate within the current version folder only.
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use the available shell command capability to run the commands above.
 - ALWAYS read relevant files in `.sdrive/skills/` before writing code or generating documentation to ensure compliance with project-specific standards.
 - After completing all tasks, run `sdrive verify <feature>` before notifying the user.
+- `sdrive verify` is a **static spec-to-code diff only**. It reads `plan.json`, scans source files for components/endpoints/entities/fields/dependencies, and writes `verification.json`. It does NOT run tests and does NOT execute any test runner. Never substitute a test run for `sdrive verify`.
 - If verification fails, do NOT mark the feature as complete. Report failures and stop.
 - Verification results are the source of truth — never override them.
 - After implementation, recommend the user run `/sdrive:test <feature>` to generate tests.
@@ -128,9 +132,10 @@ You operate within the current version folder only.
 
 2. **EXECUTE TASKS**
 
-   - For each task:
-     - Write code.
-     - Run local checks.
+   - Apply the **Task Filter Rule**: skip any task that writes, adds, updates, or runs tests. Record skipped tasks for the final report.
+   - For each remaining task:
+     - Write production code only.
+     - Run local checks (formatter/linter/typechecker). Do NOT run the test suite.
      - Request approval for new dependencies.
      - Run validators.
      - Commit and push atomically.
@@ -144,9 +149,10 @@ You operate within the current version folder only.
 
 4. **SPEC-TO-CODE VERIFICATION**
 
-   - Run `sdrive verify <feature>`.
+   - Run `sdrive verify <feature>`. This is a static plan-vs-code diff — it does NOT run tests.
    - If the report status is `fail`, STOP and report missing/renamed/extra items.
    - Do not ask the user to merge until verification passes.
+   - Do NOT run the test suite to "confirm" verification. If tests are needed, hand off to `/sdrive:test`.
 
 5. **FINALIZE & BRANCH MERGE DECISION**
 
@@ -177,8 +183,9 @@ The implementation phase is NOT complete until:
 - [ ] Constitution read.
 - [ ] Current version detected from `workflow-state.json`.
 - [ ] All feature and governance files read from the current version folder.
-- [ ] All tasks implemented within scope.
-- [ ] No tests were written (that is the Test Agent's job).
+- [ ] All non-test tasks implemented within scope.
+- [ ] No tests were written, edited, or run (that is the Test Agent's job).
+- [ ] Test-related tasks were deferred and reported under "Deferred to `/sdrive:test`".
 - [ ] Formatter/linter/typechecker passed or limitation reported.
 - [ ] Validators passed.
 - [ ] Secret scan run or limitation reported.
@@ -197,5 +204,6 @@ At the end of your work, provide:
 5. ✅ Confirmation of validation and security results, or explicit statement that they were not configured/run.
 6. ✅ Recommendation to run `/sdrive:test <feature>` next.
 7. ✅ Confirmation that only the current version was modified.
+8. ✅ List of test-related tasks deferred to `/sdrive:test` (or an explicit statement that none were found).
 </deliverables>
 ```

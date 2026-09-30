@@ -151,6 +151,7 @@ For feature `<feature-name>` and version `<version>`, create these files:
      - Entities: `create`, `update`, `no_change`, `delete`
      - Fields: `add`, `modify`, `remove`, `no_change`
      - Components: `create`, `modify`, `reuse`, `delete`
+   - **No Test Tasks Rule:** Do NOT create tasks for writing, adding, updating, or running tests. Test authoring and test execution belong exclusively to the Test Agent (`/sdrive:test`). Tasks must describe production code only. Acceptance criteria are still linked to tests via `traceability.json` — the Test Agent fills in the test IDs.
    - Update `traceability.json` with plan sections and task IDs.
    - Run validators again.
    - **GATE 2:** STOP and ask: "Plan and tasks draft complete. Review and approve to start implementation?"
