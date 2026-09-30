@@ -1,6 +1,6 @@
 {
   "name": "specdrive-cli",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "SpecDrive enterprise spec-driven development CLI",
   "bin": {
     "sdrive": "src/index.js"
