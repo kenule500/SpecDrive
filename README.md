@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="SpecDrive" width="120" />
+</p>
+
 # SpecDrive
 
 **Enterprise Spec-Driven Development for AI Coding Tools**
@@ -6,7 +10,7 @@ SpecDrive gives AI coding tools like GitHub Copilot, Cline, Claude Code, and Cur
 
 It adds:
 
-- 12 specialized governance agents
+- 13 specialized governance agents
 - Machine-readable JSON schemas
 - Requirement → AC → task → test traceability
 - Per-version lifecycle tracking

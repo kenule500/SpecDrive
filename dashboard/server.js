@@ -3,9 +3,76 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
 
 const projectRoot = process.cwd();
 const sdriveRoot = path.join(projectRoot, ".sdrive");
+
+function git(args) {
+  try {
+    return execFileSync("git", args, {
+      cwd: projectRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch (error) {
+    return "";
+  }
+}
+
+function apiGitInfo() {
+  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
+  if (!branch) {
+    return { available: false };
+  }
+
+  const commit = git(["rev-parse", "--short", "HEAD"]);
+  const subject = git(["log", "-1", "--pretty=%s"]);
+  const author = git(["log", "-1", "--pretty=%an"]);
+  const committedAt = git(["log", "-1", "--pretty=%cI"]);
+  const dirty = git(["status", "--porcelain"]).length > 0;
+
+  // Determine the branch this one was merged from / branched off.
+  // Prefer the upstream tracking branch, then the default branch, then the
+  // most recent merged-in branch recorded in the reflog.
+  let mergedFrom = "";
+  const upstream = git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]);
+  if (upstream && upstream !== branch) {
+    mergedFrom = upstream.replace(/^origin\//, "");
+  }
+
+  if (!mergedFrom) {
+    const defaultBranch = git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+      .replace(/^origin\//, "");
+    if (defaultBranch && defaultBranch !== branch) {
+      mergedFrom = defaultBranch;
+    }
+  }
+
+  if (!mergedFrom) {
+    const reflog = git(["reflog", "--grep-reflog=merge", "--pretty=%gs", "-n", "1"]);
+    const match = reflog.match(/merge\s+([^:]+):/);
+    if (match) {
+      mergedFrom = match[1].trim();
+    }
+  }
+
+  const ahead = git(["rev-list", "--count", "@{upstream}..HEAD"]);
+  const behind = git(["rev-list", "--count", "HEAD..@{upstream}"]);
+
+  return {
+    available: true,
+    branch,
+    commit,
+    subject,
+    author,
+    committedAt,
+    dirty,
+    mergedFrom: mergedFrom || null,
+    ahead: ahead ? parseInt(ahead, 10) : 0,
+    behind: behind ? parseInt(behind, 10) : 0
+  };
+}
 
 function loadJson(filePath, fallback = null) {
   if (!fs.existsSync(filePath)) return fallback;
@@ -154,6 +221,51 @@ function apiProduct() {
   };
 }
 
+// Static CLI command reference. Kept in sync with src/index.js.
+const CLI_COMMANDS = [
+  { command: "sdrive init", description: "Initialize SpecDrive structure, tool adapters, and default template", group: "Setup" },
+  { command: "sdrive onboard", description: "Scan an existing project for onboarding (usually run by /sdrive:onboard)", group: "Setup" },
+  { command: "sdrive config:validate", description: "Validate .sdrive/config.json", group: "Setup" },
+  { command: "sdrive template:list", description: "List available templates", group: "Setup" },
+  { command: "sdrive template:set <name>", description: "Set the default template", group: "Setup" },
+  { command: "sdrive hooks:install", description: "Install the SpecDrive pre-commit hook", group: "Setup" },
+
+  { command: "sdrive create <feature>", description: "Create a new feature scaffold (internal)", group: "Features" },
+  { command: "sdrive status", description: "Show feature lifecycle state", group: "Features" },
+  { command: "sdrive version:new <feature>", description: "Create a new version of a feature", group: "Features" },
+  { command: "sdrive reopen <feature>", description: "Reopen a completed feature", group: "Features" },
+  { command: "sdrive diff:version <feature> <a> <b>", description: "Compare two versions of a feature", group: "Features" },
+
+  { command: "sdrive validate", description: "Validate SpecDrive governance files", group: "Governance" },
+  { command: "sdrive verify <feature>", description: "Verify code matches the plan (spec-to-code diff)", group: "Governance" },
+  { command: "sdrive approve <gate>", description: "Approve a workflow gate (specification, planning, implementation, review)", group: "Governance" },
+  { command: "sdrive diff <oldFile> <newFile>", description: "Show differences between two spec files", group: "Governance" },
+  { command: "sdrive openapi:generate <feature>", description: "Generate an OpenAPI spec from plan.json API contracts", group: "Governance" },
+
+  { command: "sdrive team:add <username> <role>", description: "Add a new team member", group: "Team" },
+  { command: "sdrive team:remove <username>", description: "Remove a team member", group: "Team" },
+  { command: "sdrive team:list", description: "List all team members", group: "Team" },
+  { command: "sdrive team:update <username> <role>", description: "Update a team member's role", group: "Team" },
+  { command: "sdrive team:sync", description: "Sync team members from GitHub collaborators", group: "Team" },
+
+  { command: "sdrive dashboard", description: "Start the SpecDrive web dashboard", group: "Dashboard" }
+];
+
+function apiCommands() {
+  const manifestPath = path.join(sdriveRoot, "commands", "manifest.json");
+  const manifest = loadJson(manifestPath, { commands: [] });
+
+  const slash = (manifest.commands || []).map((c) => ({
+    command: c.command,
+    description: c.description || "",
+    agent: c.agent || "",
+    acceptsFeature: Boolean(c.acceptsFeature),
+    gates: c.gates || []
+  }));
+
+  return { slash, cli: CLI_COMMANDS };
+}
+
 const server = http.createServer((req, res) => {
   const url = req.url;
 
@@ -195,6 +307,14 @@ const server = http.createServer((req, res) => {
       return res.end(JSON.stringify(apiProduct()));
     }
 
+    if (url === "/api/git-info") {
+      return res.end(JSON.stringify(apiGitInfo()));
+    }
+
+    if (url === "/api/commands") {
+      return res.end(JSON.stringify(apiCommands()));
+    }
+
     res.writeHead(404);
     return res.end(JSON.stringify({ error: "Not found" }));
   }
@@ -209,6 +329,18 @@ const server = http.createServer((req, res) => {
 
   if (url === "/app.js") {
     return serveStatic(res, path.join(__dirname, "app.js"), "application/javascript");
+  }
+
+  if (url === "/logo.png") {
+    const logoCandidates = [
+      path.join(__dirname, "logo.png"),
+      path.join(__dirname, "..", "logo.png"),
+      path.join(__dirname, "..", "..", "logo.png")
+    ];
+    const logoPath = logoCandidates.find((candidate) => fs.existsSync(candidate));
+    if (logoPath) {
+      return serveStatic(res, logoPath, "image/png");
+    }
   }
 
   res.writeHead(404);

@@ -2,77 +2,180 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SpecDrive Dashboard</title>
+  <link rel="icon" href="/logo.png" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <header>
-    <h1>SpecDrive Dashboard</h1>
-  </header>
-
-  <main>
-    <section id="onboarding">
-      <div id="onboarding-panel">Loading...</div>
-    </section>
-
-    <section id="product">
-      <h2>Product Blueprint</h2>
-      <div id="product-panel">Loading...</div>
-    </section>
-
-    <section id="features">
-      <h2>Features</h2>
-
-      <div id="feature-filters" style="margin-bottom: 16px;">
-        <input
-          id="filter-search"
-          type="text"
-          placeholder="Search features..."
-          style="padding: 6px 10px; font-size: 13px; margin-right: 8px; border: 1px solid #ddd; border-radius: 4px;"
-        />
-
-        <select id="filter-phase" style="padding: 6px 10px; font-size: 13px; margin-right: 8px; border: 1px solid #ddd; border-radius: 4px;">
-          <option value="">All phases</option>
-          <option value="backlog">backlog</option>
-          <option value="ongoing">ongoing</option>
-          <option value="completed">completed</option>
-          <option value="blocked">blocked</option>
-        </select>
-
-        <select id="filter-verification" style="padding: 6px 10px; font-size: 13px; margin-right: 8px; border: 1px solid #ddd; border-radius: 4px;">
-          <option value="">All verification</option>
-          <option value="pass">pass</option>
-          <option value="warn">warn</option>
-          <option value="fail">fail</option>
-          <option value="not_run">not run</option>
-        </select>
-
-        <select id="filter-tests" style="padding: 6px 10px; font-size: 13px; margin-right: 8px; border: 1px solid #ddd; border-radius: 4px;">
-          <option value="">All test coverage</option>
-          <option value="complete">complete (100%)</option>
-          <option value="partial">partial</option>
-          <option value="not_run">not run</option>
-        </select>
-
-        <label style="font-size: 13px; margin-right: 8px;">
-          <input id="filter-current-version" type="checkbox" />
-          Current version only
-        </label>
+  <div class="app-shell">
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <img src="/logo.png" alt="SpecDrive" class="brand-logo" />
+        <div class="brand-text">
+          <span class="brand-name">SpecDrive</span>
+          <span class="brand-tagline">Governance Console</span>
+        </div>
       </div>
 
-      <div id="feature-list">Loading...</div>
-    </section>
+      <nav class="sidebar-nav">
+        <a class="nav-item active" href="#overview" data-nav="overview">
+          <span class="nav-icon">◈</span><span>Overview</span>
+        </a>
+        <a class="nav-item" href="#blueprint" data-nav="blueprint">
+          <span class="nav-icon">◇</span><span>Product Blueprint</span>
+        </a>
+        <a class="nav-item" href="#features" data-nav="features">
+          <span class="nav-icon">▤</span><span>Features</span>
+        </a>
+        <a class="nav-item" href="#team" data-nav="team">
+          <span class="nav-icon">◉</span><span>Team</span>
+        </a>
+        <a class="nav-item" href="#activity" data-nav="activity">
+          <span class="nav-icon">◷</span><span>Activity</span>
+        </a>
+        <a class="nav-item" href="#commands" data-nav="commands">
+          <span class="nav-icon">⌘</span><span>Commands</span>
+        </a>
+      </nav>
 
-    <section id="team">
-      <h2>Team</h2>
-      <div id="team-list">Loading...</div>
-    </section>
+      <div class="sidebar-footer">
+        <div class="sidebar-footer-label">Repository</div>
+        <div id="sidebar-git" class="sidebar-git">Loading…</div>
+      </div>
+    </aside>
 
-    <section id="audit">
-      <h2>Recent Activity</h2>
-      <div id="audit-list">Loading...</div>
-    </section>
-  </main>
+    <!-- ============ MAIN ============ -->
+    <div class="content">
+      <header class="topbar">
+        <div class="topbar-title">
+          <h1>Governance Dashboard</h1>
+          <p class="topbar-subtitle">Spec-driven development with built-in governance</p>
+        </div>
+        <div class="topbar-actions">
+          <div id="topbar-git" class="git-chip">Loading…</div>
+        </div>
+      </header>
+
+      <main class="main">
+        <!-- ===== OVERVIEW ===== -->
+        <section id="overview" class="section">
+          <div class="section-head">
+            <h2>Project Overview</h2>
+            <span class="section-hint">Onboarding &amp; repository state</span>
+          </div>
+          <div id="overview-panel" class="overview-grid">
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+          </div>
+        </section>
+
+        <!-- ===== BLUEPRINT ===== -->
+        <section id="blueprint" class="section">
+          <div class="section-head">
+            <h2>Product Blueprint</h2>
+            <span class="section-hint">Product-level candidates &amp; artifacts</span>
+          </div>
+          <div id="product-panel" class="panel-loading">Loading…</div>
+        </section>
+
+        <!-- ===== FEATURES ===== -->
+        <section id="features" class="section">
+          <div class="section-head">
+            <h2>Features</h2>
+            <span class="section-hint">Versions, gates, traceability &amp; verification</span>
+          </div>
+
+          <div id="feature-filters" class="filters">
+            <div class="filter-search">
+              <span class="filter-search-icon">⌕</span>
+              <input id="filter-search" type="text" placeholder="Search features…" />
+            </div>
+
+            <select id="filter-phase" class="filter-select">
+              <option value="">All phases</option>
+              <option value="backlog">Backlog</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="completed">Completed</option>
+              <option value="blocked">Blocked</option>
+            </select>
+
+            <select id="filter-verification" class="filter-select">
+              <option value="">All verification</option>
+              <option value="pass">Pass</option>
+              <option value="warn">Warn</option>
+              <option value="fail">Fail</option>
+              <option value="not_run">Not run</option>
+            </select>
+
+            <select id="filter-tests" class="filter-select">
+              <option value="">All test coverage</option>
+              <option value="complete">Complete (100%)</option>
+              <option value="partial">Partial</option>
+              <option value="not_run">Not run</option>
+            </select>
+
+            <label class="filter-toggle">
+              <input id="filter-current-version" type="checkbox" />
+              <span>Current version only</span>
+            </label>
+          </div>
+
+          <div id="feature-list" class="feature-grid">
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+          </div>
+        </section>
+
+        <!-- ===== TEAM ===== -->
+        <section id="team" class="section">
+          <div class="section-head">
+            <h2>Team</h2>
+            <span class="section-hint">Members &amp; approval rules</span>
+          </div>
+          <div id="team-list" class="team-grid">
+            <div class="skeleton-card"></div>
+          </div>
+        </section>
+
+        <!-- ===== ACTIVITY ===== -->
+        <section id="activity" class="section">
+          <div class="section-head">
+            <h2>Recent Activity</h2>
+            <span class="section-hint">Governance audit trail</span>
+          </div>
+          <div id="audit-list" class="timeline">
+            <div class="panel-loading">Loading…</div>
+          </div>
+        </section>
+
+        <!-- ===== COMMANDS ===== -->
+        <section id="commands" class="section">
+          <div class="section-head">
+            <h2>Command Reference</h2>
+            <span class="section-hint">Slash commands &amp; CLI — your quick guide</span>
+          </div>
+
+          <div class="command-search">
+            <span class="filter-search-icon">⌕</span>
+            <input id="command-search" type="text" placeholder="Search commands…" />
+          </div>
+
+          <div class="command-tabs">
+            <button class="command-tab active" data-tab="slash">Slash Commands</button>
+            <button class="command-tab" data-tab="cli">Terminal (CLI)</button>
+          </div>
+
+          <div id="command-list" class="command-list">
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
 
   <script src="/app.js"></script>
 </body>

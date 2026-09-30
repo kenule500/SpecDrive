@@ -15,6 +15,7 @@
     "dashboard/",
     "mcp/",
     "templates/",
+    "logo.png",
     "README.md"
   ],
   "dependencies": {
@@ -34,6 +35,7 @@
   ],
   "author": "SpecDrive",
   "license": "MIT",
+  "logo": "logo.png",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kenule500/SpecDrive.git"

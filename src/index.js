@@ -636,6 +636,45 @@ program
     console.log(`✅ Feature "${feature}" created in backlog.`);
   });
 
+// ---------- ASSIGN COMMAND ----------
+program
+  .command("assign <feature> <username>")
+  .description("Assign a team member as the owner of a feature")
+  .action((feature, username) => {
+    const projectRoot = process.cwd();
+    const sdriveRoot = path.join(projectRoot, ".sdrive");
+    const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
+
+    if (!fs.existsSync(workflowStatePath)) {
+      console.error("❌ workflow-state.json not found. Run `sdrive init` first.");
+      process.exit(1);
+    }
+
+    const state = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
+    const target = (state.features || []).find((f) => f.name === feature);
+
+    if (!target) {
+      console.error(`❌ Feature "${feature}" not found in workflow-state.json.`);
+      process.exit(1);
+    }
+
+    // Warn (but don't block) if the username isn't on the team roster.
+    const teamPath = path.join(sdriveRoot, "team.json");
+    if (fs.existsSync(teamPath)) {
+      const team = JSON.parse(fs.readFileSync(teamPath, "utf8"));
+      const known = (team.members || []).some((m) => m.username === username);
+      if (!known) {
+        console.warn(`⚠️  "${username}" is not in team.json. Assigning anyway.`);
+      }
+    }
+
+    target.assignee = username;
+    fs.writeFileSync(workflowStatePath, JSON.stringify(state, null, 2));
+
+    audit("feature_assigned", { feature, assignee: username });
+    console.log(`✅ Feature "${feature}" assigned to "${username}".`);
+  });
+
 // ---------- STATUS COMMAND ----------
 program
   .command("status")
