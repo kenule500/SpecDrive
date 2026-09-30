@@ -111,6 +111,23 @@ function featureMatchesFilters(feature, version, filters, verification, tests) {
 }
 
 /* ============================================================
+   PROJECT INFO
+   ============================================================ */
+function renderProjectInfo(project) {
+  const name = (project && project.name) || "project";
+
+  const sidebar = document.getElementById("sidebar-project");
+  if (sidebar) sidebar.textContent = name;
+
+  const topbar = document.getElementById("topbar-project");
+  if (topbar) topbar.textContent = name;
+
+  if (project && project.name) {
+    document.title = `${project.name} · SpecDrive Dashboard`;
+  }
+}
+
+/* ============================================================
    GIT INFO
    ============================================================ */
 function renderGitInfo(git) {
@@ -847,12 +864,14 @@ function setupNav() {
    MAIN
    ============================================================ */
 async function main() {
-  const [onboarding, product, git] = await Promise.all([
+  const [onboarding, product, git, project] = await Promise.all([
     fetchJson("/api/onboarding"),
     fetchJson("/api/product"),
-    fetchJson("/api/git-info")
+    fetchJson("/api/git-info"),
+    fetchJson("/api/project-info")
   ]);
 
+  renderProjectInfo(project);
   renderGitInfo(git);
 
   const overviewContainer = document.getElementById("overview-panel");

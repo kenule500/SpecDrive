@@ -83,6 +83,14 @@ function loadJson(filePath, fallback = null) {
   }
 }
 
+// The dashboard is launched from the project root, so the folder name is the
+// project name (e.g. "allymagax"). Surfaced in the sidebar and topbar so it is
+// obvious which project a dashboard belongs to when several are running.
+function apiProjectInfo() {
+  const name = path.basename(projectRoot) || "project";
+  return { name, root: projectRoot };
+}
+
 function apiWorkflowState() {
   return loadJson(path.join(sdriveRoot, "workflow-state.json"), { features: [] });
 }
@@ -223,7 +231,8 @@ function apiProduct() {
 
 // Static CLI command reference. Kept in sync with src/index.js.
 const CLI_COMMANDS = [
-  { command: "sdrive init", description: "Initialize SpecDrive structure, tool adapters, and default template", group: "Setup" },
+  { command: "sdrive init", description: "Initialize SpecDrive structure, tool adapters, and MCP wiring", group: "Setup" },
+  { command: "sdrive update", description: "Refresh framework files (dashboard, mcp, scripts, schemas) without touching specs or governance", group: "Setup" },
   { command: "sdrive onboard", description: "Scan an existing project for onboarding (usually run by /sdrive:onboard)", group: "Setup" },
   { command: "sdrive config:validate", description: "Validate .sdrive/config.json", group: "Setup" },
   { command: "sdrive template:list", description: "List available templates", group: "Setup" },
@@ -309,6 +318,10 @@ function handleRequest(req, res) {
 
     if (url === "/api/git-info") {
       return res.end(JSON.stringify(apiGitInfo()));
+    }
+
+    if (url === "/api/project-info") {
+      return res.end(JSON.stringify(apiProjectInfo()));
     }
 
     if (url === "/api/commands") {
