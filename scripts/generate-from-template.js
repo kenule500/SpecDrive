@@ -40,15 +40,19 @@ function applyVariables(content, variables) {
   return result;
 }
 
-function generate(templateName, featureName, variables) {
+function generate(templateName, featureName, variables, version) {
   const templateDir = path.join(projectRoot, ".sdrive", "templates", templateName);
-  const govDir = path.join(projectRoot, ".sdrive", "governance", featureName);
 
   if (!fs.existsSync(templateDir)) {
     console.error(`❌ Template "${templateName}" not found.`);
     listTemplates();
     process.exit(1);
   }
+
+  // Governance JSON belongs in a version folder. Default to v1 when the caller
+  // does not specify a version, matching the specification agent's convention.
+  const targetVersion = version || "v1";
+  const govDir = path.join(projectRoot, ".sdrive", "governance", featureName, targetVersion);
 
   fs.mkdirSync(govDir, { recursive: true });
 
@@ -68,7 +72,7 @@ function generate(templateName, featureName, variables) {
     });
 
     fs.writeFileSync(path.join(govDir, file), content);
-    console.log(`✅ Generated: ${featureName}/${file}`);
+    console.log(`✅ Generated: ${featureName}/${targetVersion}/${file}`);
   });
 
   console.log(`\n🎉 Feature "${featureName}" generated from "${templateName}" template.`);

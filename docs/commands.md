@@ -424,6 +424,8 @@ After gathering user input and any inspiration references, Blueprint proposes:
 
 Blueprint asks whether to add, change, or defer feature ideas and gets approval before writing. It does not generate interactive prototypes, detailed feature specs, implementation tasks, or workflow-state entries. Select an approved backlog item later and run `/sdrive:propose "<feature description>"` to create its detailed plan.
 
+> **Inspiration images:** If your AI session cannot view images (vision unavailable), Blueprint does not stall. It uses the text it can read — file names, folder names, link titles, and your own description — as high-level guidance, records the reference as an open question, and continues. You can always add detail later by describing the reference in your own words.
+
 ---
 
 ### `/sdrive:onboard`

@@ -769,7 +769,8 @@ program
 program
   .command("verify <feature>")
   .description("Verify code matches the plan (spec-to-code diff)")
-  .action((feature) => {
+  .option("--version <version>", "Feature version to verify (defaults to the latest)")
+  .action((feature, options) => {
     const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "verify.js");
 
     if (!fs.existsSync(scriptPath)) {
@@ -777,8 +778,10 @@ program
       process.exit(1);
     }
 
+    const versionArg = options.version ? ` "${options.version}"` : "";
+
     try {
-      execSync(`node "${scriptPath}" "${feature}"`, { stdio: "inherit" });
+      execSync(`node "${scriptPath}" "${feature}"${versionArg}`, { stdio: "inherit" });
     } catch (error) {
       process.exit(1);
     }
@@ -1150,7 +1153,8 @@ program
 program
   .command("openapi:generate <feature>")
   .description("Generate OpenAPI spec from plan.json API contracts")
-  .action((feature) => {
+  .option("--version <version>", "Feature version to read (defaults to the latest)")
+  .action((feature, options) => {
     const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "generate-openapi.js");
 
     if (!fs.existsSync(scriptPath)) {
@@ -1158,8 +1162,10 @@ program
       process.exit(1);
     }
 
+    const versionArg = options.version ? ` "${options.version}"` : "";
+
     try {
-      execSync(`node "${scriptPath}" "${feature}"`, { stdio: "inherit" });
+      execSync(`node "${scriptPath}" "${feature}"${versionArg}`, { stdio: "inherit" });
     } catch (error) {
       console.error("❌ OpenAPI generation failed.");
       process.exit(1);

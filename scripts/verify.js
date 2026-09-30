@@ -2,15 +2,16 @@
 
 const fs = require("fs");
 const path = require("path");
+const { resolveGovernanceFile, resolveGovernanceDir } = require("./lib/governance-paths");
 
 const projectRoot = process.cwd();
 
 // ---------- Phase 1: Plan Reader ----------
 
-function loadPlan(featureName) {
-  const planPath = path.join(projectRoot, ".sdrive", "governance", featureName, "plan.json");
+function loadPlan(featureName, version) {
+  const planPath = resolveGovernanceFile(projectRoot, featureName, version, "plan.json");
 
-  if (!fs.existsSync(planPath)) {
+  if (!planPath) {
     console.error(`❌ plan.json not found for feature "${featureName}".`);
     process.exit(1);
   }
@@ -434,7 +435,7 @@ function determineStatus(result) {
   return "pass";
 }
 
-function writeReport(featureName, result) {
+function writeReport(featureName, result, version) {
   const status = determineStatus(result);
 
   const report = {
@@ -455,13 +456,10 @@ function writeReport(featureName, result) {
     }
   };
 
-  const reportPath = path.join(
-    projectRoot,
-    ".sdrive",
-    "governance",
-    featureName,
-    "verification.json"
-  );
+  // Write alongside the plan we verified, so the report lands in the same
+  // version folder (falling back to the flat layout for older projects).
+  const reportDir = resolveGovernanceDir(projectRoot, featureName, version);
+  const reportPath = path.join(reportDir, "verification.json");
 
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 
@@ -472,18 +470,19 @@ function writeReport(featureName, result) {
 // ---------- Entry ----------
 
 const featureName = process.argv[2];
+const version = process.argv[3];
 
 if (!featureName) {
-  console.error("❌ Usage: node verify.js <feature-name>");
+  console.error("❌ Usage: node verify.js <feature-name> [version]");
   process.exit(1);
 }
 
-const plan = loadPlan(featureName);
+const plan = loadPlan(featureName, version);
 const planItems = extractPlanItems(plan);
 const code = scanCode();
 
 const result = diffPlanAgainstCode(planItems, code);
-const { status, reportPath } = writeReport(featureName, result);
+const { status, reportPath } = writeReport(featureName, result, version);
 
 console.log("\n📊 Verification Result\n");
 console.log(`✅ Matched:  ${result.matched.length}`);

@@ -1,0 +1,16 @@
+{
+  "feature": "test-feature",
+  "version": 1,
+  "rows": [
+    {
+      "requirementId": "FR-001",
+      "acceptanceCriteriaIds": [
+        "AC-001"
+      ],
+      "taskIds": [
+        "T1.1"
+      ],
+      "status": "not_started"
+    }
+  ]
+}

@@ -23,6 +23,7 @@ You plan at the whole-product level. `/sdrive:propose` remains responsible for t
 - The user may skip any section, defer decisions, or stop the workflow. Mark unresolved items as open questions rather than blocking the user.
 - Ask whether the user has design/product inspiration (for example, Figma, Dribbble, screenshots, or other products). Record URLs, names, and the user's stated interpretation. Summarize high-level patterns only; do not copy protected layouts, text, assets, or branded designs.
 - Do not access private/authenticated design files or attempt to bypass access restrictions. If a reference cannot be inspected, ask the user to describe it or provide an authorized export.
+- Never block the workflow on an unreadable reference. If you cannot view an image (vision unavailable, unsupported format, or access denied), say so once, then continue using whatever text you do have (file names, folder names, link titles, alt text, captions, or the user's own words). Record the reference as an open question and move on. Do not ask the user to describe images you cannot see unless they volunteer it.
 - Do not invent package choices, vendors, APIs, estimates, dates, or commitments. Record technical tools/packages as candidates with rationale and status `proposed` until the user approves them.
 - The app mockup is a conceptual overview only: describe major areas/screens, navigation, and a representative user journey using Markdown tables, simple text diagrams, or low-fidelity text wireframes. Do NOT create HTML/CSS/JS, interactive prototypes, production UI, or image mockups.
 - Produce a candidate feature list, group it into suggested milestones, and propose a roadmap sequence with dependencies and rationale. Dates and estimates are optional and must remain explicitly tentative unless user-confirmed.
@@ -56,6 +57,7 @@ Do not require the user to answer every question. Offer to mark unknown items as
    - Ask targeted product questions, honoring previous answers.
    - Ask whether the user has inspiration links or files. For each reference, capture source, date/access context when known, what the user likes, and patterns to adapt.
    - Mark inaccessible sources and unverified statements transparently.
+   - **If you cannot view an image** (vision unavailable, unsupported format, or access denied): do not stop and do not ask the user to describe it. Instead, extract every available text signal — file name, folder name, link title, alt text, caption, or surrounding note — and use that as high-level guidance. Record the reference in the overview under open questions with a note that the visual content was not inspected. Continue the interview and drafting.
 
 3. **Draft product overview and conceptual mockup**
    - Draft the application overview with vision, problem, users, goals, non-goals, constraints, confirmed guidance, existing and proposed architecture, candidate tools/packages/integrations, assumptions, inspiration references, and open questions. Keep current choices distinct from recommendations.
@@ -99,6 +101,7 @@ Do not assign implementation estimates or dates unless the user asks and confirm
 - [ ] The user confirmed the product scope.
 - [ ] Confirmed facts are distinguished from assumptions and recommendations.
 - [ ] Inspiration is attributed and represented as high-level guidance, not copied design.
+- [ ] Unreadable or inaccessible references were recorded as open questions instead of blocking the workflow.
 - [ ] The app overview mockup is conceptual only; no working prototype was created.
 - [ ] Roadmap and milestones are proposals unless explicitly approved.
 - [ ] The user had an explicit opportunity to add, remove, or defer feature candidates.

@@ -73,6 +73,19 @@ function validateFeature(featureName) {
     return true;
   }
 
+  // Governance JSON lives in a version folder (`.sdrive/governance/<feature>/<version>/`).
+  // Older projects may still use the flat layout (`.sdrive/governance/<feature>/`),
+  // so we validate every version folder we find and fall back to the flat layout
+  // when no version folders exist.
+  const versionDirs = fs
+    .readdirSync(featureDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name);
+
+  const targets = versionDirs.length > 0
+    ? versionDirs.map((version) => ({ label: `${featureName}/${version}`, dir: path.join(featureDir, version) }))
+    : [{ label: featureName, dir: featureDir }];
+
   let failed = false;
 
   const files = [
@@ -82,18 +95,20 @@ function validateFeature(featureName) {
     { file: "traceability.json", schema: "traceability.schema.json" }
   ];
 
-  files.forEach(({ file, schema }) => {
-    const filePath = path.join(featureDir, file);
-    const schemaPath = path.join(schemaDir, schema);
+  targets.forEach(({ label, dir }) => {
+    files.forEach(({ file, schema }) => {
+      const filePath = path.join(dir, file);
+      const schemaPath = path.join(schemaDir, schema);
 
-    if (!fs.existsSync(filePath)) {
-      console.log(`⚠️  ${featureName}/${file} not found. Skipping.`);
-      return;
-    }
+      if (!fs.existsSync(filePath)) {
+        console.log(`⚠️  ${label}/${file} not found. Skipping.`);
+        return;
+      }
 
-    const data = loadJson(filePath);
-    const schemaData = loadJson(schemaPath);
-    failed |= !validateData(data, schemaData, `${featureName}/${file}`);
+      const data = loadJson(filePath);
+      const schemaData = loadJson(schemaPath);
+      failed |= !validateData(data, schemaData, `${label}/${file}`);
+    });
   });
 
   return !failed;
