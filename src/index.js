@@ -45,6 +45,31 @@ function copyRecursive(src, dest) {
   }
 }
 
+// Like copyRecursive, but overwrites existing files. Used by `sdrive update` to
+// refresh framework-owned code (dashboard, mcp, scripts, schemas) so bug fixes
+// reach existing projects. Returns the number of files written.
+function copyRecursiveForce(src, dest) {
+  if (!fs.existsSync(src)) return 0;
+
+  fs.mkdirSync(dest, { recursive: true });
+
+  let written = 0;
+
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      written += copyRecursiveForce(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+      written += 1;
+    }
+  }
+
+  return written;
+}
+
 function mergeBundledSlashCommands(packageRoot, sdriveRoot) {
   const packagedManifestPath = path.join(packageRoot, "commands", "manifest.json");
   const installedManifestPath = path.join(sdriveRoot, "commands", "manifest.json");
@@ -429,6 +454,15 @@ program
       }
     });
 
+    // The dashboard serves the brand logo from .sdrive/logo.png, so it must be
+    // copied alongside the dashboard files. Without this the logo 404s.
+    const logoSource = path.join(packageRoot, "logo.png");
+    const logoDest = path.join(sdriveRoot, "logo.png");
+    if (fs.existsSync(logoSource) && !fs.existsSync(logoDest)) {
+      fs.copyFileSync(logoSource, logoDest);
+      console.log("  Copied: .sdrive/logo.png");
+    }
+
     mergeBundledSlashCommands(packageRoot, sdriveRoot);
 
     const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
@@ -575,6 +609,83 @@ program
 
       applySelection(selectedTools);
     });
+  });
+
+// ---------- UPDATE COMMAND ----------
+program
+  .command("update")
+  .description("Refresh SpecDrive framework files (dashboard, mcp, scripts, schemas) without touching your specs or governance")
+  .option("--dry-run", "Show what would be updated without writing any files")
+  .action((options) => {
+    const projectRoot = process.cwd();
+    const sdriveRoot = path.join(projectRoot, ".sdrive");
+
+    if (!fs.existsSync(sdriveRoot)) {
+      console.error("❌ No .sdrive folder found. Run `sdrive init` first.");
+      process.exit(1);
+    }
+
+    const packageRoot = path.join(__dirname, "..");
+
+    // Framework-owned directories: safe to overwrite because they contain code,
+    // not user content. User data (specs, governance, constitution, config,
+    // team, workflow-state) is deliberately excluded.
+    const frameworkDirs = ["dashboard", "mcp", "scripts", "schemas", "agents", "templates"];
+
+    console.log("\n🔄 SpecDrive Update\n");
+    console.log(`   From: ${packageRoot}`);
+    console.log(`   To:   ${sdriveRoot}\n`);
+
+    if (options.dryRun) {
+      console.log("   (dry run — no files will be written)\n");
+    }
+
+    let totalWritten = 0;
+
+    frameworkDirs.forEach((dir) => {
+      const srcDir = path.join(packageRoot, dir);
+      const destDir = path.join(sdriveRoot, dir);
+
+      if (!fs.existsSync(srcDir)) {
+        console.log(`  ⚠️  Missing in package: ${dir}/`);
+        return;
+      }
+
+      if (options.dryRun) {
+        console.log(`  Would refresh: .sdrive/${dir}/`);
+        return;
+      }
+
+      const written = copyRecursiveForce(srcDir, destDir);
+      totalWritten += written;
+      console.log(`  ✅ Refreshed: .sdrive/${dir}/ (${written} file${written === 1 ? "" : "s"})`);
+    });
+
+    // The logo is served by the dashboard, so keep it in sync too.
+    const logoSource = path.join(packageRoot, "logo.png");
+    const logoDest = path.join(sdriveRoot, "logo.png");
+    if (fs.existsSync(logoSource)) {
+      if (options.dryRun) {
+        console.log("  Would refresh: .sdrive/logo.png");
+      } else {
+        fs.copyFileSync(logoSource, logoDest);
+        totalWritten += 1;
+        console.log("  ✅ Refreshed: .sdrive/logo.png");
+      }
+    }
+
+    // Merge any new slash commands added since the project was initialized.
+    if (!options.dryRun) {
+      mergeBundledSlashCommands(packageRoot, sdriveRoot);
+    }
+
+    console.log("");
+    if (options.dryRun) {
+      console.log("✅ Dry run complete. Re-run without --dry-run to apply.\n");
+    } else {
+      console.log(`✅ SpecDrive updated (${totalWritten} file${totalWritten === 1 ? "" : "s"} refreshed).`);
+      console.log("   Your specs, governance, and constitution were left untouched.\n");
+    }
   });
 
 // ---------- TEMPLATE COMMANDS ----------

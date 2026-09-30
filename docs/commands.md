@@ -12,6 +12,7 @@ SpecDrive has two types of commands:
 | Command | Purpose |
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive structure and adapters |
+| `sdrive update` | Refresh framework files (dashboard, mcp, scripts, schemas) without touching your specs or governance |
 | `sdrive onboard` | Scan an existing project (usually run automatically by `/sdrive:onboard`) |
 | `sdrive validate` | Validate all governance files |
 | `sdrive config:validate` | Validate `.sdrive/config.json` |
@@ -44,6 +45,9 @@ Initializes SpecDrive in the current project.
 sdrive init
 ```
 
+Asks one question — which AI tools you use. MCP wiring is applied automatically
+for the tools you pick.
+
 Creates:
 
 - `.sdrive/` structure
@@ -51,6 +55,53 @@ Creates:
 - `constitution.md`
 - Tool adapters
 - MCP server and config
+- `.sdrive/logo.png`
+
+For non-interactive setup, pass `--tools`:
+
+```bash
+sdrive init --tools github-copilot
+sdrive init --tools github-copilot,cursor,cline
+sdrive init --tools all
+sdrive init --tools none
+```
+
+---
+
+### `sdrive update`
+
+Refreshes framework-owned files from the installed CLI version.
+
+```bash
+sdrive update
+```
+
+Use this after upgrading the CLI so bug fixes reach an existing project.
+
+Refreshes:
+
+- `.sdrive/dashboard/`
+- `.sdrive/mcp/`
+- `.sdrive/scripts/`
+- `.sdrive/schemas/`
+- `.sdrive/agents/`
+- `.sdrive/templates/`
+- `.sdrive/logo.png`
+
+Leaves untouched:
+
+- `.sdrive/specs/`
+- `.sdrive/governance/`
+- `.sdrive/constitution.md`
+- `.sdrive/config.json`
+- `.sdrive/team.json`
+- `.sdrive/workflow-state.json`
+
+Preview changes without writing:
+
+```bash
+sdrive update --dry-run
+```
 
 ---
 
@@ -300,11 +351,15 @@ Shows added and removed lines across `spec.md`, `plan.md`, and `tasks.md`.
 
 ### `sdrive dashboard`
 
-Starts a local web dashboard on port `4747`.
+Starts a local web dashboard, beginning on port `4747`.
 
 ```bash
 sdrive dashboard
 ```
+
+If `4747` is already in use, it automatically falls back to the next free port
+(`4748`, `4749`, …) and prints the URL it chose. Override the starting port with
+the `SDRIVE_PORT` environment variable.
 
 Open `http://localhost:4747` to view:
 

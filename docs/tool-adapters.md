@@ -91,17 +91,19 @@ No slash commands needed.
 .sdrive/mcp/mcp.json
 ```
 
-It also asks which MCP clients to wire.
+MCP clients are wired **automatically** based on the tools you select — there is
+no separate prompt. Each client uses its own config schema:
 
-Supported:
+| Client | Config Path | Config Key |
+|--------|-------------|------------|
+| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` | `mcpServers` |
+| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` | `mcpServers` |
+| Cursor | `.cursor/mcp.json` | `mcpServers` |
+| Cline | `.cline/mcp.json` | `mcpServers` |
+| GitHub Copilot (VS Code) | `.vscode/mcp.json` | `servers` (with `type: "stdio"`) |
 
-| Client | Config Path |
-|--------|-------------|
-| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` |
-| Cursor | `.cursor/mcp.json` |
-| Cline | `.cline/mcp.json` |
-| VS Code | `.vscode/mcp.json` |
+> **Note:** VS Code uses `servers` with an explicit `type`, while other clients
+> use `mcpServers`. SpecDrive writes the correct shape per client.
 
 ---
 

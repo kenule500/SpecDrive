@@ -151,6 +151,36 @@ For the simplest experience, use a global install.
 
 ---
 
+## Updating SpecDrive
+
+When you upgrade the CLI, your existing project keeps the framework files it was
+initialized with. To pull in the latest dashboard, MCP server, scripts, and
+schemas, run:
+
+```bash
+sdrive update
+```
+
+This refreshes **framework-owned** files only:
+
+| Refreshed | Left untouched |
+|-----------|----------------|
+| `.sdrive/dashboard/` | `.sdrive/specs/` |
+| `.sdrive/mcp/` | `.sdrive/governance/` |
+| `.sdrive/scripts/` | `.sdrive/constitution.md` |
+| `.sdrive/schemas/` | `.sdrive/config.json` |
+| `.sdrive/agents/` | `.sdrive/team.json` |
+| `.sdrive/templates/` | `.sdrive/workflow-state.json` |
+| `.sdrive/logo.png` | |
+
+Preview changes first with a dry run:
+
+```bash
+sdrive update --dry-run
+```
+
+---
+
 ## Where to Run Commands
 
 | Command Type | Where to Run | Example |
@@ -532,6 +562,7 @@ Audits and manages AI skills.
 | Command | Purpose |
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive structure |
+| `sdrive update` | Refresh framework files without touching specs or governance |
 | `sdrive onboard` | Scan an existing project (usually run automatically by `/sdrive:onboard`) |
 | `sdrive validate` | Validate governance files |
 | `sdrive config:validate` | Validate `.sdrive/config.json` |
@@ -820,15 +851,16 @@ The AI tool calls SpecDrive automatically through MCP.
 .sdrive/mcp/server.js
 ```
 
-It also asks which MCP clients to wire. Supported:
+MCP clients are wired **automatically** based on the tools you select — there is
+no separate prompt. Each client uses its own config schema:
 
-| Client | Config Path |
-|--------|-------------|
-| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` |
-| Cursor | `.cursor/mcp.json` |
-| Cline | `.cline/mcp.json` |
-| VS Code | `.vscode/mcp.json` |
+| Client | Config Path | Config Key |
+|--------|-------------|------------|
+| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` | `mcpServers` |
+| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` | `mcpServers` |
+| Cursor | `.cursor/mcp.json` | `mcpServers` |
+| Cline | `.cline/mcp.json` | `mcpServers` |
+| GitHub Copilot (VS Code) | `.vscode/mcp.json` | `servers` (with `type: "stdio"`) |
 
 SpecDrive never overwrites existing MCP entries. It merges safely.
 
@@ -919,7 +951,11 @@ The dashboard includes a filter bar:
 
 ### Notes
 
-- The dashboard runs locally on port `4747`
+- The dashboard runs locally, starting on port `4747`
+- If `4747` is already in use (for example another project's dashboard is running),
+  it automatically falls back to the next free port (`4748`, `4749`, …) and prints
+  the URL it chose
+- Override the starting port with the `SDRIVE_PORT` environment variable
 - It reads directly from `.sdrive/`
 - No data leaves your machine
 

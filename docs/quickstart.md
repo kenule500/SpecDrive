@@ -23,15 +23,34 @@ sdrive init
 SpecDrive will ask you to:
 
 1. Select which AI tools you use
-2. Select a default template
-3. Wire MCP clients (optional)
+
+MCP wiring is applied automatically for the tools you pick — no second prompt.
 
 It then creates:
 
 - `.sdrive/` folder structure
 - Tool adapters for selected tools
-- MCP server
+- MCP server and config
 - Default config
+
+For non-interactive setup (CI, scripts, agents), pass `--tools`:
+
+```bash
+sdrive init --tools github-copilot
+sdrive init --tools all
+sdrive init --tools none
+```
+
+### Updating Later
+
+After upgrading the CLI, refresh your project's framework files:
+
+```bash
+sdrive update
+```
+
+This updates the dashboard, MCP server, scripts, and schemas while leaving your
+specs, governance, and constitution untouched.
 
 ---
 

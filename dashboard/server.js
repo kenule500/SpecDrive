@@ -334,6 +334,8 @@ function handleRequest(req, res) {
   if (url === "/logo.png") {
     const logoCandidates = [
       path.join(__dirname, "logo.png"),
+      path.join(sdriveRoot, "logo.png"),
+      path.join(projectRoot, "logo.png"),
       path.join(__dirname, "..", "logo.png"),
       path.join(__dirname, "..", "..", "logo.png")
     ];

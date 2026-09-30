@@ -232,6 +232,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | Command | Purpose |
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive |
+| `sdrive update` | Refresh framework files without touching specs or governance |
 | `sdrive onboard` | Scan existing project (usually run automatically by `/sdrive:onboard`) |
 | `sdrive validate` | Validate all governance files |
 | `sdrive config:validate` | Validate `config.json` |
