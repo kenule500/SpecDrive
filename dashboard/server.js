@@ -266,7 +266,7 @@ function apiCommands() {
   return { slash, cli: CLI_COMMANDS };
 }
 
-const server = http.createServer((req, res) => {
+function handleRequest(req, res) {
   const url = req.url;
 
   if (url.startsWith("/api/")) {
@@ -345,10 +345,34 @@ const server = http.createServer((req, res) => {
 
   res.writeHead(404);
   res.end("Not found");
-});
+}
 
-const PORT = 4747;
+// Preferred port, overridable via SDRIVE_PORT. If it is taken (for example
+// another project's dashboard is already running), we walk forward to the next
+// free port so multiple projects can each serve their own dashboard.
+const PREFERRED_PORT = Number(process.env.SDRIVE_PORT) || 4747;
+const MAX_PORT_ATTEMPTS = 20;
 
-server.listen(PORT, () => {
-  console.log(`\n🚀 SpecDrive Dashboard running at http://localhost:${PORT}\n`);
-});
+// A fresh server is created for every attempt. Reusing one server across
+// listen() calls leaves stale "listening" callbacks queued, which makes the
+// success message print once per failed attempt.
+function listenOnFreePort(port, attemptsLeft) {
+  const server = http.createServer(handleRequest);
+
+  server.once("error", (error) => {
+    if (error.code === "EADDRINUSE" && attemptsLeft > 0) {
+      console.log(`⚠️  Port ${port} is in use, trying ${port + 1}...`);
+      listenOnFreePort(port + 1, attemptsLeft - 1);
+      return;
+    }
+
+    console.error(`\n❌ Could not start the dashboard: ${error.message}\n`);
+    process.exit(1);
+  });
+
+  server.listen(port, () => {
+    console.log(`\n🚀 SpecDrive Dashboard running at http://localhost:${port}\n`);
+  });
+}
+
+listenOnFreePort(PREFERRED_PORT, MAX_PORT_ATTEMPTS);
