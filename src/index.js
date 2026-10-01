@@ -500,6 +500,8 @@ program
         )
       );
       console.log("  Created: .sdrive/team.json");
+      console.log("  ⚠️  team.json has no members. Gated commands (/sdrive:review, /sdrive:apply, etc.) will be denied.");
+      console.log("      Run: sdrive team:add <your-git-username> admin");
     }
 
     const mcpConfigPath = path.join(sdriveRoot, "mcp", "mcp.json");
