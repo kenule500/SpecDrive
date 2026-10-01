@@ -39,6 +39,7 @@ It adds:
 - [Agents](#agents)
 - [Templates](#templates)
 - [Versions](#versions)
+- [Feature Lifecycle](#feature-lifecycle)
 - [Directory Structure](#directory-structure)
 - [Validation](#validation)
 - [Spec-to-Code Verification](#spec-to-code-verification)
@@ -379,6 +380,7 @@ Writes production code from the approved tasks.
 
 **What it does:**
 
+- **Moves the feature from `specs/backlog/` to `specs/ongoing/`** and sets the version's `phase` to `ongoing`
 - Reads approved tasks and plan from the current version
 - Asks which base branch to pull from
 - Creates a feature branch with user approval
@@ -400,11 +402,12 @@ Writes tests for every acceptance criterion, runs them, and reports coverage.
 **What it does:**
 
 - Reads spec, plan, tasks, and traceability from the current version
-- Detects the project's test framework
-- Writes one test per AC
+- Detects the project's test framework and its test file naming convention
+- Writes one test per AC, organized by feature under the project's test folder using the framework's own convention (`<test-folder>/<feature>/<subfeature>.<test-suffix>.<ext>`)
 - Requires approval before writing
 - Runs tests and updates `traceability.json`
 - Generates a coverage report
+- Writes all artifacts (reports, logs, captured output) under `.sdrive/` — never to the project root
 - Runs `sdrive verify <feature>` and the governance validator
 
 **When to use:**
@@ -426,6 +429,7 @@ Final audit, merge, and archive.
 - Requires human approval before merging
 - Merges to main and archives the feature
 - Marks the current version as `completed`
+- Moves the feature folder from `ongoing/` to `completed/`
 - Preserves older versions
 
 **When to use:**
@@ -680,6 +684,23 @@ All agents operate within the **current version** folder only. Older versions ar
 
 ---
 
+## Feature Lifecycle
+
+A feature moves through three spec folders. Each transition has exactly one owner:
+
+| Transition | Owner | Notes |
+|------------|-------|-------|
+| → `specs/backlog/<feature>/<version>/` | `/sdrive:propose` | New specs are created in `backlog/` with `phase: backlog` |
+| `backlog/` → `ongoing/` | `/sdrive:apply` | Happens at the start of implementation; sets `phase: ongoing` |
+| `ongoing/` → `completed/` | `/sdrive:review` | Happens after merge and archive; sets `phase: completed` |
+| `completed/` → `ongoing/` | `sdrive reopen <feature>` | Manual reopen for further work |
+
+`/sdrive:apply` MUST NOT begin implementation while the spec is still in `backlog/`. If the feature is in neither `backlog/` nor `ongoing/`, the agent stops and asks.
+
+> **Note:** `governance/` is not lifecycle-partitioned. Governance files live at `.sdrive/governance/<feature>/<version>/` regardless of the spec's lifecycle folder.
+
+---
+
 ## Directory Structure
 
 ```text
@@ -687,13 +708,13 @@ All agents operate within the **current version** folder only. Older versions ar
 ├── agents/               # 13 agent definitions
 ├── commands/             # Manifest, router, gates, permissions
 ├── schemas/              # JSON schemas
-├── specs/                # Human-readable specs
-│   ├── backlog/
+├── specs/                # Human-readable specs (lifecycle-partitioned)
+│   ├── backlog/          # Created by /sdrive:propose
 │   │   └── <feature>/
 │   │       └── <version>/
-│   ├── ongoing/
-│   └── completed/
-├── governance/           # Machine-readable JSON
+│   ├── ongoing/          # Entered by /sdrive:apply
+│   └── completed/        # Entered by /sdrive:review
+├── governance/           # Machine-readable JSON (NOT lifecycle-partitioned)
 │   └── <feature>/
 │       └── <version>/
 ├── onboarding/           # Brownfield onboarding inventory + migration results

@@ -191,6 +191,7 @@ SpecDrive uses 13 specialized agents. Each agent has one slash command.
 
 **What it does:**
 
+- **Moves the feature from `specs/backlog/` to `specs/ongoing/`** and sets the version's `phase` to `ongoing` (the backlog → ongoing transition)
 - Reads approved tasks and plan from the current version
 - Asks about base branch and feature branch
 - Implements production code only (no tests)
@@ -233,8 +234,10 @@ SpecDrive uses 13 specialized agents. Each agent has one slash command.
 - Requires human merge approval
 - Merges the current version and marks it as `completed`
 - Preserves other versions
-- Moves feature folder from `ongoing/` to `completed/`
+- Moves feature folder from `ongoing/` to `completed/` (the ongoing → completed transition)
 - Verifies permission before and after merge
+
+**Lifecycle ownership:** `/sdrive:apply` owns `backlog/` → `ongoing/`; `/sdrive:review` owns `ongoing/` → `completed/`; `sdrive reopen` owns `completed/` → `ongoing/`.
 
 ---
 
@@ -265,12 +268,13 @@ SpecDrive uses 13 specialized agents. Each agent has one slash command.
 **What it does:**
 
 - Reads spec, plan, tasks, and traceability from the current version
-- Detects the project's test framework from the constitution and project files
-- Writes one test per acceptance criterion
+- Detects the project's test framework from the constitution and project files, including its test file naming convention and suffix
+- Writes one test per acceptance criterion, organized by feature under the project's test folder using the framework's own convention (`<test-folder>/<feature>/<subfeature>.<test-suffix>.<ext>`)
 - Test names include the AC ID (e.g., `AC-001`)
 - Requires user approval before writing tests
-- Runs tests and captures pass/fail
+- Runs tests and captures pass/fail directly from the tool result (no shell redirection to log files)
 - Updates `traceability.json` with test IDs and status in the current version
 - Generates a coverage report at `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md`
+- Writes all artifacts (reports, logs, captured output) under `.sdrive/` — never to the project root
 - Runs `sdrive verify <feature>` and the governance validator
 - Does NOT write production code

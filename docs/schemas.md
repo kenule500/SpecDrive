@@ -134,9 +134,9 @@ Validates feature lifecycle state.
 
 ### Phase Values
 
-- `backlog`
-- `ongoing`
-- `completed`
+- `backlog` — created by `/sdrive:propose`
+- `ongoing` — set by `/sdrive:apply` when implementation begins
+- `completed` — set by `/sdrive:review` after merge and archive
 - `blocked`
 
 ### Current Step Values

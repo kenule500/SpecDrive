@@ -24,17 +24,22 @@ You operate within the current version folder only.
   - Use `currentVersion` as the active version folder.
   - If the feature has no versions yet, treat it as implicit `v1`.
   - NEVER read or write files from older versions.
-- ALWAYS read the active feature files from the current version folder:
-  - `.sdrive/specs/ongoing/<feature>/<version>/spec.md`
-  - `.sdrive/specs/ongoing/<feature>/<version>/plan.md`
-  - `.sdrive/specs/ongoing/<feature>/<version>/tasks.md`
+- ALWAYS read the active feature files from the current version folder. The feature may live in `backlog/`, `ongoing/`, or `completed/` — resolve the actual path first (see Lifecycle Location Rule):
+  - `.sdrive/specs/<lifecycle>/<feature>/<version>/spec.md`
+  - `.sdrive/specs/<lifecycle>/<feature>/<version>/plan.md`
+  - `.sdrive/specs/<lifecycle>/<feature>/<version>/tasks.md`
   - `.sdrive/governance/<feature>/<version>/spec.json`
   - `.sdrive/governance/<feature>/<version>/plan.json`
   - `.sdrive/governance/<feature>/<version>/tasks.json`
   - `.sdrive/governance/<feature>/<version>/traceability.json`
   If any are missing, STOP and ask the user to run the Specification or Cascade agent first. Never infer missing files.
-- If audit fails, DO NOT move the feature folder; leave it in `ongoing/`.
-- If audit passes, move the feature folder from `ongoing/` to `completed/` after merge and archive.
+- **Lifecycle Location Rule:** NEVER assume the feature is in `ongoing/`. Before reading or moving anything, determine its actual location by checking, in order: `.sdrive/specs/ongoing/<feature>/`, `.sdrive/specs/backlog/<feature>/`, `.sdrive/specs/completed/<feature>/`. Record which one exists. If none exist, STOP and ask.
+- If audit fails, DO NOT move the feature folder; leave it where it is.
+- If audit passes, move the feature folder from **wherever it currently is** (`backlog/` or `ongoing/`) to `completed/` after merge and archive. Do NOT hardcode `ongoing/` as the source path.
+- **Move Verification Rule:** After moving the feature folder, VERIFY the move succeeded before updating `workflow-state.json` or reporting success:
+  - Confirm the destination `.sdrive/specs/completed/<feature>/` exists and contains the version folder.
+  - Confirm the source folder no longer exists.
+  - If the move failed (e.g. source path did not exist, `git mv` errored), STOP and report the failure. NEVER mark the phase `completed` or claim the lifecycle is finished when the folder did not move.
 - **Version Archival Rule:** When a version is merged and archived, mark that version's phase as `completed` in `workflow-state.json`. Do NOT delete older versions or their folders.
 - Use the **Context7 MCP** to verify library security documentation. Use `exa:search` to check for known security vulnerabilities (CVEs) in new dependencies. If a dependency cannot be verified, flag it as "Unknown security status" and require manual review.
 - Require explicit user approval before merging via your tool's native approval mechanism (e.g., `vscode/askQuestions`), even if all checks pass.
@@ -159,14 +164,19 @@ You operate within the current version folder only.
 
 4. **FINALIZE LIFECYCLE (only after confirmed merge)**
    - Switch to main and pull: `git checkout main && git pull origin main`.
-   - Move feature folder:
-     `git mv .sdrive/specs/ongoing/<feature> .sdrive/specs/completed/<feature>`.
+   - **Resolve the feature's actual location** (Lifecycle Location Rule): check `.sdrive/specs/ongoing/<feature>/`, then `.sdrive/specs/backlog/<feature>/`, then `.sdrive/specs/completed/<feature>/`. Let `<source>` be the one that exists.
+   - If `<source>` is already `completed/`, skip the move and report that it was already archived.
+   - Move feature folder from its actual location:
+     `git mv .sdrive/specs/<source>/<feature> .sdrive/specs/completed/<feature>`.
+     If `git mv` fails (e.g. the folder is untracked), fall back to a plain filesystem move and report the fallback.
+   - **Verify the move:** confirm `.sdrive/specs/completed/<feature>/<version>/` exists and `.sdrive/specs/<source>/<feature>/` no longer exists. If verification fails, STOP and report — do NOT continue to the state update.
    - Move governance folder if using lifecycle subfolders:
      `git mv .sdrive/governance/<feature> .sdrive/governance/completed/<feature>`.
    - Update `traceability.json` in the current version folder only for rows confirmed complete during audit. Preserve all others.
    - Update `.sdrive/workflow-state.json`:
      - Set the current version's `phase: completed`.
      - Set all of the current version's gates to `approved`.
+     - Append a `history` entry recording the archive and the source lifecycle folder it moved from.
      - Preserve all other versions.
    - Commit: `git commit -m "docs: finalize and archive <feature> <version>"`.
    - Push: `git push origin main`.
@@ -223,7 +233,9 @@ The review phase is NOT complete until:
 - [ ] Coverage is 100% (all ACs tested and passing).
 - [ ] Test report exists (with version in filename) and is newer than `spec.md` and `plan.md`.
 - [ ] Review report generated inside the current version folder with honest pass/fail status.
+- [ ] Feature's actual lifecycle location resolved (`backlog/`, `ongoing/`, or `completed/`) before any move.
 - [ ] If pass: human approved merge, PR merged, current version marked `completed`, feature folder moved to `completed/`.
+- [ ] Move verified: `.sdrive/specs/completed/<feature>/<version>/` exists and the source folder no longer exists.
 - [ ] If fail: fix tasks added, PR blocked, user notified.
 - [ ] No criterion was marked passed unless actually verified.
 - [ ] Merge success verified before branch deletion.
@@ -238,4 +250,5 @@ At the end of your work, provide:
 4. ✅ Confirmation of human approval for merge.
 5. ✅ Confirmation that merge success was verified before branch deletion.
 6. ✅ Confirmation that only the current version was archived and other versions preserved.
+7. ✅ Confirmation of the source lifecycle folder the feature was moved from (e.g. `backlog/` → `completed/`) and that the move was verified.
 </deliverables>

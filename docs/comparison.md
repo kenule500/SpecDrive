@@ -17,6 +17,7 @@
 | Coverage enforcement | ❌ | ❌ | ✅ |
 | Spec versioning | ❌ | ⚠️ | ✅ full per-version tracking |
 | Version diff | ❌ | ❌ | ✅ |
+| Explicit feature lifecycle transitions | ❌ | ❌ | ✅ backlog → ongoing → completed |
 | Plugin system | ❌ | ❌ | ✅ |
 | Team collaboration | ❌ | ❌ | ✅ |
 | Role-based permissions | ❌ | ❌ | ✅ |
@@ -43,6 +44,7 @@ SpecDrive is the only system that combines:
 - Strict machine validation
 - Full traceability
 - Per-version lifecycle tracking
+- Explicit feature lifecycle transitions (`backlog` → `ongoing` → `completed`)
 - Enterprise governance
 - Security, performance, and test agents
 - Spec-to-code verification

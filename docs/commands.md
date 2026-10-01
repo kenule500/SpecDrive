@@ -398,10 +398,10 @@ The dashboard also supports filters:
 | `/sdrive:sync` | Cascade | Sync downstream files |
 | `/sdrive:skills` | Discover-skills | Manage AI skills |
 | `/sdrive:docs` | Documentation | Generate docs |
-| `/sdrive:apply` | Implementation | Write production code |
+| `/sdrive:apply` | Implementation | Write production code; move feature from `backlog/` to `ongoing/` |
 | `/sdrive:test` | Test | Write tests, run them, report coverage |
 | `/sdrive:performance` | Performance | Benchmark and optimize |
-| `/sdrive:review` | Review & Complete | Final audit and merge |
+| `/sdrive:review` | Review & Complete | Final audit and merge; move feature from `ongoing/` to `completed/` |
 | `/sdrive:secure` | Security | Security audit |
 
 ---
@@ -485,12 +485,13 @@ Writes tests for every acceptance criterion, runs them, and reports coverage.
 **What it does:**
 
 - Reads spec, plan, tasks, and traceability from the current version
-- Detects the project's test framework
-- Writes one test per AC
+- Detects the project's test framework and its test file naming convention
+- Writes one test per AC, organized by feature under the project's test folder using the framework's own convention (`<test-folder>/<feature>/<subfeature>.<test-suffix>.<ext>`)
 - Test names include the AC ID
 - Requires approval before writing
 - Runs tests and updates `traceability.json` in the current version
 - Generates a coverage report at `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md`
+- Writes all artifacts (reports, logs, captured output) under `.sdrive/` — never to the project root
 - Runs `sdrive verify <feature>` and the governance validator
 
 **When to use:**
@@ -532,6 +533,23 @@ becomes:
 ```text
 user-login-with-email-and-password
 ```
+
+---
+
+## Feature Lifecycle
+
+A feature moves through three spec folders. Each transition has exactly one owner:
+
+| Transition | Owner | Notes |
+|------------|-------|-------|
+| → `specs/backlog/<feature>/<version>/` | `/sdrive:propose` | New specs are created in `backlog/` with `phase: backlog` |
+| `backlog/` → `ongoing/` | `/sdrive:apply` | Happens at the start of implementation; sets `phase: ongoing` |
+| `ongoing/` → `completed/` | `/sdrive:review` | Happens after merge and archive; sets `phase: completed` |
+| `completed/` → `ongoing/` | `sdrive reopen <feature>` | Manual reopen for further work |
+
+`/sdrive:apply` MUST NOT begin implementation while the spec is still in `backlog/`. If the feature is in neither `backlog/` nor `ongoing/`, the agent stops and asks.
+
+> **Note:** `governance/` is not lifecycle-partitioned. Governance files live at `.sdrive/governance/<feature>/<version>/` regardless of the spec's lifecycle folder.
 
 ---
 

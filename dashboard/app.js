@@ -521,10 +521,21 @@ function featureMembersEl(members) {
   return wrap;
 }
 
+// Monotonic token used to cancel stale renders. renderFeatures() is async and
+// awaits network calls inside its loop, so two overlapping invocations (e.g. a
+// <select> firing both `input` and `change`) would each clear the container and
+// then both append their cards, producing duplicate cards. Each render claims a
+// token; any render that finds the token has moved on aborts before mutating the DOM.
+let featureRenderToken = 0;
+
 async function renderFeatures() {
+  const token = ++featureRenderToken;
+
   const state = await fetchJson("/api/workflow-state");
   const team = (await fetchJson("/api/team")) || { members: [] };
   const container = document.getElementById("feature-list");
+
+  if (token !== featureRenderToken) return;
 
   if (!state || !state.features || state.features.length === 0) {
     container.className = "panel-loading";
@@ -579,6 +590,9 @@ async function renderFeatures() {
       const verification = (await fetchJson(`/api/verification/${f.name}/${version.id}`)) || { status: "not_run", summary: {} };
       const tests = (await fetchJson(`/api/tests/${f.name}/${version.id}`)) || { status: "not_run", summary: {} };
 
+      // A newer render started while we were awaiting — abandon this one.
+      if (token !== featureRenderToken) return;
+
       if (!featureMatchesFilters(f, version, filters, verification, tests)) {
         continue;
       }
@@ -593,6 +607,8 @@ async function renderFeatures() {
       rendered++;
     }
   }
+
+  if (token !== featureRenderToken) return;
 
   if (rendered === 0) {
     container.className = "panel-loading";
@@ -886,17 +902,20 @@ async function main() {
     productContainer.appendChild(renderProduct(product));
   }
 
+  // Bind each control to the single event it actually emits. A <select> fires
+  // BOTH `input` and `change`, so binding both caused renderFeatures() to run
+  // twice per change and race against itself (duplicate cards). Text inputs only
+  // emit `input`; selects and checkboxes only need `change`.
   [
-    "filter-search",
-    "filter-phase",
-    "filter-verification",
-    "filter-tests",
-    "filter-current-version"
-  ].forEach((id) => {
+    { id: "filter-search", event: "input" },
+    { id: "filter-phase", event: "change" },
+    { id: "filter-verification", event: "change" },
+    { id: "filter-tests", event: "change" },
+    { id: "filter-current-version", event: "change" }
+  ].forEach(({ id, event }) => {
     const el = document.getElementById(id);
     if (el) {
-      el.addEventListener("input", renderFeatures);
-      el.addEventListener("change", renderFeatures);
+      el.addEventListener(event, renderFeatures);
     }
   });
 

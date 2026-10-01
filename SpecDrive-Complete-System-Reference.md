@@ -24,12 +24,13 @@ A full walkthrough of everything we built, from the ground up.
 16. [The Onboarding System (Brownfield)](#16-the-onboarding-system-brownfield)
 17. [The Migration System (OpenSpec + Spec-Kit)](#17-the-migration-system-openspec--spec-kit)
 18. [The Versioning System](#18-the-versioning-system)
-19. [The Spec-to-Code Verification System](#19-the-spec-to-code-verification-system)
-20. [The Full Workflow (End-to-End)](#20-the-full-workflow-end-to-end)
-21. [CI/CD Integration](#21-cicd-integration)
-22. [Docs Folder](#22-docs-folder)
-23. [How To Use It (User Guide)](#23-how-to-use-it-user-guide)
-24. [What Problem Each Piece Solves](#24-what-problem-each-piece-solves)
+19. [The Feature Lifecycle](#19-the-feature-lifecycle)
+20. [The Spec-to-Code Verification System](#20-the-spec-to-code-verification-system)
+21. [The Full Workflow (End-to-End)](#21-the-full-workflow-end-to-end)
+22. [CI/CD Integration](#22-cicd-integration)
+23. [Docs Folder](#23-docs-folder)
+24. [How To Use It (User Guide)](#24-how-to-use-it-user-guide)
+25. [What Problem Each Piece Solves](#25-what-problem-each-piece-solves)
 
 ---
 
@@ -111,11 +112,11 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 ├── commands/          # Manifest, router, gates, permissions
 ├── schemas/           # 8 JSON schemas
 ├── scripts/           # 20 scripts (validators, helpers, generators)
-├── specs/             # Human-readable specs
-│   ├── backlog/
-│   ├── ongoing/
-│   └── completed/
-├── governance/        # Machine-readable JSON per feature/version
+├── specs/             # Human-readable specs (lifecycle-partitioned)
+│   ├── backlog/       # Created by /sdrive:propose
+│   ├── ongoing/       # Entered by /sdrive:apply
+│   └── completed/     # Entered by /sdrive:review
+├── governance/        # Machine-readable JSON per feature/version (NOT lifecycle-partitioned)
 ├── onboarding/        # Brownfield inventory + report
 ├── mcp/               # MCP server for AI chat integration
 ├── prototype/         # UI/UX prototypes
@@ -162,9 +163,9 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | 4 | Cascade | `/sdrive:sync` | Sync spec → plan → tasks |
 | 5 | Discover-skills | `/sdrive:skills` | Audit/manage AI skills |
 | 6 | Documentation | `/sdrive:docs` | Generate docs |
-| 7 | Implementation | `/sdrive:apply` | Write production code |
+| 7 | Implementation | `/sdrive:apply` | Write production code; move feature `backlog/` → `ongoing/` |
 | 8 | Performance | `/sdrive:performance` | Benchmark + optimize |
-| 9 | Review & Complete | `/sdrive:review` | Audit + merge |
+| 9 | Review & Complete | `/sdrive:review` | Audit + merge; move feature `ongoing/` → `completed/` |
 | 10 | Security | `/sdrive:secure` | Security audit |
 | 11 | Test | `/sdrive:test` | Write tests |
 | 12 | Blueprint | `/sdrive:blueprint` | Optionally create a product overview, conceptual mockup, design-system plan, roadmap, milestones, and backlog |
@@ -476,7 +477,27 @@ The Onboarding Agent runs `node .sdrive/scripts/onboard.js` internally if the in
 
 ---
 
-## 19. The Spec-to-Code Verification System
+## 19. The Feature Lifecycle
+
+A feature moves through three spec folders. Each transition has exactly one owner:
+
+| Transition | Owner | Notes |
+|------------|-------|-------|
+| → `specs/backlog/<feature>/<version>/` | `/sdrive:propose` | New specs are created in `backlog/` with `phase: backlog` |
+| `backlog/` → `ongoing/` | `/sdrive:apply` | Happens at the start of implementation; sets `phase: ongoing` |
+| `ongoing/` → `completed/` | `/sdrive:review` | Happens after merge and archive; sets `phase: completed` |
+| `completed/` → `ongoing/` | `sdrive reopen <feature>` | Manual reopen for further work |
+
+**Rules:**
+
+- `/sdrive:apply` MUST NOT begin implementation while the spec is still in `backlog/`.
+- If the feature is in neither `backlog/` nor `ongoing/`, the agent stops and asks.
+- `/sdrive:review` leaves the feature in `ongoing/` if the audit fails.
+- `governance/` is **not** lifecycle-partitioned — governance files live at `.sdrive/governance/<feature>/<version>/` regardless of the spec's lifecycle folder.
+
+---
+
+## 20. The Spec-to-Code Verification System
 
 **Script:** `scripts/verify.js`
 
@@ -500,7 +521,7 @@ The Onboarding Agent runs `node .sdrive/scripts/onboard.js` internally if the in
 
 ---
 
-## 20. The Full Workflow (End-to-End)
+## 21. The Full Workflow (End-to-End)
 
 ```
 [Brownfield only]
@@ -516,8 +537,10 @@ The Onboarding Agent runs `node .sdrive/scripts/onboard.js` internally if the in
    /sdrive:propose
      → Gate 1
      → Gate 2
+     → creates specs/backlog/<feature>/<version>/
 
    /sdrive:apply
+     → moves specs/backlog/ → specs/ongoing/  (phase: ongoing)
      → sdrive verify
      → recommend /sdrive:test
 
@@ -529,6 +552,7 @@ The Onboarding Agent runs `node .sdrive/scripts/onboard.js` internally if the in
      → verify + coverage + audit
      → human merge approval
      → archive current version
+     → moves specs/ongoing/ → specs/completed/  (phase: completed)
 ```
 
 **Optional at any time:**
@@ -552,7 +576,7 @@ sdrive version:new <feature>
 
 ---
 
-## 21. CI/CD Integration
+## 22. CI/CD Integration
 
 `.github/workflows/sdrive-governance.yml` runs on PRs and:
 
@@ -564,7 +588,7 @@ Blocks merge on failure.
 
 ---
 
-## 22. Docs Folder
+## 23. Docs Folder
 
 | File | Purpose |
 |------|---------|
@@ -577,7 +601,7 @@ Blocks merge on failure.
 
 ---
 
-## 23. How To Use It (User Guide)
+## 24. How To Use It (User Guide)
 
 **Greenfield project:**
 
@@ -640,7 +664,7 @@ sdrive dashboard
 
 ---
 
-## 24. What Problem Each Piece Solves
+## 25. What Problem Each Piece Solves
 
 | Problem | Solution |
 |---------|----------|
@@ -661,6 +685,7 @@ sdrive dashboard
 | AI doesn't know project rules | `constitution.md` |
 | Remote tooling | MCP server |
 | Different AI tools | 15 adapters |
+| Specs never leave the backlog | Lifecycle transitions owned by `/sdrive:apply` and `/sdrive:review` |
 
 ---
 
@@ -679,6 +704,7 @@ You built a complete, enterprise-grade Spec-Driven Development system consisting
 - Brownfield onboarding as a single command
 - OpenSpec and Spec-Kit migration
 - Per-version lifecycle tracking
+- Explicit feature lifecycle transitions (`backlog` → `ongoing` → `completed`)
 - Spec-to-code verification
 - Role-based permissions
 - Full audit trail

@@ -108,6 +108,8 @@ The agent asks:
 
 The agent writes production code only.
 
+It also moves the feature from `specs/backlog/` to `specs/ongoing/` and sets the version's `phase` to `ongoing` — this is the moment work begins.
+
 After tasks are complete, it runs:
 
 ```bash
@@ -127,6 +129,7 @@ This checks that code matches the plan.
 The Test Agent:
 
 - Writes one test per acceptance criterion
+- Organizes test files by feature under your project's test folder, using your framework's own naming convention
 - Requires approval before writing
 - Runs the tests
 - Updates traceability
@@ -142,6 +145,8 @@ The Test Agent:
 
 Review runs verification and coverage checks before allowing merge.
 
+
+On success, the feature folder moves from `specs/ongoing/` to `specs/completed/` and the version's `phase` becomes `completed`. If the audit fails, the feature stays in `ongoing/`.
 Approve the final merge.
 
 ---
