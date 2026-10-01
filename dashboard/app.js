@@ -165,133 +165,307 @@ function renderGitInfo(git) {
 /* ============================================================
    OVERVIEW
    ============================================================ */
-function renderOverview(onboarding, git) {
+function renderOverview(onboarding, git, product) {
   const wrap = document.createElement("div");
-  wrap.className = "overview-grid";
+  wrap.className = "overview-page";
 
-  if (!onboarding) {
-    wrap.innerHTML = `
-      <div class="stat-card tone-green">
-        <span class="stat-icon">â—ˆ</span>
-        <span class="stat-label">Project Type</span>
-        <span class="stat-value small">Greenfield</span>
-        <span class="stat-sub">Fully SpecDrive-native â€” no onboarding needed</span>
-      </div>
-      <div class="stat-card tone-blue">
-        <span class="stat-icon">âŽ‡</span>
-        <span class="stat-label">Current Branch</span>
-        <span class="stat-value small">${escapeHtml(git?.branch || "â€”")}</span>
-        <span class="stat-sub">${escapeHtml(git?.commit || "")} ${git?.dirty ? "Â· uncommitted changes" : ""}</span>
-      </div>
-    `;
-    return wrap;
-  }
+  const summary = product?.summary || null;
 
+  wrap.innerHTML = `
+    ${renderOverviewHero(summary, git)}
+    ${renderOverviewKpis(onboarding, git, summary)}
+    ${renderOverviewPanels(onboarding, git, summary)}
+  `;
+
+  return wrap;
+}
+
+/* Hero banner — the product's identity at a glance. */
+function renderOverviewHero(summary, git) {
+  const title = summary?.title || "Project Overview";
+  const vision = summary?.vision || "";
+  const status = summary?.status || "";
+  const branch = git?.branch || "—";
+
+  return `
+    <div class="ov-hero">
+      <div class="ov-hero-glow"></div>
+      <div class="ov-hero-body">
+        <div class="ov-hero-eyebrow">
+          <span class="ov-hero-dot"></span>
+          <span>Product Overview</span>
+          ${status ? `<span class="ov-hero-status">${escapeHtml(status)}</span>` : ""}
+        </div>
+        <h2 class="ov-hero-title">${escapeHtml(title)}</h2>
+        ${vision ? `<p class="ov-hero-vision">${escapeHtml(vision)}</p>` : ""}
+        <div class="ov-hero-meta">
+          <span class="ov-hero-meta-item"><span class="ov-hero-meta-icon">⎇</span>${escapeHtml(branch)}</span>
+          ${git?.commit ? `<span class="ov-hero-meta-item"><span class="ov-hero-meta-icon">◈</span>${escapeHtml(git.commit)}</span>` : ""}
+          ${git?.mergedFrom ? `<span class="ov-hero-meta-item"><span class="ov-hero-meta-icon">⇄</span>merged from ${escapeHtml(git.mergedFrom)}</span>` : ""}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* KPI strip — the headline numbers, presented as a single unified band. */
+function renderOverviewKpis(onboarding, git, summary) {
+  const goals = summary?.goals || [];
+  const users = summary?.targetUsers || [];
+  const arch = summary?.architecture || [];
+
+  const verified = onboarding?.verifiedFeatures || [];
+  const retro = onboarding?.retroactiveFeatures || [];
+  const missing = onboarding?.missing || [];
+  const deferred = onboarding?.deferred || [];
+
+  const kpis = [
+    {
+      label: "Product Status",
+      value: summary?.status || "—",
+      sub: summary?.title ? "blueprint approved" : "no blueprint",
+      tone: summary?.status ? "green" : "slate",
+      icon: "◈"
+    },
+    {
+      label: "Primary Goals",
+      value: String(goals.length),
+      sub: goals.length ? "confirmed" : "none recorded",
+      tone: "blue",
+      icon: "✦"
+    },
+    {
+      label: "Target Users",
+      value: String(users.length),
+      sub: users.length ? users.map((u) => u.segment).join(" · ") : "none recorded",
+      tone: "blue",
+      icon: "◉"
+    },
+    {
+      label: "Tech Stack",
+      value: String(arch.length),
+      sub: arch.length ? "layers documented" : "none recorded",
+      tone: "slate",
+      icon: "⌘"
+    },
+    {
+      label: "Verified Features",
+      value: String(verified.length),
+      sub: `${retro.length} retroactive`,
+      tone: "green",
+      icon: "✓"
+    },
+    {
+      label: "Attention",
+      value: String(missing.length + deferred.length),
+      sub: missing.length ? `${missing.length} missing · ${deferred.length} deferred` : "all clear",
+      tone: missing.length ? "red" : deferred.length ? "amber" : "green",
+      icon: "!"
+    }
+  ];
+
+  return `
+    <div class="ov-kpi-strip">
+      ${kpis
+        .map(
+          (k) => `
+        <div class="ov-kpi tone-${k.tone}">
+          <span class="ov-kpi-icon">${k.icon}</span>
+          <span class="ov-kpi-value">${escapeHtml(k.value)}</span>
+          <span class="ov-kpi-label">${escapeHtml(k.label)}</span>
+          <span class="ov-kpi-sub">${escapeHtml(k.sub)}</span>
+        </div>`
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+/* Grouped panels — blueprint, repository, onboarding. */
+function renderOverviewPanels(onboarding, git, summary) {
+  const sidePanels = [];
+  sidePanels.push(renderRepositoryPanel(git));
+  if (summary) sidePanels.push(renderOpenQuestionsPanel(summary));
+  if (onboarding) sidePanels.push(renderOnboardingPanel(onboarding));
+
+  const mainPanel = summary ? renderBlueprintPanel(summary) : "";
+
+  return `
+    <div class="ov-panels">
+      <div class="ov-col ov-col-main">${mainPanel}</div>
+      <div class="ov-col ov-col-side">${sidePanels.join("")}</div>
+    </div>
+  `;
+}
+
+function renderBlueprintPanel(summary) {
+  const goals = summary.goals || [];
+  const nonGoals = summary.nonGoals || [];
+  const users = summary.targetUsers || [];
+  const guidance = summary.guidance || [];
+  const arch = summary.architecture || [];
+
+  const bulletList = (items, icon) =>
+    items.length
+      ? `<ul class="detail-list">${items
+          .map((i) => `<li><span>${icon}</span><span>${escapeHtml(i)}</span></li>`)
+          .join("")}</ul>`
+      : `<div class="ov-empty">None</div>`;
+
+  return `
+    <section class="ov-panel">
+      <header class="ov-panel-head">
+        <span class="ov-panel-icon">◇</span>
+        <h3>Product Blueprint</h3>
+      </header>
+      <div class="ov-panel-body">
+        ${summary.problem ? `<div class="ov-callout"><span class="ov-callout-label">Problem</span><p>${escapeHtml(summary.problem)}</p></div>` : ""}
+        <div class="detail-grid">
+          <div>
+            <div class="detail-block-label">Goals</div>
+            ${bulletList(goals, "✓")}
+          </div>
+          <div>
+            <div class="detail-block-label">Non-Goals</div>
+            ${bulletList(nonGoals, "✕")}
+          </div>
+          <div>
+            <div class="detail-block-label">Target Users</div>
+            ${
+              users.length
+                ? `<ul class="detail-list">${users
+                    .map(
+                      (u) =>
+                        `<li><span>◉</span><span><span class="li-key">${escapeHtml(u.segment)}</span>${
+                          u.need ? ` <span class="li-meta">${escapeHtml(u.need)}</span>` : ""
+                        }</span></li>`
+                    )
+                    .join("")}</ul>`
+                : `<div class="ov-empty">None</div>`
+            }
+          </div>
+          <div>
+            <div class="detail-block-label">Confirmed Guidance</div>
+            ${bulletList(guidance, "▸")}
+          </div>
+          <div>
+            <div class="detail-block-label">Architecture</div>
+            ${bulletList(arch, "⌘")}
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderOpenQuestionsPanel(summary) {
+  const openQuestions = summary?.openQuestions || [];
+  if (!openQuestions.length) return "";
+
+  return `
+    <section class="ov-panel">
+      <header class="ov-panel-head">
+        <span class="ov-panel-icon">?</span>
+        <h3>Open Questions</h3>
+        <span class="ov-panel-tag">${openQuestions.length}</span>
+      </header>
+      <div class="ov-panel-body">
+        <ul class="detail-list">
+          ${openQuestions
+            .map((q) => `<li><span>?</span><span>${escapeHtml(q)}</span></li>`)
+            .join("")}
+        </ul>
+      </div>
+    </section>
+  `;
+}
+
+function renderRepositoryPanel(git) {
+  const rows = [
+    { label: "Branch", value: git?.branch || "—" },
+    { label: "Commit", value: git?.commit || "—" },
+    { label: "Merged From", value: git?.mergedFrom || "—" },
+    { label: "Working Tree", value: git?.dirty ? "Uncommitted changes" : "Clean" }
+  ];
+
+  return `
+    <section class="ov-panel">
+      <header class="ov-panel-head">
+        <span class="ov-panel-icon">⎇</span>
+        <h3>Repository</h3>
+      </header>
+      <div class="ov-panel-body">
+        <dl class="ov-facts">
+          ${rows
+            .map(
+              (r) => `
+            <div class="ov-fact">
+              <dt>${escapeHtml(r.label)}</dt>
+              <dd>${escapeHtml(r.value)}</dd>
+            </div>`
+            )
+            .join("")}
+        </dl>
+      </div>
+    </section>
+  `;
+}
+
+function renderOnboardingPanel(onboarding) {
   const missing = onboarding.missing || [];
   const deferred = onboarding.deferred || [];
   const migrated = onboarding.migrated || [];
   const skipped = onboarding.skipped || [];
-  const retro = onboarding.retroactiveFeatures || [];
-  const verified = onboarding.verifiedFeatures || [];
 
-  const isPartial = missing.length > 0;
+  const list = (items, icon, render) =>
+    items.length
+      ? `<ul class="detail-list">${items.map((i) => `<li><span>${icon}</span><span>${render(i)}</span></li>`).join("")}</ul>`
+      : `<div class="ov-empty">None</div>`;
 
-  wrap.innerHTML = `
-    <div class="stat-card ${isPartial ? "tone-amber" : "tone-green"}">
-      <span class="stat-icon">â—ˆ</span>
-      <span class="stat-label">Project Type</span>
-      <span class="stat-value small">${isPartial ? "Brownfield Â· Partial" : "Brownfield Â· Onboarded"}</span>
-      <span class="stat-sub">Onboarded ${escapeHtml(formatDate(onboarding.date))}</span>
-    </div>
-
-    <div class="stat-card tone-blue">
-      <span class="stat-icon">âŽ‡</span>
-      <span class="stat-label">Current Branch</span>
-      <span class="stat-value small">${escapeHtml(git?.branch || "â€”")}</span>
-      <span class="stat-sub">${escapeHtml(git?.commit || "")}${git?.dirty ? " Â· uncommitted changes" : ""}</span>
-    </div>
-
-    <div class="stat-card tone-blue">
-      <span class="stat-icon">â‡„</span>
-      <span class="stat-label">Merged From</span>
-      <span class="stat-value small">${escapeHtml(git?.mergedFrom || "â€”")}</span>
-      <span class="stat-sub">${git?.mergedFrom ? "upstream / default branch" : "no merge source detected"}</span>
-    </div>
-
-    <div class="stat-card tone-green">
-      <span class="stat-icon">âœ“</span>
-      <span class="stat-label">Verified Features</span>
-      <span class="stat-value">${verified.length}</span>
-      <span class="stat-sub">${retro.length} retroactive total</span>
-    </div>
-
-    <div class="stat-card ${missing.length ? "tone-red" : "tone-green"}">
-      <span class="stat-icon">!</span>
-      <span class="stat-label">Missing</span>
-      <span class="stat-value">${missing.length}</span>
-      <span class="stat-sub">${missing.length ? escapeHtml(missing[0]) : "nothing outstanding"}</span>
-    </div>
-
-    <div class="stat-card ${deferred.length ? "tone-amber" : "tone-green"}">
-      <span class="stat-icon">â¸</span>
-      <span class="stat-label">Deferred</span>
-      <span class="stat-value">${deferred.length}</span>
-      <span class="stat-sub">${deferred.length ? escapeHtml(deferred[0]) : "nothing deferred"}</span>
-    </div>
-
-    <div class="overview-detail">
-      <h3>â—ˆ Onboarding Details</h3>
-      <div class="detail-grid">
-        <div>
-          <div class="detail-block-label">Missing</div>
-          ${
-            missing.length
-              ? `<ul class="detail-list">${missing.map((m) => `<li><span>âœ•</span><span>${escapeHtml(m)}</span></li>`).join("")}</ul>`
-              : `<div class="stat-sub">None</div>`
-          }
+  return `
+    <section class="ov-panel">
+      <header class="ov-panel-head">
+        <span class="ov-panel-icon">◈</span>
+        <h3>Onboarding</h3>
+        <span class="ov-panel-tag">${escapeHtml(formatDate(onboarding.date))}</span>
+      </header>
+      <div class="ov-panel-body">
+        <div class="detail-grid">
+          <div>
+            <div class="detail-block-label">Missing</div>
+            ${list(missing, "✕", (m) => escapeHtml(m))}
+          </div>
+          <div>
+            <div class="detail-block-label">Deferred</div>
+            ${list(deferred, "⏸", (m) => escapeHtml(m))}
+          </div>
+          <div>
+            <div class="detail-block-label">Migrated Features</div>
+            ${list(
+              migrated,
+              "▸",
+              (m) => {
+                const src = m.from === "openspec" ? "OpenSpec" : m.from === "speckit" ? "Spec-Kit" : m.from;
+                return `<span class="li-key">${escapeHtml(m.feature)}</span> <span class="li-meta">from ${escapeHtml(src)}</span>`;
+              }
+            )}
+          </div>
+          <div>
+            <div class="detail-block-label">Skipped Migrations</div>
+            ${list(
+              skipped,
+              "⏭",
+              (s) => {
+                const sys = s.system === "openspec" ? "OpenSpec" : s.system === "speckit" ? "Spec-Kit" : s.system;
+                return `<span class="li-key">${escapeHtml(sys)}</span>${s.reason ? ` <span class="li-meta">${escapeHtml(s.reason)}</span>` : ""}`;
+              }
+            )}
+          </div>
         </div>
-        <div>
-          <div class="detail-block-label">Deferred</div>
-          ${
-            deferred.length
-              ? `<ul class="detail-list">${deferred.map((m) => `<li><span>â¸</span><span>${escapeHtml(m)}</span></li>`).join("")}</ul>`
-              : `<div class="stat-sub">None</div>`
-          }
-        </div>
-        <div>
-          <div class="detail-block-label">Migrated Features</div>
-          ${
-            migrated.length
-              ? `<ul class="detail-list">${migrated
-                  .map((m) => {
-                    const src =
-                      m.from === "openspec" ? "OpenSpec" : m.from === "speckit" ? "Spec-Kit" : m.from;
-                    return `<li><span>ðŸ“¦</span><span><span class="li-key">${escapeHtml(m.feature)}</span> <span class="li-meta">from ${escapeHtml(src)}</span></span></li>`;
-                  })
-                  .join("")}</ul>`
-              : `<div class="stat-sub">None</div>`
-          }
-        </div>
-        <div>
-          <div class="detail-block-label">Skipped Migrations</div>
-          ${
-            skipped.length
-              ? `<ul class="detail-list">${skipped
-                  .map((s) => {
-                    const sys =
-                      s.system === "openspec" ? "OpenSpec" : s.system === "speckit" ? "Spec-Kit" : s.system;
-                    return `<li><span>â­</span><span><span class="li-key">${escapeHtml(sys)}</span>${s.reason ? ` <span class="li-meta">${escapeHtml(s.reason)}</span>` : ""}</span></li>`;
-                  })
-                  .join("")}</ul>`
-              : `<div class="stat-sub">None</div>`
-          }
-        </div>
+        ${onboarding.notes ? `<div class="ov-callout"><span class="ov-callout-label">Notes</span><p>${escapeHtml(onboarding.notes)}</p></div>` : ""}
       </div>
-      ${onboarding.notes ? `<div class="overview-note">${escapeHtml(onboarding.notes)}</div>` : ""}
-    </div>
+    </section>
   `;
-
-  return wrap;
 }
 
 /* ============================================================
@@ -361,12 +535,14 @@ function renderProduct(product) {
         ${product.roadmap ? `<span class="artifact-chip">ðŸ›£ï¸ roadmap.md</span>` : ""}
       </div>
 
-      <table class="backlog-table">
-        <thead>
-          <tr><th>ID</th><th>Feature</th><th>Milestone</th><th>Priority</th><th>Status</th></tr>
-        </thead>
-        <tbody>${backlogRows}</tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="backlog-table">
+          <thead>
+            <tr><th>ID</th><th>Feature</th><th>Milestone</th><th>Priority</th><th>Status</th></tr>
+          </thead>
+          <tbody>${backlogRows}</tbody>
+        </table>
+      </div>
 
       <div class="product-note">
         Backlog items are product-level candidates. Promote one with <code>/sdrive:propose</code> to start detailed planning.
@@ -688,10 +864,12 @@ function auditTone(event) {
 }
 
 async function renderAudit() {
-  const log = await fetchJson("/api/audit-log");
+  const data = await fetchJson("/api/activity");
   const container = document.getElementById("audit-list");
 
-  if (!log || !log.events || log.events.length === 0) {
+  const events = (data && data.events) || [];
+
+  if (events.length === 0) {
     container.className = "panel-loading";
     container.textContent = "No activity yet.";
     return;
@@ -700,28 +878,82 @@ async function renderAudit() {
   container.className = "timeline";
   container.innerHTML = "";
 
-  log.events
-    .slice(-20)
-    .reverse()
-    .forEach((e) => {
-      const item = document.createElement("div");
-      item.className = "timeline-item";
+  events.slice(0, 40).forEach((e) => {
+    const item = document.createElement("div");
+    item.className = "timeline-item";
 
-      const details = e.details || {};
-      const detailParts = Object.entries(details)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join(" Â· ");
+    const details = e.details || {};
+    const detailParts = Object.entries(details)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(" Â· ");
 
-      item.innerHTML = `
-        <span class="timeline-dot ${auditTone(e.event)}"></span>
-        <div class="timeline-body">
-          <div class="timeline-event">${escapeHtml(String(e.event).replace(/_/g, " "))}</div>
-          <div class="timeline-meta">${escapeHtml(formatDateTime(e.timestamp))}</div>
-          ${detailParts ? `<div class="timeline-details">${escapeHtml(detailParts)}</div>` : ""}
+    const scope = [e.feature, e.version].filter(Boolean).join(" Â· ");
+
+    item.innerHTML = `
+      <span class="timeline-dot ${auditTone(e.event)}"></span>
+      <div class="timeline-body">
+        <div class="timeline-event">${escapeHtml(String(e.event).replace(/[_-]/g, " "))}</div>
+        <div class="timeline-meta">${escapeHtml(formatDateTime(e.timestamp))}${
+          scope ? ` Â· ${escapeHtml(scope)}` : ""
+        }</div>
+        ${detailParts ? `<div class="timeline-details">${escapeHtml(detailParts)}</div>` : ""}
+      </div>
+    `;
+    container.appendChild(item);
+  });
+}
+
+/* ============================================================
+   SKILLS
+   ============================================================ */
+async function renderSkills() {
+  const data = await fetchJson("/api/skills");
+  const container = document.getElementById("skills-list");
+  if (!container) return;
+
+  const skills = (data && data.skills) || [];
+
+  if (skills.length === 0) {
+    container.className = "panel-loading";
+    container.textContent = "No skills provisioned yet. Run /sdrive:skills to discover and install skills.";
+    return;
+  }
+
+  container.className = "skills-grid";
+  container.innerHTML = "";
+
+  skills.forEach((s) => {
+    const card = document.createElement("div");
+    card.className = "skill-card";
+
+    const tags = (s.tags || [])
+      .map((t) => `<span class="chip slate">${escapeHtml(t)}</span>`)
+      .join("");
+
+    const meta = [
+      s.version ? `v${s.version}` : "",
+      s.installed ? `installed ${formatDate(s.installed)}` : "",
+      s.lines ? `${s.lines} lines` : "",
+      s.extraFiles ? `${s.extraFiles} extra file${s.extraFiles === 1 ? "" : "s"}` : ""
+    ]
+      .filter(Boolean)
+      .join(" Â· ");
+
+    card.innerHTML = `
+      <div class="skill-head">
+        <span class="skill-icon">âœ¦</span>
+        <div>
+          <div class="skill-name">${escapeHtml(s.name)}</div>
+          <div class="skill-folder">.sdrive/skills/${escapeHtml(s.folder)}</div>
         </div>
-      `;
-      container.appendChild(item);
-    });
+      </div>
+      <div class="skill-desc">${escapeHtml(s.description || "No description.")}</div>
+      ${tags ? `<div class="chip-list">${tags}</div>` : ""}
+      <div class="skill-meta">${escapeHtml(meta)}</div>
+      ${s.source ? `<div class="skill-source">${escapeHtml(s.source)}</div>` : ""}
+    `;
+    container.appendChild(card);
+  });
 }
 
 /* ============================================================
@@ -774,6 +1006,9 @@ function renderCommandList() {
 }
 
 function commandTableEl(items) {
+  const wrap = document.createElement("div");
+  wrap.className = "table-scroll";
+
   const table = document.createElement("table");
   table.className = "command-table";
 
@@ -791,7 +1026,8 @@ function commandTableEl(items) {
   items.forEach((item) => body.appendChild(commandRowEl(item)));
   table.appendChild(body);
 
-  return table;
+  wrap.appendChild(table);
+  return wrap;
 }
 
 function commandRowEl(item) {
@@ -848,34 +1084,55 @@ async function renderCommands() {
 }
 
 /* ============================================================
-   NAV HIGHLIGHT
+   ROUTER (path-based)
+   Each view is its own URL: /overview, /blueprint, /features,
+   /team, /activity, /commands. The server serves the same shell
+   for every route; here we show the matching section and keep the
+   sidebar highlight in sync.
    ============================================================ */
+const ROUTES = ["overview", "blueprint", "features", "skills", "team", "activity", "commands"];
+const DEFAULT_ROUTE = "overview";
+
+function currentRoute() {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  const name = path.split("/").pop();
+  return ROUTES.includes(name) ? name : DEFAULT_ROUTE;
+}
+
+function showRoute(route) {
+  const target = ROUTES.includes(route) ? route : DEFAULT_ROUTE;
+
+  document.querySelectorAll(".section").forEach((section) => {
+    section.classList.toggle("active", section.id === target);
+  });
+
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    item.classList.toggle("active", item.dataset.nav === target);
+  });
+
+  document.title = `SpecDrive · ${target.charAt(0).toUpperCase()}${target.slice(1)}`;
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
 function setupNav() {
-  const items = document.querySelectorAll(".nav-item");
-  items.forEach((item) => {
-    item.addEventListener("click", () => {
-      items.forEach((i) => i.classList.remove("active"));
-      item.classList.add("active");
+  // Intercept sidebar link clicks so navigation is instant (no full reload)
+  // while still updating the URL via the History API.
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    item.addEventListener("click", (event) => {
+      const route = item.dataset.nav;
+      if (!ROUTES.includes(route)) return;
+      event.preventDefault();
+      if (currentRoute() !== route) {
+        window.history.pushState({ route }, "", `/${route}`);
+      }
+      showRoute(route);
     });
   });
 
-  const sections = document.querySelectorAll(".section");
-  if ("IntersectionObserver" in window) {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const id = entry.target.id;
-            items.forEach((i) => {
-              i.classList.toggle("active", i.dataset.nav === id);
-            });
-          }
-        });
-      },
-      { rootMargin: "-40% 0px -55% 0px" }
-    );
-    sections.forEach((s) => observer.observe(s));
-  }
+  // Handle browser back/forward.
+  window.addEventListener("popstate", () => showRoute(currentRoute()));
+
+  showRoute(currentRoute());
 }
 
 /* ============================================================
@@ -895,7 +1152,7 @@ async function main() {
   const overviewContainer = document.getElementById("overview-panel");
   if (overviewContainer) {
     overviewContainer.innerHTML = "";
-    overviewContainer.appendChild(renderOverview(onboarding, git));
+    overviewContainer.appendChild(renderOverview(onboarding, git, product));
   }
 
   const productContainer = document.getElementById("product-panel");
@@ -924,6 +1181,7 @@ async function main() {
   setupNav();
 
   await renderFeatures();
+  await renderSkills();
   await renderTeam();
   await renderAudit();
   await renderCommands();

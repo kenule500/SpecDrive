@@ -152,6 +152,10 @@ For feature `<feature-name>` and version `<version>`, create these files:
      - Fields: `add`, `modify`, `remove`, `no_change`
      - Components: `create`, `modify`, `reuse`, `delete`
    - **No Test Tasks Rule:** Do NOT create tasks for writing, adding, updating, or running tests. Test authoring and test execution belong exclusively to the Test Agent (`/sdrive:test`). Tasks must describe production code only. Acceptance criteria are still linked to tests via `traceability.json` — the Test Agent fills in the test IDs.
+     - Do NOT create a "Tests" phase or any phase whose tasks write test files (`*.test.*`, `*.spec.*`, `__tests__/`, `tests/`).
+     - Do NOT create a verification task that invokes a test runner (e.g. "Run `bun run test`", "Run `npm test`", "confirm the full suite passes"). Test execution is `/sdrive:test`'s job, not a verification task.
+     - Verification-phase tasks are limited to: formatter, linter, typechecker (`tsc --noEmit`), `sdrive verify`, `node .sdrive/scripts/validate-governance.js`, and manual checks (responsive breakpoints, RTL, reduced motion, JS-disabled).
+   - **Dependency Recording Rule:** Record every third-party dependency the feature needs in `plan.json` `dependencies[]` with `name`, `type`, `action` (`add`/`update`/`remove`/`no_change`), and `notes`. For each dependency with `action: "add"`, note in `notes` whether a skill is expected (e.g. `"skill: framer-motion"`). Do NOT install packages or skills here — the Implementation Agent (`/sdrive:apply`) provisions a matching skill in `.sdrive/skills/` for every `action: "add"` dependency before writing code that uses it.
    - Update `traceability.json` with plan sections and task IDs.
    - Run validators again.
    - **GATE 2:** STOP and ask: "Plan and tasks draft complete. Review and approve to start implementation?"

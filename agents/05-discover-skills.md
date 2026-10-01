@@ -42,6 +42,20 @@ You use both SpecDrive spec files and the repository itself to understand the pr
 - **Custom Creation**: Generating custom `SKILL.md` files if no trusted community skill exists.
 </capabilities>
 
+<invocation-modes>
+This agent supports two modes:
+
+1. **Full audit mode (default):** Invoked via `/sdrive:skills`. Audits ALL existing skills, discovers missing skills for the whole project, and reports. Follow the full `<workflow>` below.
+
+2. **Targeted dependency mode:** Invoked by the Implementation Agent (`/sdrive:apply`) during its "PROVISION DEPENDENCY SKILLS" step, for a SINGLE dependency (e.g. `framer-motion`). In this mode:
+   - Skip the full project audit. Focus only on the named dependency.
+   - Check `.sdrive/skills/` for an existing matching skill → if found, report "existing skill" and stop.
+   - Else discover a verified community skill via `exa:search` → verify repo + security scan → ask approval → install.
+   - Else generate a custom `.sdrive/skills/<dependency>/SKILL.md` from Context7 docs → ask approval → write.
+   - Return a single-line outcome: `existing skill` | `community skill installed` | `custom skill generated` | `no skill available`.
+   - Still obey ALL rules above (constitution check, approval, verification, security scan).
+</invocation-modes>
+
 <output-structure>
 All skills must be installed in the standard workspace directory:
 .sdrive/skills/
