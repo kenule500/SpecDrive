@@ -10,7 +10,7 @@ SpecDrive gives AI coding tools like GitHub Copilot, Cline, Claude Code, and Cur
 
 It adds:
 
-- 13 specialized governance agents
+- 14 specialized governance agents
 - Machine-readable JSON schemas
 - Requirement → AC → task → test traceability
 - Per-version lifecycle tracking
@@ -374,6 +374,29 @@ Creates the feature specification, traceability matrix, technical plan, and exec
 
 ---
 
+### 2b. `/sdrive:update-propose`
+
+Extends an **existing** feature specification with new requirements, user stories, and acceptance criteria.
+
+**What it does:**
+
+- Accepts a feature name and the change to add (e.g. `/sdrive:update-propose "signup-page" add google auth`)
+- Verifies the feature already exists and is not completed
+- Preserves all existing IDs and content — only appends new ones
+- Continues ID numbering from the highest existing `FR-###`, `NFR-###`, `US-###`, `AC-###`
+- Updates `spec.md`, `plan.md`, `tasks.md`, and the governance JSON files
+- Resets the `specification` gate to `pending` (new requirements invalidate prior approval)
+- Records a `spec_updated` event in the version history
+- Requires two human approval gates
+
+**When to use:**
+
+- When an existing feature needs a new capability (e.g. adding Google Auth to a signup page)
+- When requirements change after the spec was first written
+- **Not** for brand-new features — use `/sdrive:propose` for those
+
+---
+
 ### 3. `/sdrive:apply`
 
 Writes production code from the approved tasks.
@@ -443,11 +466,12 @@ Final audit, merge, and archive.
 
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
+| `/sdrive:update-propose` | Extend an existing feature spec | When adding requirements to a feature that already exists |
 | `/sdrive:design` | Build UI/UX prototype | When there is no existing prototype |
 | `/sdrive:secure` | Security audit and fixes | When security is a concern |
 | `/sdrive:performance` | Benchmark and optimize | When performance NFRs are not met |
 | `/sdrive:docs` | Generate documentation | When docs are outdated or missing |
-| `/sdrive:sync` | Sync spec → plan → tasks | When higher-level files change |
+| `/sdrive:sync` | Sync spec → plan → tasks | After manually hand-editing a single file |
 | `/sdrive:skills` | Manage AI skills | When auditing or discovering skills |
 
 ---
@@ -540,6 +564,9 @@ Cascades changes across spec, plan, tasks, and traceability.
 **When to use:**
 
 - When spec or plan changes after implementation has started
+- When you have **manually hand-edited** a single file (e.g. `spec.md`) and need the downstream files re-synced
+
+> **Note:** You do **not** need to run `/sdrive:sync` after `/sdrive:update-propose` — that command already cascades spec, plan, tasks, and traceability in one run.
 
 ---
 
@@ -599,6 +626,7 @@ Audits and manages AI skills.
 | Constitution | `01-constitution.md` | Discover project rules, merge into constitution |
 | Blueprint | `12-blueprint.md` | Optionally create a product overview, conceptual mockup, design-system plan, roadmap, and backlog |
 | Specification | `02-specification.md` | Generate spec, plan, tasks, traceability |
+| Update Proposal | `13-update-propose.md` | Extend an existing feature spec with new requirements, stories, and acceptance criteria |
 | UI/UX | `03-uiux.md` | Build interactive prototype |
 | Cascade | `04-cascade.md` | Sync spec → plan → tasks |
 | Discover-skills | `05-discover-skills.md` | Audit AI skills |
@@ -705,7 +733,7 @@ A feature moves through three spec folders. Each transition has exactly one owne
 
 ```text
 .sdrive/
-├── agents/               # 13 agent definitions
+├── agents/               # 14 agent definitions
 ├── commands/             # Manifest, router, gates, permissions
 ├── schemas/              # JSON schemas
 ├── specs/                # Human-readable specs (lifecycle-partitioned)

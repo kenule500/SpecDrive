@@ -1,6 +1,6 @@
 # SpecDrive Agent Reference
 
-SpecDrive uses 13 specialized agents. Each agent has one slash command.
+SpecDrive uses 14 specialized agents. Each agent has one slash command.
 
 ---
 
@@ -21,6 +21,7 @@ SpecDrive uses 13 specialized agents. Each agent has one slash command.
 | 10 | Security | `/sdrive:secure` | `10-security.md` |
 | 11 | Test | `/sdrive:test` | `11-test.md` |
 | 12 | Blueprint | `/sdrive:blueprint` | `12-blueprint.md` |
+| 13 | Update Proposal | `/sdrive:update-propose` | `13-update-propose.md` |
 
 ---
 
@@ -149,6 +150,27 @@ SpecDrive uses 13 specialized agents. Each agent has one slash command.
 - Preserves IDs and task status
 - Operates only within the current version
 - Runs `sdrive verify <feature>` after sync
+
+**When to use:** When you have **manually hand-edited** a single file (e.g. `spec.md`) and need the downstream files re-synced. You do **not** need it after `/sdrive:update-propose`, which cascades all files itself.
+
+---
+
+## Update Proposal Agent
+
+**Command:** `/sdrive:update-propose`
+
+**Purpose:** Extend an existing feature specification with new requirements, user stories, and acceptance criteria.
+
+**What it does:**
+
+- Requires an existing feature (use `/sdrive:propose` for brand-new features)
+- Continues ID sequences (`FR-###`, `NFR-###`, `US-###`, `AC-###`) from the highest existing ID
+- Appends to `spec.md`, `plan.md`, `tasks.md`, and `traceability.json` without rewriting existing content
+- Cascades the new requirements all the way down the hierarchy in one run
+- Resets the `specification` gate to `pending` (new requirements invalidate prior approval)
+- Two approval gates (spec, then plan/tasks)
+
+**When to use:** When adding requirements to a feature that already exists.
 
 ---
 

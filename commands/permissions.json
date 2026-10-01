@@ -4,6 +4,7 @@
     "/sdrive:constitution": ["admin"],
     "/sdrive:blueprint": ["admin", "reviewer"],
     "/sdrive:propose": ["admin", "reviewer"],
+    "/sdrive:update-propose": ["admin", "reviewer"],
     "/sdrive:design": ["admin", "reviewer", "developer"],
     "/sdrive:sync": ["admin", "reviewer", "developer"],
     "/sdrive:skills": ["admin"],
@@ -18,6 +19,7 @@
   "cli": {
     "init": ["admin"],
     "create": ["admin", "reviewer", "developer"],
+    "update-propose": ["admin", "reviewer"],
     "approve": ["admin", "reviewer"],
     "team:add": ["admin"],
     "team:remove": ["admin"],

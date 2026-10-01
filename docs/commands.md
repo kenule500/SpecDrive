@@ -388,14 +388,17 @@ The dashboard also supports filters:
 
 > **Typical workflow:** `/sdrive:onboard` (brownfield only) → `/sdrive:constitution` → optionally `/sdrive:blueprint` → `/sdrive:propose` → `/sdrive:apply` → `/sdrive:test` → `/sdrive:review`
 
+> **Extending an existing feature:** `/sdrive:update-propose "<feature>" <what to add>` → `sdrive approve specification` → `/sdrive:apply` → `/sdrive:test`
+
 | Command | Agent | Purpose |
 |---------|-------|---------|
 | `/sdrive:onboard` | Onboarding | Adopt SpecDrive into an existing project, migrate OpenSpec/Spec-Kit |
 | `/sdrive:constitution` | Constitution | Create/update constitution |
 | `/sdrive:blueprint` | Blueprint | Optionally draft an app overview, conceptual mockup, roadmap, milestones, and backlog |
 | `/sdrive:propose` | Specification | Create spec, plan, tasks |
+| `/sdrive:update-propose` | Update Proposal | Extend an existing feature spec with new requirements, stories, and acceptance criteria |
 | `/sdrive:design` | UI/UX | Build prototype |
-| `/sdrive:sync` | Cascade | Sync downstream files |
+| `/sdrive:sync` | Cascade | Sync downstream files after a manual edit |
 | `/sdrive:skills` | Discover-skills | Manage AI skills |
 | `/sdrive:docs` | Documentation | Generate docs |
 | `/sdrive:apply` | Implementation | Write production code; move feature from `backlog/` to `ongoing/` |
@@ -474,6 +477,37 @@ Adopts SpecDrive into an existing project (brownfield) and migrates OpenSpec or 
 
 ---
 
+### `/sdrive:update-propose`
+
+Extends an **existing** feature specification with new requirements, user stories, and acceptance criteria.
+
+```text
+/sdrive:update-propose "signup-page" add google auth
+```
+
+**What it does:**
+
+- Requires an existing feature (use `/sdrive:propose` for brand-new features)
+- Continues ID sequences (`FR-###`, `NFR-###`, `US-###`, `AC-###`) from the highest existing ID
+- Appends to `spec.md`, `plan.md`, `tasks.md`, and `traceability.json` without rewriting or reordering existing content
+- Cascades the new requirements all the way down the hierarchy in one run
+- Resets the `specification` gate to `pending` (new requirements invalidate prior approval)
+- Two approval gates (spec, then plan/tasks)
+
+**When to use:**
+
+- When adding requirements to a feature that already exists
+- When a completed feature needs more work — run `sdrive reopen <feature>` first
+
+**What it does NOT do:**
+
+- Create brand-new features (use `/sdrive:propose`)
+- Write or run tests (use `/sdrive:test`)
+
+> **Note:** You do **not** need to run `/sdrive:sync` afterward — this command already cascades spec, plan, tasks, and traceability. `/sdrive:sync` is only for re-syncing after a manual hand-edit of a single file.
+
+---
+
 ### `/sdrive:test`
 
 Writes tests for every acceptance criterion, runs them, and reports coverage.
@@ -515,6 +549,7 @@ Some commands accept a feature name or description.
 
 ```text
 /sdrive:propose "User login with email and password"
+/sdrive:update-propose "user-login" add google auth
 /sdrive:apply user-login
 /sdrive:test user-login
 /sdrive:review user-login
@@ -560,6 +595,7 @@ Some commands require approval before they run.
 | Command | Required Gates |
 |---------|----------------|
 | `/sdrive:propose` | specification, planning |
+| `/sdrive:update-propose` | specification, planning |
 | `/sdrive:apply` | implementation |
 | `/sdrive:review` | review |
 

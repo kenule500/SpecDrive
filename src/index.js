@@ -843,6 +843,64 @@ program
     console.log(`✅ Feature "${feature}" created in backlog.`);
   });
 
+// ---------- UPDATE-PROPOSE COMMAND ----------
+// Internal helper. Validates that a feature exists and is editable, then hands
+// off to the Update Proposal agent (/sdrive:update-propose) to extend the spec.
+program
+  .command("update-propose <feature>")
+  .description("Validate an existing feature for extension (usually run automatically by /sdrive:update-propose)")
+  .action((feature) => {
+    if (!/^[a-z0-9-]+$/.test(feature)) {
+      console.error("❌ Feature name must be lowercase letters, numbers, and hyphens only.");
+      process.exit(1);
+    }
+
+    const projectRoot = process.cwd();
+    const sdriveRoot = path.join(projectRoot, ".sdrive");
+    const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
+
+    if (!fs.existsSync(workflowStatePath)) {
+      console.error("❌ workflow-state.json not found. Run `sdrive init` first.");
+      process.exit(1);
+    }
+
+    const state = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
+    const target = state.features?.find((f) => f.name === feature);
+
+    if (!target) {
+      console.error(`❌ Feature "${feature}" does not exist.`);
+      console.error(`   Use /sdrive:propose "${feature}" to create it first.`);
+      process.exit(1);
+    }
+
+    const version = target.currentVersion || "v1";
+    const versionEntry = (target.versions || []).find((v) => v.id === version);
+
+    if (versionEntry && versionEntry.phase === "completed") {
+      console.error(`❌ Feature "${feature}" is completed and cannot be extended.`);
+      console.error(`   Run \`sdrive reopen ${feature}\` first.`);
+      process.exit(1);
+    }
+
+    const specDir = path.join(sdriveRoot, "specs", "backlog", feature, version);
+    const ongoingSpecDir = path.join(sdriveRoot, "specs", "ongoing", feature, version);
+    const resolvedSpecDir = fs.existsSync(specDir) ? specDir : ongoingSpecDir;
+
+    if (!fs.existsSync(resolvedSpecDir)) {
+      console.error(`❌ Spec folder not found for "${feature}" (${version}).`);
+      console.error(`   Expected: .sdrive/specs/{backlog|ongoing}/${feature}/${version}/`);
+      process.exit(1);
+    }
+
+    console.log(`\n📦 Feature: ${feature}`);
+    console.log(`📄 Version: ${version}`);
+    console.log(`📁 Spec: ${path.relative(projectRoot, resolvedSpecDir)}`);
+    console.log("\n✅ Feature is valid for extension.");
+    console.log("🤖 The AI tool should now read the Update Proposal agent instructions");
+    console.log("   and extend the specification with the requested change.");
+    console.log("⏸️  Remember to stop for human approval after the command completes.\n");
+  });
+
 // ---------- ASSIGN COMMAND ----------
 program
   .command("assign <feature> <username>")
