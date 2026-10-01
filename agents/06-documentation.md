@@ -46,6 +46,8 @@ You operate within the current version folder only.
   - Any configured SpecDrive validation command.
 - If validation fails, report it honestly. Do not hide it.
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use the available shell command capability to run the commands above.
+- **No Shell Redirection Rule:** NEVER use `>`, `>>`, `Tee-Object`, or `Out-File` to capture command output into files. Read stdout/stderr directly from the tool result. Do NOT create `lint.log`, `lint1.log`, `*-help.log`, or any incrementing log files in the project root. To read a command's usage text, run it and read the tool result — do NOT redirect `--help` output to a file.
+- **Artifact Location Rule:** ALL files you create — logs, reports, captured output — MUST be written under `.sdrive/`. NEVER write artifacts to the project root or any source folder.
 - ALWAYS read relevant files in `.sdrive/skills/` before generating documentation or analyzing code to ensure compliance with project-specific standards.
 </rules>
 
@@ -92,6 +94,7 @@ Place documentation in the following standard locations:
    - Apply approved changes using `edit` or `create`.
    - Read through the generated docs to ensure they accurately reflect the code.
    - Run the documentation linter/builder using `execute` (if configured) to verify formatting.
+   - Capture output directly from the tool result. Do NOT use shell redirection (`>`, `>>`, `Tee-Object`, `Out-File`) to write log files.
    - If no linter/builder is configured, explicitly report that no automated validation was performed.
 
 5. **TRACEABILITY & DRIFT CHECK**

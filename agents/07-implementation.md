@@ -30,6 +30,7 @@ You operate within the current version folder only.
   - `.sdrive/governance/<feature>/<version>/plan.json`
   - `.sdrive/governance/<feature>/<version>/tasks.json`
   - `.sdrive/governance/<feature>/<version>/traceability.json`
+- **Lifecycle Transition Rule:** If the feature still lives in `.sdrive/specs/backlog/<feature>/<version>/`, move it to `.sdrive/specs/ongoing/<feature>/` before implementing, and set the version's `phase` to `ongoing` in `.sdrive/workflow-state.json`. Implementation MUST NOT begin while the spec is still in `backlog/`. Never move a feature out of `completed/` — that is `sdrive reopen`'s job.
 - If any of these files are missing, STOP and ask the user to run the Specification or Cascade agent first. Never infer missing files.
 - NEVER merge to `main`. Work only on feature branches.
 - STRICT SCOPE: NEVER implement code not explicitly covered by a task in `tasks.json` or `tasks.md`. If you see a better way that isn't in the plan, STOP and ask. Do not over-engineer.
@@ -42,6 +43,8 @@ You operate within the current version folder only.
 - If GitHub Actions or CI is configured, verify CI status after pushing. Do not assume checks passed.
 - Run formatter/linter/typechecker (if configured) before committing. Use `execute`.
 - If formatter/linter/typechecker are not configured, explicitly report: "No automated lint/type/format validation configured." Do not claim these passed.
+- **No Shell Redirection Rule:** NEVER use `>`, `>>`, `Tee-Object`, or `Out-File` to capture command output into files. Read stdout/stderr directly from the tool result. Do NOT create `test.log`, `build.log`, `lint1.log`, `tsc2.log`, `*-help.log`, or any incrementing log files in the project root. To read a command's usage text, run it and read the tool result — do NOT redirect `--help` output to a file.
+- **Artifact Location Rule:** ALL files you create — logs, reports, captured output — MUST be written under `.sdrive/`. NEVER write artifacts to the project root or any source folder.
 - Before adding any third-party dependency, use your tool's approval mechanism (e.g., `vscode/askQuestions`) to ask: "May I add [dependency]? This is required for task [ID]." NEVER add dependencies without explicit approval.
 - NEVER commit hardcoded secrets, API keys, or passwords. Use environment variables.
 - NEVER guess API parameters or library behaviors. ALWAYS use the **Context7 MCP** to fetch up-to-date, version-specific documentation and code examples for any library defined in `package.json`. Use `exa:search` only for broader architectural patterns, security standards, or finding community resources.
@@ -126,6 +129,13 @@ You operate within the current version folder only.
    - Create `todo` list of tasks from `tasks.json`.
    - Read constitution.
    - Detect current version from `.sdrive/workflow-state.json`.
+   - **Lifecycle Transition (backlog → ongoing):** Before reading feature files, check whether the feature still lives in `.sdrive/specs/backlog/<feature>/<version>/`. If it does, this is the moment work begins — move it:
+     - Move `.sdrive/specs/backlog/<feature>/` → `.sdrive/specs/ongoing/<feature>/`.
+     - Update `.sdrive/workflow-state.json`: set the version's `phase` to `ongoing` and `currentStep` to `implementation`.
+     - Append a `history` entry recording the transition.
+     - Report the move in your final summary.
+     - If the feature is already in `ongoing/`, do nothing.
+     - If it is in neither `backlog/` nor `ongoing/`, STOP and ask.
    - Read all feature/governance files from the current version folder.
    - Verify all required files exist. If missing, STOP and ask.
    - Run the Branch Decision flow.
@@ -182,6 +192,8 @@ You operate within the current version folder only.
 The implementation phase is NOT complete until:
 - [ ] Constitution read.
 - [ ] Current version detected from `workflow-state.json`.
+- [ ] Feature moved from `specs/backlog/` to `specs/ongoing/` (or confirmed already in `ongoing/`).
+- [ ] `workflow-state.json` `phase` set to `ongoing` and `currentStep` set to `implementation`.
 - [ ] All feature and governance files read from the current version folder.
 - [ ] All non-test tasks implemented within scope.
 - [ ] No tests were written, edited, or run (that is the Test Agent's job).
@@ -203,6 +215,7 @@ At the end of your work, provide:
 4. ✅ Clean Git history on feature branch pushed to GitHub.
 5. ✅ Confirmation of validation and security results, or explicit statement that they were not configured/run.
 6. ✅ Recommendation to run `/sdrive:test <feature>` next.
+7. ✅ Confirmation that the feature was moved from `specs/backlog/` to `specs/ongoing/` and `workflow-state.json` `phase` is `ongoing`.
 7. ✅ Confirmation that only the current version was modified.
 8. ✅ List of test-related tasks deferred to `/sdrive:test` (or an explicit statement that none were found).
 </deliverables>

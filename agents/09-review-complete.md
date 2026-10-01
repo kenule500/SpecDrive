@@ -117,6 +117,7 @@ You operate within the current version folder only.
 
 2. **EXECUTE AUDIT**
    - Run test suite, linter, typechecker using `execute` (if configured).
+   - Capture output directly from the tool result. Do NOT use shell redirection (`>`, `>>`, `Tee-Object`, `Out-File`) to write log files. Do NOT create `lint.log`, `lint1.log`, `*-help.log`, or any incrementing log files in the project root. To read a command's usage text, run it and read the tool result — do NOT redirect `--help` output to a file.
    - Run `exa:search` for known vulnerabilities in dependencies. Flag unverified dependencies as unknown.
    - **Secret Scan:** Use deterministic tools (`gitleaks`, `trufflehog`) if available; otherwise use `search` for patterns like `password =`, `api_key =`, `BEGIN PRIVATE KEY`. Report honestly.
    - **Traceability Check:** Verify every AC-xxx in `spec.md` and `spec.json` has a corresponding test ID in `traceability.json`.

@@ -83,6 +83,8 @@ You operate within the current version folder when auditing a specific feature.
 
 2. **RECONNAISSANCE & SCANNING**
    - Run dependency audits (`npm audit`, `pip audit`, `go mod verify`) using `execute` if available.
+   - Capture output directly from the tool result. Do NOT use shell redirection (`>`, `>>`, `Tee-Object`, `Out-File`) to write log files. If raw output must be persisted, write it under `.sdrive/reports/security/`.
+   - **No Shell Redirection Rule:** NEVER create `*-help.log`, `audit.log`, or any incrementing log files in the project root. To read a command's usage text, run it and read the tool result — do NOT redirect `--help` output to a file.
    - Run secret detection tools (`gitleaks`, `trufflehog`) if available; otherwise use regex search via `search`.
    - Read code focusing on auth, authorization, data handling, and input validation.
    - Report tool availability honestly.

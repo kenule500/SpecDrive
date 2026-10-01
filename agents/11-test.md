@@ -55,6 +55,8 @@ You operate within the current version folder only.
   - `- **Tests Passed:** X/X`
   - Do not change the wording, bold markers, or punctuation.
 - Report file path is `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md`.
+- **Artifact Location Rule:** ALL files you create — reports, logs, captured test output, coverage data — MUST be written under `.sdrive/`. NEVER write artifacts to the project root or any source folder.
+- **No Shell Redirection Rule:** NEVER use `>`, `>>`, `Tee-Object`, or `Out-File` to capture test output into files. Read the command's stdout/stderr directly from the tool result. Do NOT create `test.log`, `test2.log`, `*-help.log`, or any incrementing log files. To read a command's usage text, run it and read the tool result — do NOT redirect `--help` output to a file.
 - You are tool-agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool.
 </rules>
 
@@ -69,7 +71,7 @@ You operate within the current version folder only.
 </capabilities>
 
 <output-structure>
-- **Test files**: Written to the project's test folder (detected from convention).
+- **Test files**: Written to `<test-folder>/<feature>/<subfeature>.<test-suffix>.<ext>`, where the folder and suffix follow the detected framework's convention (see CON-406).
 - **Coverage report**: `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md`
 - **Traceability update**: `.sdrive/governance/<feature>/<version>/traceability.json`
 - **Active version** is defined by `currentVersion` in `.sdrive/workflow-state.json`.
@@ -87,6 +89,7 @@ You operate within the current version folder only.
    - Read `package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, or equivalent.
    - Prefer the framework and command from CON-401 and CON-402 if present.
    - Identify test folder (CON-403 if present).
+   - Determine the framework's test file naming convention and suffix (e.g. `.test.tsx`, `.spec.ts`, `_test.go`, `test_*.py`, `*_test.dart`).
    - Read existing tests to match conventions (naming, structure, imports).
    - If no framework found, STOP and ask.
 
@@ -102,11 +105,23 @@ You operate within the current version folder only.
 4. **WRITE TESTS**
    - Create or update test files.
    - Follow existing project conventions.
+   - **Test File Placement Rule:** organize test files by feature, nested under the project's test folder using the framework's own convention:
+     - `<test-folder>/<feature>/<subfeature>.<test-suffix>.<ext>`
+     - `<feature>` MUST match the SpecDrive feature folder name (kebab-case).
+     - `<test-suffix>` and `<ext>` MUST follow the detected framework — do NOT hardcode `.test.tsx`:
+       - Jest / Vitest / React (Next.js, Vite): `test/signup/google-auth.test.tsx`
+       - NestJS: `test/signup/google-auth.spec.ts` (or co-located `src/signup/google-auth.spec.ts` if that is the project convention)
+       - pytest: `tests/signup/test_google_auth.py`
+       - Go: `signup/google_auth_test.go`
+       - Flutter / Dart: `test/signup/google_auth_test.dart`
+     - If the project already has an established flat test layout, ASK the user before restructuring. Never move existing test files without approval.
    - Each AC MUST have at least one test.
    - Do not write tests for private/internal code unless required by an AC.
 
 5. **RUN TESTS**
    - Run the test suite using `execute`.
+   - Capture the command's stdout/stderr **directly from the tool result**. Do NOT use shell redirection (`>`, `>>`, `Tee-Object`, `Out-File`, `2>&1 >`) to write log files.
+   - NEVER create log files in the project root or any source folder. If you must persist raw output, write it to `.sdrive/reports/tests/raw/<feature>-<version>-<date>.log`.
    - Capture:
      - Per-test pass/fail
      - Total counts
@@ -122,6 +137,7 @@ You operate within the current version folder only.
    - Save to `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md`.
    - Use the `<test-report-template>` exactly.
    - The Summary section MUST contain the 4 exact lines so the dashboard can parse them.
+   - **Artifact Location Rule:** ALL files you create — reports, logs, captured output, coverage data — MUST be written under `.sdrive/`. NEVER write artifacts to the project root or any source folder. If a target file already exists, overwrite it or version it inside `.sdrive/` — never append an incrementing suffix (`test2.log`, `test3.log`) in the project root.
 
 8. **RUN VALIDATORS**
    - Run `sdrive verify <feature>`.

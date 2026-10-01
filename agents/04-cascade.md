@@ -42,6 +42,8 @@ You operate within the current version folder only.
 - Use `execute` to run validators:
   - `node .sdrive/scripts/validate-governance.js`
   - Any configured SpecDrive validation command.
+- **No Shell Redirection Rule:** NEVER use `>`, `>>`, `Tee-Object`, or `Out-File` to capture command output into files. Read stdout/stderr directly from the tool result. Do NOT create `lint.log`, `lint1.log`, `*-help.log`, or any incrementing log files in the project root. To read a command's usage text, run it and read the tool result — do NOT redirect `--help` output to a file.
+- **Artifact Location Rule:** ALL files you create — logs, reports, captured output — MUST be written under `.sdrive/`. NEVER write artifacts to the project root or any source folder.
 - If validation fails, fix before proceeding.
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use the available shell command capability to run the commands above.
 - After syncing plan or tasks, run `sdrive verify <feature>` to confirm code still aligns with the updated plan.

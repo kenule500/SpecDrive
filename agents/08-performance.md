@@ -85,6 +85,8 @@ Place generated reports and artifacts in the following standard locations:
 
 2. **BASELINE MEASUREMENT**
    - Run initial benchmarks using `execute` (e.g., Lighthouse for frontend, `k6` or `curl` timing for APIs).
+   - Capture output directly from the tool result. Do NOT use shell redirection (`>`, `>>`, `Tee-Object`, `Out-File`) to write log files. If raw output must be persisted, write it under `.sdrive/reports/performance/`.
+   - **No Shell Redirection Rule:** NEVER create `*-help.log`, `bench.log`, or any incrementing log files in the project root. To read a command's usage text, run it and read the tool result — do NOT redirect `--help` output to a file.
    - **Methodology:** Run at least 5 iterations. Discard highest and lowest. Record p50, p95, and p99 metrics from remaining runs. Note cold vs. warm starts.
    - Record baseline metrics in memory.
    - **Gate Check:** If baseline already meets NFRs, STOP and report success. Do not proceed.

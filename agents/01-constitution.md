@@ -162,6 +162,7 @@ This document is the single source of truth for all project standards, rules, an
 - **CON-403:** Tests live in [FOLDER]. <!-- source: .sdrive/context/code-standards.md -->
 - **CON-404:** Every acceptance criterion MUST have at least one test. <!-- source: SpecDrive -->
 - **CON-405:** Test names MUST include the acceptance criterion ID (e.g., `AC-001`). <!-- source: SpecDrive -->
+- **CON-406:** Test files MUST be organized by feature, nested under the project's test folder using the framework's own convention: `[TEST_FOLDER]/<feature>/<subfeature>.<test-suffix>.<ext>`. The `<feature>` segment MUST match the SpecDrive feature folder name (kebab-case). The `<test-suffix>` and `<ext>` MUST follow the detected framework (e.g. `.test.tsx` for Jest/Vitest, `.spec.ts` for NestJS, `_test.go` for Go, `test_*.py` for pytest, `*_test.dart` for Flutter). If the project already has an established flat test layout, ask the user before restructuring. <!-- source: SpecDrive -->
 
 ## 5. Security & Compliance (CON-5xx)
 - **CON-501:** AI agents MUST NOT read, modify, or commit files containing secrets or private information. <!-- source: Universal Security Default -->
