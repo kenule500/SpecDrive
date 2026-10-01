@@ -103,14 +103,29 @@ function apiTeam() {
   return loadJson(path.join(sdriveRoot, "team.json"), { members: [] });
 }
 
+// Governance files may live in either layout:
+//   versioned: .sdrive/governance/<feature>/<version>/<file>
+//   legacy:    .sdrive/governance/<feature>/<file>
+// Resolve the versioned path first, then fall back to the flat legacy path so
+// projects created before versioned governance still render correctly.
+function governanceFile(feature, version, fileName) {
+  const versioned = path.join(sdriveRoot, "governance", feature, version, fileName);
+  if (fs.existsSync(versioned)) return versioned;
+  const legacy = path.join(sdriveRoot, "governance", feature, fileName);
+  if (fs.existsSync(legacy)) return legacy;
+  return versioned;
+}
+
 function apiTraceability(feature, version) {
-  const tracePath = path.join(sdriveRoot, "governance", feature, version, "traceability.json");
-  return loadJson(tracePath, { rows: [] });
+  return loadJson(governanceFile(feature, version, "traceability.json"), { rows: [] });
 }
 
 function apiVerification(feature, version) {
-  const verificationPath = path.join(sdriveRoot, "governance", feature, version, "verification.json");
-  return loadJson(verificationPath, { status: "not_run", summary: {}, items: {} });
+  return loadJson(governanceFile(feature, version, "verification.json"), {
+    status: "not_run",
+    summary: {},
+    items: {}
+  });
 }
 
 function apiTestReport(feature, version) {
@@ -204,7 +219,17 @@ function parseBacklog(markdown) {
     if (cells.length < 3) continue;
     if (/^id$/i.test(cells[0])) continue;
 
-    rows.push({ id: cells[0], feature: cells[1], status: cells[2] });
+    // Backlog table columns: ID | Feature | Milestone | Priority | Dependencies | Status
+    // Older/simpler tables may only have: ID | Feature | Status
+    const hasFullColumns = cells.length >= 6;
+    rows.push({
+      id: cells[0],
+      feature: cells[1],
+      milestone: hasFullColumns ? cells[2] : "",
+      priority: hasFullColumns ? cells[3] : "",
+      dependencies: hasFullColumns ? cells[4] : "",
+      status: hasFullColumns ? cells[5] : cells[2]
+    });
   }
 
   return rows;

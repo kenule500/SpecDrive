@@ -307,26 +307,28 @@ function renderProduct(product) {
   }
 
   const backlog = product.backlog || [];
-  const pending = backlog.filter((item) => /pending/i.test(item.status)).length;
+  const pending = backlog.filter((item) => /pending|backlog/i.test(item.status)).length;
   const deferred = backlog.filter((item) => /deferred/i.test(item.status)).length;
 
   const backlogRows = backlog.length
     ? backlog
         .map((item) => {
-          const tone = /pending/i.test(item.status)
-            ? "amber"
-            : /deferred/i.test(item.status)
+          const tone = /deferred/i.test(item.status)
             ? "slate"
+            : /pending|backlog/i.test(item.status)
+            ? "amber"
             : "green";
           return `
         <tr>
           <td class="backlog-id">${escapeHtml(item.id)}</td>
           <td>${escapeHtml(item.feature)}</td>
+          <td>${item.milestone ? `<span class="chip slate">${escapeHtml(item.milestone)}</span>` : "—"}</td>
+          <td>${item.priority ? escapeHtml(item.priority) : "—"}</td>
           <td><span class="chip ${tone}">${escapeHtml(item.status)}</span></td>
         </tr>`;
         })
         .join("")
-    : `<tr><td colspan="3" class="product-empty">No backlog items yet.</td></tr>`;
+    : `<tr><td colspan="5" class="product-empty">No backlog items yet.</td></tr>`;
 
   div.innerHTML = `
     <div class="blueprint-wrap">
@@ -361,7 +363,7 @@ function renderProduct(product) {
 
       <table class="backlog-table">
         <thead>
-          <tr><th>ID</th><th>Feature</th><th>Status</th></tr>
+          <tr><th>ID</th><th>Feature</th><th>Milestone</th><th>Priority</th><th>Status</th></tr>
         </thead>
         <tbody>${backlogRows}</tbody>
       </table>
