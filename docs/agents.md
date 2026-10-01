@@ -20,7 +20,7 @@ SpecDrive uses 14 specialized agents. Each agent has one slash command.
 | 9 | Review & Complete | `/sdrive:review` | `09-review-complete.md` |
 | 10 | Security | `/sdrive:secure` | `10-security.md` |
 | 11 | Test | `/sdrive:test` | `11-test.md` |
-| 12 | Blueprint | `/sdrive:blueprint` | `12-blueprint.md` |
+| 12 | Product Plan | `/sdrive:product-plan` | `12-product-plan.md` |
 | 13 | Update Proposal | `/sdrive:update-propose` | `13-update-propose.md` |
 
 ---
@@ -78,9 +78,9 @@ SpecDrive uses 14 specialized agents. Each agent has one slash command.
 
 ---
 
-## Blueprint Agent
+## Product Plan Agent
 
-**Command:** `/sdrive:blueprint` (optional)
+**Command:** `/sdrive:product-plan` (optional)
 
 **Purpose:** Turn an early product idea into an approved product overview, conceptual app mockup, high-level design-system plan, roadmap, milestones, and product-level feature backlog.
 

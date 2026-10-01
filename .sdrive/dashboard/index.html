@@ -28,8 +28,8 @@
         <a class="nav-item active" href="/overview" data-nav="overview">
           <span class="nav-icon">◈</span><span>Overview</span>
         </a>
-        <a class="nav-item" href="/blueprint" data-nav="blueprint">
-          <span class="nav-icon">◇</span><span>Product Blueprint</span>
+        <a class="nav-item" href="/product-plan" data-nav="product-plan">
+          <span class="nav-icon">◇</span><span>Product Plan</span>
         </a>
         <a class="nav-item" href="/features" data-nav="features">
           <span class="nav-icon">▤</span><span>Features</span>
@@ -54,9 +54,12 @@
       </div>
     </aside>
 
+    <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
     <!-- ============ MAIN ============ -->
     <div class="content">
       <header class="topbar">
+        <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
         <div class="topbar-title">
           <h1><span id="topbar-project" class="topbar-project">Project</span> <span class="topbar-sep">/</span> Governance Dashboard</h1>
           <p class="topbar-subtitle">Spec-driven development with built-in governance</p>
@@ -71,7 +74,7 @@
         <section id="overview" class="section">
           <div class="section-head">
             <h2>Project Overview</h2>
-            <span class="section-hint">Product blueprint, repository &amp; governance state</span>
+            <span class="section-hint">Product plan, repository &amp; governance state</span>
           </div>
           <div id="overview-panel" class="overview-page">
             <div class="skeleton-card"></div>
@@ -80,10 +83,10 @@
           </div>
         </section>
 
-        <!-- ===== BLUEPRINT ===== -->
-        <section id="blueprint" class="section">
+        <!-- ===== PRODUCT PLAN ===== -->
+        <section id="product-plan" class="section">
           <div class="section-head">
-            <h2>Product Blueprint</h2>
+            <h2>Product Plan</h2>
             <span class="section-hint">Product-level candidates &amp; artifacts</span>
           </div>
           <div id="product-panel" class="panel-loading">Loading…</div>

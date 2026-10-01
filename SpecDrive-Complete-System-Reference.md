@@ -168,12 +168,12 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | 9 | Review & Complete | `/sdrive:review` | Audit + merge; move feature `ongoing/` → `completed/` |
 | 10 | Security | `/sdrive:secure` | Security audit |
 | 11 | Test | `/sdrive:test` | Write tests |
-| 12 | Blueprint | `/sdrive:blueprint` | Optionally create a product overview, conceptual mockup, design-system plan, roadmap, milestones, and backlog |
+| 12 | Product Plan | `/sdrive:product-plan` | Optionally create a product overview, conceptual mockup, design-system plan, roadmap, milestones, and backlog |
 
 **How each agent connects:**
 
 - The **Onboarding Agent** is only used once for brownfield projects. It runs the scan internally and migrates OpenSpec or Spec-Kit specs.
-- Feature-focused agents read the **constitution** and current feature files; Blueprint instead works from product context and user input.
+- Feature-focused agents read the **constitution** and current feature files; Product Plan instead works from product context and user input.
 - Each agent respects **current version** isolation.
 - Every agent runs **validators** before finishing.
 - Every agent stops at **human approval gates**.
@@ -261,7 +261,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 |---------|-------|
 | `/sdrive:onboard` | Onboarding |
 | `/sdrive:constitution` | Constitution |
-| `/sdrive:blueprint` | Blueprint |
+| `/sdrive:product-plan` | Product Plan |
 | `/sdrive:propose` | Specification |
 | `/sdrive:design` | UI/UX |
 | `/sdrive:sync` | Cascade |

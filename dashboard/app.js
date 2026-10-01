@@ -223,7 +223,7 @@ function renderOverviewKpis(onboarding, git, summary) {
     {
       label: "Product Status",
       value: summary?.status || "—",
-      sub: summary?.title ? "blueprint approved" : "no blueprint",
+      sub: summary?.title ? "product plan approved" : "no product plan",
       tone: summary?.status ? "green" : "slate",
       icon: "◈"
     },
@@ -281,7 +281,7 @@ function renderOverviewKpis(onboarding, git, summary) {
   `;
 }
 
-/* Grouped panels — blueprint, repository, onboarding. */
+/* Grouped panels — product plan, repository, onboarding. */
 function renderOverviewPanels(onboarding, git, summary) {
   const sidePanels = [];
   sidePanels.push(renderRepositoryPanel(git));
@@ -316,7 +316,7 @@ function renderBlueprintPanel(summary) {
     <section class="ov-panel">
       <header class="ov-panel-head">
         <span class="ov-panel-icon">◇</span>
-        <h3>Product Blueprint</h3>
+        <h3>Product Plan</h3>
       </header>
       <div class="ov-panel-body">
         ${summary.problem ? `<div class="ov-callout"><span class="ov-callout-label">Problem</span><p>${escapeHtml(summary.problem)}</p></div>` : ""}
@@ -469,14 +469,14 @@ function renderOnboardingPanel(onboarding) {
 }
 
 /* ============================================================
-   PRODUCT BLUEPRINT
+   PRODUCT PLAN
    ============================================================ */
 function renderProduct(product) {
   const div = document.createElement("div");
 
   if (!product || !product.exists) {
     div.className = "panel-loading";
-    div.innerHTML = `No product blueprint yet. Run <code>/sdrive:blueprint</code> to create a product overview, conceptual mockup, roadmap, and feature backlog.`;
+    div.innerHTML = `No product plan yet. Run <code>/sdrive:product-plan</code> to create a product overview, conceptual mockup, roadmap, and feature backlog.`;
     return div;
   }
 
@@ -1085,12 +1085,12 @@ async function renderCommands() {
 
 /* ============================================================
    ROUTER (path-based)
-   Each view is its own URL: /overview, /blueprint, /features,
+   Each view is its own URL: /overview, /product-plan, /features,
    /team, /activity, /commands. The server serves the same shell
    for every route; here we show the matching section and keep the
    sidebar highlight in sync.
    ============================================================ */
-const ROUTES = ["overview", "blueprint", "features", "skills", "team", "activity", "commands"];
+const ROUTES = ["overview", "product-plan", "features", "skills", "team", "activity", "commands"];
 const DEFAULT_ROUTE = "overview";
 
 function currentRoute() {
@@ -1126,6 +1126,7 @@ function setupNav() {
         window.history.pushState({ route }, "", `/${route}`);
       }
       showRoute(route);
+      closeSidebarDrawer();
     });
   });
 
@@ -1133,6 +1134,44 @@ function setupNav() {
   window.addEventListener("popstate", () => showRoute(currentRoute()));
 
   showRoute(currentRoute());
+}
+
+/* Mobile off-canvas drawer (shadcn-style sheet). */
+function openSidebarDrawer() {
+  const sidebar = document.querySelector(".sidebar");
+  const backdrop = document.getElementById("sidebar-backdrop");
+  const toggle = document.getElementById("sidebar-toggle");
+  if (sidebar) sidebar.classList.add("open");
+  if (backdrop) backdrop.classList.add("open");
+  if (toggle) toggle.setAttribute("aria-expanded", "true");
+}
+
+function closeSidebarDrawer() {
+  const sidebar = document.querySelector(".sidebar");
+  const backdrop = document.getElementById("sidebar-backdrop");
+  const toggle = document.getElementById("sidebar-toggle");
+  if (sidebar) sidebar.classList.remove("open");
+  if (backdrop) backdrop.classList.remove("open");
+  if (toggle) toggle.setAttribute("aria-expanded", "false");
+}
+
+function setupSidebarDrawer() {
+  const toggle = document.getElementById("sidebar-toggle");
+  const backdrop = document.getElementById("sidebar-backdrop");
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      const sidebar = document.querySelector(".sidebar");
+      if (sidebar && sidebar.classList.contains("open")) {
+        closeSidebarDrawer();
+      } else {
+        openSidebarDrawer();
+      }
+    });
+  }
+  if (backdrop) backdrop.addEventListener("click", closeSidebarDrawer);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeSidebarDrawer();
+  });
 }
 
 /* ============================================================
@@ -1179,6 +1218,7 @@ async function main() {
   });
 
   setupNav();
+  setupSidebarDrawer();
 
   await renderFeatures();
   await renderSkills();

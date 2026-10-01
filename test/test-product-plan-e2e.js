@@ -6,7 +6,7 @@ const { execFileSync } = require("child_process");
 
 const packageRoot = path.join(__dirname, "..");
 const cliPath = path.join(packageRoot, "src", "index.js");
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "sdrive-blueprint-e2e-"));
+const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "sdrive-product-plan-e2e-"));
 const sdriveRoot = path.join(tempRoot, ".sdrive");
 const commandsDir = path.join(sdriveRoot, "commands");
 const testModulesRoot = path.join(tempRoot, "test-node-modules");
@@ -64,12 +64,12 @@ try {
   runInit();
 
   // --- 1. Agent file installed and well-formed ---
-  const agentPath = path.join(sdriveRoot, "agents", "12-blueprint.md");
-  assert.ok(fs.existsSync(agentPath), "12-blueprint.md should be installed");
+  const agentPath = path.join(sdriveRoot, "agents", "12-product-plan.md");
+  assert.ok(fs.existsSync(agentPath), "12-product-plan.md should be installed");
   const agentMarkdown = fs.readFileSync(agentPath, "utf8");
   const frontmatter = parseFrontmatter(agentMarkdown);
   assert.ok(frontmatter, "agent file should have YAML frontmatter");
-  assert.strictEqual(frontmatter.name, "Blueprint");
+  assert.strictEqual(frontmatter.name, "Product Plan");
   assert.strictEqual(frontmatter["user-invocable"], "true");
   assert.strictEqual(frontmatter["disable-model-invocation"], "false");
   assert.ok(frontmatter.tools.includes("vscode/askQuestions"), "agent should be able to ask questions");
@@ -78,28 +78,28 @@ try {
 
   // --- 2. Manifest registration ---
   const manifest = JSON.parse(fs.readFileSync(path.join(commandsDir, "manifest.json"), "utf8"));
-  const blueprintEntry = manifest.commands.find((c) => c.command === "/sdrive:blueprint");
-  assert.ok(blueprintEntry, "/sdrive:blueprint should be registered");
-  assert.strictEqual(blueprintEntry.agent, "blueprint");
-  assert.strictEqual(blueprintEntry.agentFile, ".sdrive/agents/12-blueprint.md");
-  assert.strictEqual(blueprintEntry.acceptsFeature, false, "blueprint is not feature-scoped");
-  assert.deepStrictEqual(blueprintEntry.gates, [], "blueprint has no approval gates");
-  assert.deepStrictEqual(blueprintEntry.validators, [], "blueprint has no validators");
+  const productPlanEntry = manifest.commands.find((c) => c.command === "/sdrive:product-plan");
+  assert.ok(productPlanEntry, "/sdrive:product-plan should be registered");
+  assert.strictEqual(productPlanEntry.agent, "product-plan");
+  assert.strictEqual(productPlanEntry.agentFile, ".sdrive/agents/12-product-plan.md");
+  assert.strictEqual(productPlanEntry.acceptsFeature, false, "product-plan is not feature-scoped");
+  assert.deepStrictEqual(productPlanEntry.gates, [], "product-plan has no approval gates");
+  assert.deepStrictEqual(productPlanEntry.validators, [], "product-plan has no validators");
 
   // --- 3. Permissions ---
   const permissions = JSON.parse(fs.readFileSync(path.join(commandsDir, "permissions.json"), "utf8"));
-  assert.deepStrictEqual(permissions.rules["/sdrive:blueprint"], ["admin", "reviewer"]);
+  assert.deepStrictEqual(permissions.rules["/sdrive:product-plan"], ["admin", "reviewer"]);
 
   // --- 4. Router resolves the command to the agent ---
   fs.writeFileSync(path.join(sdriveRoot, "scripts", "check-permission.js"), "process.exit(0);\n");
   const routerOutput = execFileSync(
     process.execPath,
-    [path.join(commandsDir, "router.js"), "/sdrive:blueprint"],
+    [path.join(commandsDir, "router.js"), "/sdrive:product-plan"],
     { cwd: tempRoot, encoding: "utf8" }
   );
-  assert.ok(routerOutput.includes("SpecDrive Command: /sdrive:blueprint"));
-  assert.ok(routerOutput.includes("Agent: blueprint"));
-  assert.ok(routerOutput.includes("12-blueprint.md"), "router should point at the agent file");
+  assert.ok(routerOutput.includes("SpecDrive Command: /sdrive:product-plan"));
+  assert.ok(routerOutput.includes("Agent: product-plan"));
+  assert.ok(routerOutput.includes("12-product-plan.md"), "router should point at the agent file");
 
   // --- 5. Agent declares the 5 product artifacts it will produce ---
   const expectedArtifacts = [
@@ -117,18 +117,18 @@ try {
   assert.ok(/optional/i.test(agentMarkdown), "agent should describe itself as optional");
   assert.ok(
     /Do NOT create[\s\S]*?\.sdrive\/specs\//.test(agentMarkdown),
-    "blueprint must explicitly forbid creating .sdrive/specs/ feature folders"
+    "product-plan must explicitly forbid creating .sdrive/specs/ feature folders"
   );
   assert.ok(
     /workflow-state/i.test(agentMarkdown),
-    "blueprint must explicitly address workflow-state entries"
+    "product-plan must explicitly address workflow-state entries"
   );
   assert.ok(
     /\/sdrive:propose/.test(agentMarkdown),
-    "blueprint must hand off detailed planning to /sdrive:propose"
+    "product-plan must hand off detailed planning to /sdrive:propose"
   );
 
-  // --- 7. Simulate the approved blueprint output and verify it is well-formed ---
+  // --- 7. Simulate the approved product-plan output and verify it is well-formed ---
   const productDir = path.join(sdriveRoot, "product");
   fs.mkdirSync(productDir, { recursive: true });
   fs.writeFileSync(
@@ -143,12 +143,12 @@ try {
   assert.ok(/BP-\d{3}/.test(backlog), "backlog should use BP-### identifiers");
   assert.ok(/pending/.test(backlog), "backlog entries should carry a status");
 
-  // --- 8. Blueprint must not have created any feature spec folders ---
+  // --- 8. Product Plan must not have created any feature spec folders ---
   const specsBacklog = path.join(sdriveRoot, "specs", "backlog");
   const specFolders = fs.existsSync(specsBacklog) ? fs.readdirSync(specsBacklog) : [];
-  assert.deepStrictEqual(specFolders, [], "blueprint should not create feature spec folders");
+  assert.deepStrictEqual(specFolders, [], "product-plan should not create feature spec folders");
 
-  // --- 9. Dashboard surfaces the blueprint via /api/product ---
+  // --- 9. Dashboard surfaces the product plan via /api/product ---
   const dashboardServer = path.join(sdriveRoot, "dashboard", "server.js");
   assert.ok(fs.existsSync(dashboardServer), "dashboard server should be installed");
 
@@ -174,7 +174,7 @@ try {
   assert.strictEqual(backlogRows[0][0], "BP-001");
   assert.strictEqual(backlogRows[1][0], "BP-002");
 
-  console.log("✅ Blueprint end-to-end: installs, registers, routes, declares artifacts, stays optional, creates no feature specs, and surfaces on the dashboard.");
+  console.log("✅ Product Plan end-to-end: installs, registers, routes, declares artifacts, stays optional, creates no feature specs, and surfaces on the dashboard.");
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });
 }

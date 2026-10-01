@@ -562,9 +562,9 @@ function handleRequest(req, res) {
   }
 
   // Path-based page routes. Each dashboard view is its own URL (e.g.
-  // /blueprint, /features, /team). They all serve the same single-page shell;
+  // /product-plan, /features, /team). They all serve the same single-page shell;
   // the client router in app.js decides which section to display.
-  const PAGE_ROUTES = ["/overview", "/blueprint", "/features", "/team", "/activity", "/commands", "/skills"];
+  const PAGE_ROUTES = ["/overview", "/product-plan", "/features", "/team", "/activity", "/commands", "/skills"];
   if (PAGE_ROUTES.includes(url)) {
     return serveStatic(res, path.join(__dirname, "index.html"), "text/html");
   }

@@ -207,7 +207,7 @@ sdrive init
 /sdrive:constitution
 ```
 
-Optional: If you have an app idea but no product roadmap yet, run `/sdrive:blueprint` to draft a conceptual app overview and approved backlog. Skip it if you already have a plan.
+Optional: If you have an app idea but no product roadmap yet, run `/sdrive:product-plan` to draft a conceptual app overview and approved backlog. Skip it if you already have a plan.
 
 3. Propose a feature:
 
@@ -624,7 +624,7 @@ Audits and manages AI skills.
 |-------|------|------|
 | Onboarding | `00-onboarding.md` | Adopt SpecDrive into an existing project, migrate OpenSpec and Spec-Kit |
 | Constitution | `01-constitution.md` | Discover project rules, merge into constitution |
-| Blueprint | `12-blueprint.md` | Optionally create a product overview, conceptual mockup, design-system plan, roadmap, and backlog |
+| Product Plan | `12-product-plan.md` | Optionally create a product overview, conceptual mockup, design-system plan, roadmap, and backlog |
 | Specification | `02-specification.md` | Generate spec, plan, tasks, traceability |
 | Update Proposal | `13-update-propose.md` | Extend an existing feature spec with new requirements, stories, and acceptance criteria |
 | UI/UX | `03-uiux.md` | Build interactive prototype |

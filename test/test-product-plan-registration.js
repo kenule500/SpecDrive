@@ -6,7 +6,7 @@ const { execFileSync } = require("child_process");
 
 const packageRoot = path.join(__dirname, "..");
 const cliPath = path.join(packageRoot, "src", "index.js");
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "sdrive-blueprint-test-"));
+const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "sdrive-product-plan-test-"));
 const commandsDir = path.join(tempRoot, ".sdrive", "commands");
 const testModulesRoot = path.join(tempRoot, "test-node-modules");
 
@@ -64,23 +64,23 @@ try {
   const manifest = JSON.parse(fs.readFileSync(path.join(commandsDir, "manifest.json"), "utf8"));
   const permissions = JSON.parse(fs.readFileSync(path.join(commandsDir, "permissions.json"), "utf8"));
 
-  assert.ok(manifest.commands.some((command) => command.command === "/sdrive:blueprint"));
-  assert.deepStrictEqual(permissions.rules["/sdrive:blueprint"], ["admin", "reviewer"]);
+  assert.ok(manifest.commands.some((command) => command.command === "/sdrive:product-plan"));
+  assert.deepStrictEqual(permissions.rules["/sdrive:product-plan"], ["admin", "reviewer"]);
   assert.ok(manifest.commands.some((command) => command.command === "/sdrive:custom"));
   assert.strictEqual(manifest.customField, "preserve-me");
   assert.deepStrictEqual(permissions.rules["/sdrive:custom"], ["admin"]);
-  assert.ok(fs.existsSync(path.join(tempRoot, ".sdrive", "agents", "12-blueprint.md")));
+  assert.ok(fs.existsSync(path.join(tempRoot, ".sdrive", "agents", "12-product-plan.md")));
 
   fs.writeFileSync(path.join(tempRoot, ".sdrive", "scripts", "check-permission.js"), "process.exit(0);\n");
   const routerOutput = execFileSync(
     process.execPath,
-    [path.join(tempRoot, ".sdrive", "commands", "router.js"), "/sdrive:blueprint"],
+    [path.join(tempRoot, ".sdrive", "commands", "router.js"), "/sdrive:product-plan"],
     { cwd: tempRoot, encoding: "utf8" }
   );
-  assert.ok(routerOutput.includes("SpecDrive Command: /sdrive:blueprint"));
-  assert.ok(routerOutput.includes("Agent: blueprint"));
+  assert.ok(routerOutput.includes("SpecDrive Command: /sdrive:product-plan"));
+  assert.ok(routerOutput.includes("Agent: product-plan"));
 
-  console.log("✅ Blueprint command installs, routes, and loads without overwriting custom config.");
+  console.log("✅ Product Plan command installs, routes, and loads without overwriting custom config.");
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });
 }

@@ -68,12 +68,12 @@ The constitution defines your test framework, run command, and test folder.
 
 ---
 
-## Optional: Create a Product Blueprint
+## Optional: Create a Product Plan
 
 If you have an app idea but do not yet have a product overview or roadmap, run:
 
 ```text
-/sdrive:blueprint
+/sdrive:product-plan
 ```
 
 It can help prepare a conceptual app mockup, milestones, and an approved feature backlog. It does not create a working prototype. If you already have a plan, skip this and continue to `/sdrive:propose`.

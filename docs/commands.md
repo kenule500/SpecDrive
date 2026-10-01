@@ -386,7 +386,7 @@ The dashboard also supports filters:
 
 ## Slash Commands
 
-> **Typical workflow:** `/sdrive:onboard` (brownfield only) → `/sdrive:constitution` → optionally `/sdrive:blueprint` → `/sdrive:propose` → `/sdrive:apply` → `/sdrive:test` → `/sdrive:review`
+> **Typical workflow:** `/sdrive:onboard` (brownfield only) → `/sdrive:constitution` → optionally `/sdrive:product-plan` → `/sdrive:propose` → `/sdrive:apply` → `/sdrive:test` → `/sdrive:review`
 
 > **Extending an existing feature:** `/sdrive:update-propose "<feature>" <what to add>` → `sdrive approve specification` → `/sdrive:apply` → `/sdrive:test`
 
@@ -394,7 +394,7 @@ The dashboard also supports filters:
 |---------|-------|---------|
 | `/sdrive:onboard` | Onboarding | Adopt SpecDrive into an existing project, migrate OpenSpec/Spec-Kit |
 | `/sdrive:constitution` | Constitution | Create/update constitution |
-| `/sdrive:blueprint` | Blueprint | Optionally draft an app overview, conceptual mockup, roadmap, milestones, and backlog |
+| `/sdrive:product-plan` | Product Plan | Optionally draft an app overview, conceptual mockup, roadmap, milestones, and backlog |
 | `/sdrive:propose` | Specification | Create spec, plan, tasks |
 | `/sdrive:update-propose` | Update Proposal | Extend an existing feature spec with new requirements, stories, and acceptance criteria |
 | `/sdrive:design` | UI/UX | Build prototype |
@@ -409,15 +409,15 @@ The dashboard also supports filters:
 
 ---
 
-### `/sdrive:blueprint` (optional)
+### `/sdrive:product-plan` (optional)
 
 Use this when you have an application idea but need help shaping the product-level plan. Developers who already have a suitable plan can skip it and go directly to `/sdrive:propose`.
 
 ```text
-/sdrive:blueprint
+/sdrive:product-plan
 ```
 
-After gathering user input and any inspiration references, Blueprint proposes:
+After gathering user input and any inspiration references, Product Plan proposes:
 
 - `.sdrive/product/overview.md` — product purpose, users, guidance, references, assumptions, and open questions
 - `.sdrive/product/mockup.md` — a conceptual app map, key areas/screens, navigation, and user journeys (not a working prototype)
@@ -425,9 +425,9 @@ After gathering user input and any inspiration references, Blueprint proposes:
 - `.sdrive/product/roadmap.md` — suggested milestones, sequencing, and dependencies
 - `.sdrive/product/backlog.md` — user-approved product-level feature candidates, initially pending
 
-Blueprint asks whether to add, change, or defer feature ideas and gets approval before writing. It does not generate interactive prototypes, detailed feature specs, implementation tasks, or workflow-state entries. Select an approved backlog item later and run `/sdrive:propose "<feature description>"` to create its detailed plan.
+Product Plan asks whether to add, change, or defer feature ideas and gets approval before writing. It does not generate interactive prototypes, detailed feature specs, implementation tasks, or workflow-state entries. Select an approved backlog item later and run `/sdrive:propose "<feature description>"` to create its detailed plan.
 
-> **Inspiration images:** If your AI session cannot view images (vision unavailable), Blueprint does not stall. It uses the text it can read — file names, folder names, link titles, and your own description — as high-level guidance, records the reference as an open question, and continues. You can always add detail later by describing the reference in your own words.
+> **Inspiration images:** If your AI session cannot view images (vision unavailable), Product Plan does not stall. It uses the text it can read — file names, folder names, link titles, and your own description — as high-level guidance, records the reference as an open question, and continues. You can always add detail later by describing the reference in your own words.
 
 ---
 
@@ -622,7 +622,7 @@ If the user is not allowed, the command is blocked.
 | Role | Can do |
 |------|--------|
 | admin | Everything |
-| reviewer | Approve, review, propose, blueprint, create versions |
+| reviewer | Approve, review, propose, product-plan, create versions |
 | developer | Implement, test, run optimizations, verify |
 
 ### Permission File

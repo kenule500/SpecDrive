@@ -12,9 +12,9 @@
       "validators": ["governance"]
     },
     {
-      "command": "/sdrive:blueprint",
-      "agent": "blueprint",
-      "agentFile": ".sdrive/agents/12-blueprint.md",
+      "command": "/sdrive:product-plan",
+      "agent": "product-plan",
+      "agentFile": ".sdrive/agents/12-product-plan.md",
       "description": "Optionally create an approved product overview, conceptual app mockup, roadmap, milestones, and feature backlog",
       "acceptsFeature": false,
       "gates": [],
