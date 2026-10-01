@@ -1,6 +1,6 @@
 {
   "name": "specdrive-cli",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "description": "SpecDrive enterprise spec-driven development CLI",
   "bin": {
     "sdrive": "src/index.js"
@@ -28,10 +28,15 @@
   },
   "keywords": [
     "spec-driven",
-    "ai",
+    "spec-driven-development",
+    "sdd",
+    "openspec",
+    "ai-agents",
+    "agentic",
     "governance",
     "cli",
-    "specflow"
+    "specification",
+    "developer-tools"
   ],
   "author": "SpecDrive",
   "license": "MIT",
