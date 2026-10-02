@@ -138,6 +138,80 @@
             <div class="skeleton-card"></div>
             <div class="skeleton-card"></div>
           </div>
+
+          <!-- KPI explainer -->
+          <div class="kpi-explainer">
+            <div class="kpi-explainer-head">
+              <h3>What these metrics mean</h3>
+              <span class="kpi-explainer-hint">Plain-language guide to the KPIs shown on each feature</span>
+            </div>
+            <div class="kpi-explainer-grid">
+              <div class="kpi-explain">
+                <div class="kpi-explain-top">
+                  <span class="kpi-explain-icon tone-blue">◎</span>
+                  <span class="kpi-explain-name">Traceability</span>
+                </div>
+                <p class="kpi-explain-desc">
+                  How much of the feature is linked end-to-end — every requirement traced to a
+                  design, a task, and a test. <strong>100%</strong> means nothing is orphaned.
+                </p>
+                <div class="kpi-explain-scale">
+                  <span class="kpi-explain-scale-item"><i class="dot green"></i>100% — fully linked</span>
+                  <span class="kpi-explain-scale-item"><i class="dot amber"></i>Partial — gaps remain</span>
+                  <span class="kpi-explain-scale-item"><i class="dot red"></i>0% — nothing linked</span>
+                </div>
+              </div>
+
+              <div class="kpi-explain">
+                <div class="kpi-explain-top">
+                  <span class="kpi-explain-icon tone-green">✓</span>
+                  <span class="kpi-explain-name">Verification</span>
+                </div>
+                <p class="kpi-explain-desc">
+                  Whether the built code matches the approved spec. The system compares what was
+                  specified against what was implemented and reports the difference.
+                </p>
+                <div class="kpi-explain-scale">
+                  <span class="kpi-explain-scale-item"><i class="dot green"></i>PASS — spec &amp; code match</span>
+                  <span class="kpi-explain-scale-item"><i class="dot amber"></i>WARN — extra, unplanned work</span>
+                  <span class="kpi-explain-scale-item"><i class="dot red"></i>FAIL — spec items missing</span>
+                  <span class="kpi-explain-scale-item"><i class="dot slate"></i>NOT RUN — not checked yet</span>
+                </div>
+              </div>
+
+              <div class="kpi-explain">
+                <div class="kpi-explain-top">
+                  <span class="kpi-explain-icon tone-amber">▤</span>
+                  <span class="kpi-explain-name">Tests</span>
+                </div>
+                <p class="kpi-explain-desc">
+                  Test coverage of the feature's acceptance criteria — the share of ACs that have a
+                  passing automated test behind them.
+                </p>
+                <div class="kpi-explain-scale">
+                  <span class="kpi-explain-scale-item"><i class="dot green"></i>Complete — 100% of ACs</span>
+                  <span class="kpi-explain-scale-item"><i class="dot amber"></i>Partial — some ACs untested</span>
+                  <span class="kpi-explain-scale-item"><i class="dot slate"></i>NOT RUN — no tests yet</span>
+                </div>
+              </div>
+
+              <div class="kpi-explain">
+                <div class="kpi-explain-top">
+                  <span class="kpi-explain-icon tone-slate">⛨</span>
+                  <span class="kpi-explain-name">Gates</span>
+                </div>
+                <p class="kpi-explain-desc">
+                  The four approval checkpoints a version must clear before it can ship. Each gate
+                  is signed off by a human reviewer.
+                </p>
+                <div class="kpi-explain-scale">
+                  <span class="kpi-explain-scale-item"><i class="dot green"></i>Approved — signed off</span>
+                  <span class="kpi-explain-scale-item"><i class="dot amber"></i>Pending — awaiting review</span>
+                  <span class="kpi-explain-scale-item"><i class="dot blue"></i>In progress — being worked</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- ===== SKILLS ===== -->
