@@ -5,7 +5,7 @@ argument-hint: Specify the scope (e.g., "Document the API routes", "Update the R
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'edit', 'create', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7']
+tools: ['read', 'search', 'edit', 'create', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
 agents: []
 ---
 
@@ -50,6 +50,11 @@ You operate within the current version folder only.
 - **Artifact Location Rule:** ALL files you create — logs, reports, captured output — MUST be written under `.sdrive/`. NEVER write artifacts to the project root or any source folder.
 - ALWAYS read relevant files in `.sdrive/skills/` before generating documentation or analyzing code to ensure compliance with project-specific standards.
 </rules>
+
+<vision>
+- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
+- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
+</vision>
 
 <capabilities>
 - **Inline Documentation**: Generating JSDoc, Python docstrings, Go doc comments with traceability IDs.

@@ -594,6 +594,7 @@ Audits and manages AI skills.
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive structure |
 | `sdrive update` | Refresh framework files without touching specs or governance |
+| `sdrive vision` | Wire the vision-bridge MCP so text-only models can read images |
 | `sdrive onboard` | Scan an existing project (usually run automatically by `/sdrive:onboard`) |
 | `sdrive validate` | Validate governance files |
 | `sdrive config:validate` | Validate `.sdrive/config.json` |
@@ -746,7 +747,7 @@ A feature moves through three spec folders. Each transition has exactly one owne
 │   └── <feature>/
 │       └── <version>/
 ├── onboarding/           # Brownfield onboarding inventory + migration results
-├── mcp/                  # MCP server for AI chat integration
+├── mcp/                  # MCP server + vision-bridge config for AI chat integration
 ├── prototype/            # UI/UX prototypes
 ├── reports/              # Security, performance, docs, tests reports
 ├── context/              # Discovered project context
@@ -923,6 +924,34 @@ SpecDrive never overwrites existing MCP entries. It merges safely.
 | `specdrive.get_traceability` | Get traceability matrix |
 | `specdrive.validate` | Run governance validator |
 | `specdrive.status` | Get status summary |
+
+### Vision Bridge (image reading for text-only models)
+
+Text-only models (DeepSeek, etc.) cannot see images. SpecDrive wires
+[`vision-bridge-mcp`](https://www.npmjs.com/package/vision-bridge-mcp) alongside
+its own MCP server so **all 14 agents** can read screenshots, mockups, and
+diagrams by delegating to a vision model.
+
+It is added automatically on `sdrive init` for every MCP-capable tool, and can be
+re-wired at any time:
+
+```bash
+sdrive vision                 # wire all MCP-capable tools
+sdrive vision --tools cursor  # wire a specific tool
+```
+
+| Tool | Purpose |
+|------|---------|
+| `describe_image` | Markdown description of an image |
+| `extract_text` | OCR text out of a screenshot |
+| `compare_images` | Diff a reference against a rendered result |
+| `vision_status` | Confirm the bridge is configured |
+| `vision_rules` | Return the agent usage rules |
+
+Set `VISION_BRIDGE_API_KEY` in your shell (never commit it). SpecDrive writes only
+a placeholder to the MCP config. Defaults to an OpenAI-compatible endpoint (Aliyun
+DashScope) with `qwen-vl-max`; override `VISION_BRIDGE_BASE_URL` /
+`VISION_BRIDGE_MODELS` for another provider (e.g. local Ollama `llava`).
 
 ---
 

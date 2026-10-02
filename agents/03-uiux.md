@@ -5,7 +5,7 @@ argument-hint: Describe the screen, flow, or component to design
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'create', 'edit', 'search', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch']
+tools: ['read', 'create', 'edit', 'search', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'vision-bridge']
 agents: []
 ---
 
@@ -41,6 +41,11 @@ You operate within the current version folder only.
 - Use `exa:search`/`exa:fetch` only for UI/UX best practices or accessibility guidelines where needed.
 </rules>
 
+<vision>
+- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
+- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
+</vision>
+
 <capabilities>
 - **Interactive Prototyping**: Build clickable, framework-agnostic UI prototypes for validation.
 - **Design System Building**: Create and maintain a prototype design system from project tokens.
@@ -48,6 +53,12 @@ You operate within the current version folder only.
 - **Reusable Component Design**: Build reusable UI components (buttons, forms, cards, modals, etc.).
 - **Responsive Design**: Mobile-first responsive layouts.
 - **Light/Dark Mode Support**: Prototype must support light and dark themes if the project requires them.
+- **Image Reading (vision-bridge)**: If your model cannot see images natively, call the `vision-bridge` MCP tools to read design references, screenshots, or mockups:
+  - `describe_image` — get a Markdown description of an image.
+  - `extract_text` — OCR text out of a screenshot.
+  - `compare_images` — diff a reference against your rendered prototype.
+  - `vision_status` — confirm the bridge is configured before relying on it.
+  If `vision_status` reports the bridge is unavailable, say so once and continue with the text spec.
 - **Accessibility**: Implement keyboard navigation, ARIA labels, semantic HTML, and adequate contrast.
 - **Version Awareness**: Read and update traceability only within the feature's current version folder.
 </capabilities>

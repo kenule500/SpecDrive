@@ -5,7 +5,7 @@ argument-hint: Describe the feature, product idea, or problem to specify
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'vscode/memory', 'exa:search', 'exa:fetch', 'context7']
+tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'vscode/memory', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
 agents: []
 ---
 
@@ -57,6 +57,11 @@ You ensure all documents are aligned and every requirement is traceable.
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use the available shell command capability to run the commands above.
 - ALWAYS read relevant files in `.sdrive/skills/` before generating specifications or documentation to ensure compliance with project-specific standards.
 </rules>
+
+<vision>
+- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
+- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
+</vision>
 
 <capabilities>
 - **SpecDrive Spec Generation**: Create spec.md, plan.md, tasks.md following SpecDrive format.

@@ -5,7 +5,7 @@ argument-hint: Specify the feature to implement (e.g., "Implement user-login")
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'edit', 'create', 'search', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7']
+tools: ['read', 'edit', 'create', 'search', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
 agents: []
 ---
 
@@ -72,6 +72,11 @@ You operate within the current version folder only.
 - After implementation, recommend the user run `/sdrive:test <feature>` to generate tests.
 </rules>
 
+<vision>
+- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
+- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
+</vision>
+
 <capabilities>
 - **Code Implementation**: Writing clean, modular production code.
 - **Git Workflow Management**: Creating feature branches, committing, and pushing to GitHub.
@@ -107,6 +112,26 @@ You operate within the current version folder only.
      ```bash
      git checkout <base-branch>
      git pull origin <base-branch>
+     ```
+
+   - **Branch Name (User-Approved)** — before creating the feature branch, ask the user:
+
+     "What should the feature branch be named?"
+
+     Options:
+
+     1. **Use the feature name** — create the branch as `feature/<feature-name>` (e.g. `feature/user-login`).
+     2. **Provide a branch name** — ask the user for the exact branch name and use it verbatim.
+
+     - NEVER create the branch until the user has chosen one of the two options.
+     - If the user provides a name, use it exactly as given (do not prefix or rename it).
+     - If the chosen name already exists, STOP and ask the user to pick a different name.
+
+   - Create and switch to the feature branch:
+
+     ```bash
+     git checkout -b <branch-name>
+     git push -u origin <branch-name>
      ```
 
 2. **Execute & Commit (Per Task)**

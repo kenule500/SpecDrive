@@ -13,6 +13,7 @@ SpecDrive has two types of commands:
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive structure and adapters |
 | `sdrive update` | Refresh framework files (dashboard, mcp, scripts, schemas) without touching your specs or governance |
+| `sdrive vision` | Wire the vision-bridge MCP so text-only models can read images |
 | `sdrive onboard` | Scan an existing project (usually run automatically by `/sdrive:onboard`) |
 | `sdrive validate` | Validate all governance files |
 | `sdrive config:validate` | Validate `.sdrive/config.json` |

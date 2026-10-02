@@ -1,0 +1,19 @@
+{
+  "name": "vision-bridge",
+  "package": "vision-bridge-mcp@latest",
+  "description": "Vision proxy MCP — lets text-only models read images (screenshots, mockups, diagrams).",
+  "tools": [
+    "describe_image",
+    "extract_text",
+    "compare_images",
+    "vision_status",
+    "vision_rules"
+  ],
+  "env": {
+    "VISION_BRIDGE_BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "VISION_BRIDGE_API_KEY": "process.env.VISION_BRIDGE_API_KEY",
+    "VISION_BRIDGE_MODELS": "qwen-vl-max,qwen2.5-vl-72b-instruct",
+    "VISION_BRIDGE_CACHE": "1"
+  },
+  "note": "Set VISION_BRIDGE_API_KEY in your shell. Never commit real keys."
+}

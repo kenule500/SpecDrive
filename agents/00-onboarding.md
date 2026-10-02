@@ -5,7 +5,7 @@ argument-hint: Run to onboard an existing project into SpecDrive
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7']
+tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
 agents: []
 ---
 
@@ -49,6 +49,11 @@ You do NOT replace the existing project structure. You layer SpecDrive on top.
 - Use `exa:search`/`exa:fetch` and **Context7 MCP** to verify technology-specific conventions where needed.
 - If the user is uncertain at any step, STOP and mark the item as `deferred` in `.sdrive/workflow-state.json`.
 </rules>
+
+<vision>
+- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
+- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
+</vision>
 
 <capabilities>
 - **Internal Project Scan**: Running `.sdrive/scripts/onboard.js` to build an inventory without requiring the user to leave the chat.
