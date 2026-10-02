@@ -180,14 +180,14 @@ function renderGitInfo(git) {
 /* ============================================================
    OVERVIEW
    ============================================================ */
-function renderOverview(onboarding, git, product) {
+function renderOverview(onboarding, git, product, productType) {
   const wrap = document.createElement("div");
   wrap.className = "overview-page";
 
   const summary = product?.summary || null;
 
   wrap.innerHTML = `
-    ${renderOverviewHero(summary, git)}
+    ${renderOverviewHero(summary, git, productType)}
     ${renderOverviewKpis(onboarding, git, summary)}
     ${renderOverviewPanels(onboarding, git, summary)}
   `;
@@ -196,11 +196,21 @@ function renderOverview(onboarding, git, product) {
 }
 
 /* Hero banner — the product's identity at a glance. */
-function renderOverviewHero(summary, git) {
+function renderOverviewHero(summary, git, productType) {
   const title = summary?.title || "Project Overview";
   const vision = summary?.vision || "";
   const status = summary?.status || "";
   const branch = git?.branch || "—";
+
+  const pt = productType || null;
+  const typeBadge = pt
+    ? `
+        <span class="ov-type-badge" data-type="${escapeHtml(pt.type)}" title="${escapeHtml(pt.description || "")}">
+          <span class="ov-type-icon">${escapeHtml(pt.icon || "◆")}</span>
+          <span class="ov-type-label">${escapeHtml(pt.label)}</span>
+          <span class="ov-type-tagline">${escapeHtml(pt.tagline || "")}</span>
+        </span>`
+    : "";
 
   return `
     <div class="ov-hero">
@@ -210,6 +220,7 @@ function renderOverviewHero(summary, git) {
           <span class="ov-hero-dot"></span>
           <span>Product Overview</span>
           ${status ? `<span class="ov-hero-status">${escapeHtml(status)}</span>` : ""}
+          ${typeBadge}
         </div>
         <h2 class="ov-hero-title">${escapeHtml(title)}</h2>
         ${vision ? `<p class="ov-hero-vision">${escapeHtml(vision)}</p>` : ""}
@@ -1000,7 +1011,7 @@ let commandQuery = "";
 
 function commandMatches(item) {
   if (!commandQuery) return true;
-  const haystack = `${item.command} ${item.description} ${item.group || ""}`.toLowerCase();
+  const haystack = `${item.command} ${item.description} ${item.group || ""} ${item.what || ""} ${item.why || ""} ${item.when || ""}`.toLowerCase();
   return haystack.includes(commandQuery);
 }
 
@@ -1051,7 +1062,7 @@ function commandTableEl(items) {
   head.innerHTML = `
     <tr>
       <th class="col-command">Command</th>
-      <th>Description</th>
+      <th>What it does</th>
       <th class="col-meta">Details</th>
     </tr>
   `;
@@ -1065,18 +1076,31 @@ function commandTableEl(items) {
   return wrap;
 }
 
+// Returns a DocumentFragment holding the main row plus (when available) a
+// hidden detail row that the "Details" button toggles.
 function commandRowEl(item) {
+  const frag = document.createDocumentFragment();
   const tr = document.createElement("tr");
+  tr.className = "command-row";
 
   const meta = [];
   if (item.acceptsFeature) meta.push(`<span class="chip blue">feature</span>`);
   if (item.agent) meta.push(`<span class="chip slate">${escapeHtml(item.agent)}</span>`);
   (item.gates || []).forEach((g) => meta.push(`<span class="chip amber">gate: ${escapeHtml(g)}</span>`));
 
+  const hasDetail = Boolean(item.what || item.why || item.when || item.example);
+  const summary = item.what || item.description;
+
   tr.innerHTML = `
     <td class="col-command"><code class="command-code" title="Click to copy">${escapeHtml(item.command)}</code></td>
-    <td><div class="command-desc">${escapeHtml(item.description)}</div></td>
-    <td class="col-meta">${meta.length ? `<div class="command-meta">${meta.join("")}</div>` : ""}</td>
+    <td>
+      <div class="command-desc">${escapeHtml(summary)}</div>
+      ${item.what && item.description ? `<div class="command-sub">${escapeHtml(item.description)}</div>` : ""}
+    </td>
+    <td class="col-meta">
+      ${meta.length ? `<div class="command-meta">${meta.join("")}</div>` : ""}
+      ${hasDetail ? `<button class="command-toggle" type="button" aria-expanded="false">Details ▾</button>` : ""}
+    </td>
   `;
 
   const code = tr.querySelector(".command-code");
@@ -1091,12 +1115,78 @@ function commandRowEl(item) {
     }
   });
 
-  return tr;
+  if (hasDetail) {
+    const detailRow = document.createElement("tr");
+    detailRow.className = "command-detail-row";
+    detailRow.hidden = true;
+
+    const cells = [];
+    if (item.what) cells.push(detailCell("What it does", item.what));
+    if (item.why) cells.push(detailCell("Why it matters", item.why));
+    if (item.when) cells.push(detailCell("When to use it", item.when));
+    if (item.example) cells.push(detailCell("Example", item.example, true));
+
+    detailRow.innerHTML = `<td colspan="3"><div class="command-detail">${cells.join("")}</div></td>`;
+
+    const toggle = tr.querySelector(".command-toggle");
+    toggle.addEventListener("click", () => {
+      const open = detailRow.hidden;
+      detailRow.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.textContent = open ? "Details ▴" : "Details ▾";
+    });
+
+    frag.appendChild(tr);
+    frag.appendChild(detailRow);
+    return frag;
+  }
+
+  frag.appendChild(tr);
+  return frag;
+}
+
+function detailCell(label, value, isCode) {
+  const body = isCode
+    ? `<code class="command-example">${escapeHtml(value)}</code>`
+    : `<span>${escapeHtml(value)}</span>`;
+  return `<div class="command-detail-item"><span class="command-detail-label">${escapeHtml(label)}</span>${body}</div>`;
+}
+
+function renderWorkflowCards() {
+  const container = document.getElementById("workflow-cards");
+  if (!container) return;
+
+  const workflows = (commandData && commandData.workflows) || [];
+  if (!workflows.length) {
+    container.innerHTML = "";
+    return;
+  }
+
+  container.innerHTML = workflows
+    .map(
+      (w) => `
+    <article class="workflow-card" data-workflow="${escapeHtml(w.id)}">
+      <div class="workflow-card-head">
+        <span class="workflow-icon">${escapeHtml(w.icon || "◆")}</span>
+        <div>
+          <h3 class="workflow-name">${escapeHtml(w.name)}</h3>
+          <span class="workflow-tagline">${escapeHtml(w.tagline || "")}</span>
+        </div>
+      </div>
+      <p class="workflow-summary">${escapeHtml(w.summary || "")}</p>
+      <ol class="workflow-steps">
+        ${(w.steps || []).map((s) => `<li><code>${escapeHtml(s)}</code></li>`).join("")}
+      </ol>
+      <div class="workflow-bestfor"><span>Best for</span>${escapeHtml(w.bestFor || "")}</div>
+    </article>
+  `
+    )
+    .join("");
 }
 
 async function renderCommands() {
   const data = await fetchJson("/api/commands");
-  commandData = data || { slash: [], cli: [] };
+  commandData = data || { slash: [], cli: [], workflows: [] };
 
   const search = document.getElementById("command-search");
   if (search) {
@@ -1116,6 +1206,7 @@ async function renderCommands() {
   });
 
   renderCommandList();
+  renderWorkflowCards();
 }
 
 /* ============================================================
@@ -1213,11 +1304,12 @@ function setupSidebarDrawer() {
    MAIN
    ============================================================ */
 async function main() {
-  const [onboarding, product, git, project] = await Promise.all([
+  const [onboarding, product, git, project, productType] = await Promise.all([
     fetchJson("/api/onboarding"),
     fetchJson("/api/product"),
     fetchJson("/api/git-info"),
-    fetchJson("/api/project-info")
+    fetchJson("/api/project-info"),
+    fetchJson("/api/product-type")
   ]);
 
   renderProjectInfo(project);
@@ -1226,7 +1318,7 @@ async function main() {
   const overviewContainer = document.getElementById("overview-panel");
   if (overviewContainer) {
     overviewContainer.innerHTML = "";
-    overviewContainer.appendChild(renderOverview(onboarding, git, product));
+    overviewContainer.appendChild(renderOverview(onboarding, git, product, productType));
   }
 
   const productContainer = document.getElementById("product-panel");
