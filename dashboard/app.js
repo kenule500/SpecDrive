@@ -941,16 +941,25 @@ async function renderSkills() {
 
     card.innerHTML = `
       <div class="skill-head">
-        <span class="skill-icon">âœ¦</span>
-        <div>
+        ${
+          s.logo
+            ? `<span class="skill-logo"><img src="${escapeHtml(s.logo)}" alt="${escapeHtml(
+                s.name
+              )} logo" loading="lazy" /></span>`
+            : `<span class="skill-icon">âœ¦</span>`
+        }
+        <div class="skill-title">
           <div class="skill-name">${escapeHtml(s.name)}</div>
           <div class="skill-folder">.sdrive/skills/${escapeHtml(s.folder)}</div>
         </div>
+        ${s.version ? `<span class="skill-version">v${escapeHtml(s.version)}</span>` : ""}
       </div>
       <div class="skill-desc">${escapeHtml(s.description || "No description.")}</div>
       ${tags ? `<div class="chip-list">${tags}</div>` : ""}
-      <div class="skill-meta">${escapeHtml(meta)}</div>
-      ${s.source ? `<div class="skill-source">${escapeHtml(s.source)}</div>` : ""}
+      <div class="skill-foot">
+        <div class="skill-meta">${escapeHtml(meta)}</div>
+        ${s.source ? `<div class="skill-source">${escapeHtml(s.source)}</div>` : ""}
+      </div>
     `;
     container.appendChild(card);
   });

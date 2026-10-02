@@ -210,6 +210,11 @@ function apiSkills() {
       /* ignore */
     }
 
+    // A skill may ship its own logo. We look for a conventional filename in the
+    // skill folder (and an optional assets/ subfolder) so the dashboard can show
+    // the real brand mark instead of the generic gradient icon.
+    const logo = findSkillLogo(path.join(skillsDir, entry.name));
+
     skills.push({
       name: meta.name || entry.name,
       folder: entry.name,
@@ -220,6 +225,7 @@ function apiSkills() {
       source: meta.source || "",
       license: meta.license || "",
       installed: meta.installed || "",
+      logo: logo ? `/api/skill-logo/${encodeURIComponent(entry.name)}` : "",
       lines,
       extraFiles
     });
@@ -227,6 +233,64 @@ function apiSkills() {
 
   skills.sort((a, b) => a.name.localeCompare(b.name));
   return { exists: true, skills };
+}
+
+// Conventional logo filenames, checked in order. The first match wins.
+const SKILL_LOGO_NAMES = [
+  "logo.svg",
+  "logo.png",
+  "logo.webp",
+  "logo.jpg",
+  "logo.jpeg",
+  "icon.svg",
+  "icon.png",
+  "icon.webp",
+  "icon.jpg",
+  "icon.jpeg"
+];
+
+const SKILL_LOGO_TYPES = {
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg"
+};
+
+// Returns the absolute path to a skill's logo, or null if none is present.
+// Looks in the skill root and an optional assets/ subfolder.
+function findSkillLogo(skillDir) {
+  const searchDirs = [skillDir, path.join(skillDir, "assets")];
+  for (const dir of searchDirs) {
+    for (const name of SKILL_LOGO_NAMES) {
+      const candidate = path.join(dir, name);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+// Serves a skill's logo by folder name. The folder is validated against the
+// skills directory listing so a crafted path cannot escape the skills root.
+function serveSkillLogo(res, folder) {
+  const skillsDir = path.join(sdriveRoot, "skills");
+  const skillDir = path.join(skillsDir, folder);
+
+  // Guard against path traversal: the resolved dir must sit directly under skills/.
+  const resolved = path.resolve(skillDir);
+  if (path.dirname(resolved) !== path.resolve(skillsDir)) {
+    res.writeHead(400);
+    return res.end("Bad request");
+  }
+
+  const logoPath = findSkillLogo(resolved);
+  if (!logoPath) {
+    res.writeHead(404);
+    return res.end("Not found");
+  }
+
+  const type = SKILL_LOGO_TYPES[path.extname(logoPath).toLowerCase()] || "application/octet-stream";
+  return serveStatic(res, logoPath, type);
 }
 
 function apiTeam() {
@@ -495,6 +559,13 @@ function apiCommands() {
 function handleRequest(req, res) {
   const url = req.url;
 
+  // Skill logos are binary assets, so they are served before the JSON API block
+  // (which sets a JSON content-type header for everything under /api/).
+  if (url.startsWith("/api/skill-logo/")) {
+    const folder = decodeURIComponent(url.slice("/api/skill-logo/".length).split("?")[0]);
+    return serveSkillLogo(res, folder);
+  }
+
   if (url.startsWith("/api/")) {
     res.writeHead(200, { "Content-Type": "application/json" });
 
@@ -513,7 +584,6 @@ function handleRequest(req, res) {
     if (url === "/api/skills") {
       return res.end(JSON.stringify(apiSkills()));
     }
-
     if (url === "/api/team") {
       return res.end(JSON.stringify(apiTeam()));
     }
