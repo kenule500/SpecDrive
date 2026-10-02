@@ -63,7 +63,12 @@ const CANDIDATE_ROOTS = [
   "pkg",
   "api",
   "apps",
-  "packages"
+  "packages",
+  "components",
+  "messages",
+  "locales",
+  "i18n",
+  "content"
 ];
 
 const IGNORED_DIRS = new Set([
@@ -84,8 +89,23 @@ const IGNORED_DIRS = new Set([
 const CODE_EXTENSIONS = [
   ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
   ".py", ".go", ".rs", ".dart", ".java", ".kt",
-  ".rb", ".php", ".cs", ".swift"
+  ".rb", ".php", ".cs", ".swift",
+  ".css", ".scss", ".json"
 ];
+
+// Config files that are never feature components, even though they are JSON.
+const IGNORED_FILES = new Set([
+  "package.json",
+  "package-lock.json",
+  "tsconfig.json",
+  "jsconfig.json",
+  "components.json",
+  "vercel.json",
+  "next.config.json",
+  "eslint.json",
+  ".eslintrc.json",
+  ".prettierrc.json"
+]);
 
 function readConstitutionSources() {
   const constitutionPath = path.join(projectRoot, ".sdrive", "constitution.md");
@@ -97,17 +117,27 @@ function readConstitutionSources() {
 
   return matches
     .map((m) => m.replace(/`/g, "").replace(/\/$/, ""))
-    .filter((p) => CANDIDATE_ROOTS.includes(p));
+    .filter((p) => {
+      // Keep the top-level segment of a declared path (e.g. "components/ui"
+      // becomes "components") and only accept known source roots.
+      const top = p.split("/")[0];
+      return CANDIDATE_ROOTS.includes(top);
+    })
+    .map((p) => p.split("/")[0]);
 }
 
 function detectSourceRoots() {
   const fromConstitution = readConstitutionSources();
+  const detected = CANDIDATE_ROOTS.filter((r) =>
+    fs.existsSync(path.join(projectRoot, r))
+  );
 
-  if (fromConstitution.length > 0) {
-    return fromConstitution.filter((r) => fs.existsSync(path.join(projectRoot, r)));
-  }
+  // Union the constitution's declared roots with the conventional roots that
+  // actually exist. Relying on the constitution alone misses real source
+  // folders (e.g. lib/, messages/) that the document simply did not list.
+  const roots = [...new Set([...fromConstitution, ...detected])];
 
-  return CANDIDATE_ROOTS.filter((r) => fs.existsSync(path.join(projectRoot, r)));
+  return roots.filter((r) => fs.existsSync(path.join(projectRoot, r)));
 }
 
 function walkDirectory(dir, files = []) {
@@ -115,6 +145,7 @@ function walkDirectory(dir, files = []) {
 
   for (const entry of entries) {
     if (IGNORED_DIRS.has(entry.name)) continue;
+    if (IGNORED_FILES.has(entry.name)) continue;
 
     const fullPath = path.join(dir, entry.name);
 
@@ -179,6 +210,16 @@ function detectComponents(files) {
         basename
       });
     }
+
+    // Every source file is also a valid "component" target when the plan
+    // references it by path (e.g. "components/home/hero.tsx"). Plans commonly
+    // name files rather than exported symbols, so record the path too.
+    components.push({
+      name: relative,
+      file: relative,
+      basename,
+      isPath: true
+    });
   });
 
   return components;
@@ -264,6 +305,19 @@ function detectEntities(files) {
         file: relative
       });
     }
+
+    // TypeScript type aliases and interfaces (e.g. `export type Sector = {`
+    // or `export interface Sector {`). These model the plan's data entities
+    // in front-end projects that have no database layer.
+    const tsTypeMatches = content.matchAll(
+      /(?:export\s+)?(?:type|interface)\s+([A-Z][A-Za-z0-9_]*)\s*(?:<[^>]*>)?\s*=?\s*\{/g
+    );
+    for (const match of tsTypeMatches) {
+      entities.push({
+        name: match[1],
+        file: relative
+      });
+    }
   });
 
   return entities;
@@ -313,10 +367,45 @@ function detectFields(files) {
         });
       }
     }
+
+    // TypeScript type/interface fields (e.g. `id: string;` inside a type).
+    // Matches `name: Type` and optional `name?: Type` property declarations.
+    const tsBlocks = content.matchAll(
+      /(?:export\s+)?(?:type|interface)\s+([A-Z][A-Za-z0-9_]*)\s*(?:<[^>]*>)?\s*=?\s*\{([\s\S]*?)\}/g
+    );
+
+    for (const block of tsBlocks) {
+      const entity = block[1];
+      const body = block[2];
+
+      const fieldMatches = body.matchAll(/^\s*(\w+)\??\s*:\s*([^;\n]+)/gm);
+
+      for (const field of fieldMatches) {
+        fields.push({
+          entity,
+          name: field[1],
+          file: relative
+        });
+      }
+    }
   });
 
   return fields;
 }
+
+// Dependencies that are satisfied without appearing in package.json. These are
+// virtual/registry-based or bundled toolchains (e.g. shadcn/ui is a CLI that
+// copies components into the repo rather than a runtime dependency).
+const VIRTUAL_DEPENDENCIES = new Set([
+  "shadcn/ui",
+  "shadcn",
+  "tailwind",
+  "tailwindcss",
+  "radix-ui",
+  "radix",
+  "lucide",
+  "lucide-react"
+]);
 
 function detectDependencies() {
   const pkgPath = path.join(projectRoot, "package.json");
@@ -346,9 +435,32 @@ function diffPlanAgainstCode(planItems, code) {
   const codeFields = detectFields(code.files);
   const codeDependencies = detectDependencies();
 
+  // Expand brace globs such as "messages/{fr,pt,es}.json" into concrete paths
+  // so a plan that groups sibling files still matches the real files on disk.
+  const expandBraces = (pattern) => {
+    const match = pattern.match(/^(.*)\{([^}]+)\}(.*)$/);
+    if (!match) return [pattern];
+    return match[2]
+      .split(",")
+      .map((part) => `${match[1]}${part.trim()}${match[3]}`);
+  };
+
+  // A plan item matches a code component when the names are equal, when the
+  // plan names the file path directly, or when the plan uses a brace glob that
+  // expands to the file path.
+  const componentMatches = (item, c) => {
+    if (c.name === item.name || c.file === item.name) return true;
+    if (item.name.includes("{")) {
+      return expandBraces(item.name).some((p) => p === c.file || p === c.name);
+    }
+    return false;
+  };
+
   planItems.forEach((item) => {
     if (item.type === "component") {
-      const found = codeComponents.find((c) => c.name === item.name);
+      // Plans may reference a component either by exported symbol name
+      // ("Hero") or by file path ("components/home/hero.tsx"). Match both.
+      const found = codeComponents.find((c) => componentMatches(item, c));
 
       if (found) {
         matched.push({ ...item, file: found.file });
@@ -401,7 +513,10 @@ function diffPlanAgainstCode(planItems, code) {
     }
 
     if (item.type === "dependency") {
-      if (codeDependencies.includes(item.name)) {
+      if (
+        codeDependencies.includes(item.name) ||
+        VIRTUAL_DEPENDENCIES.has(item.name.toLowerCase())
+      ) {
         matched.push(item);
       } else {
         missing.push(item);
@@ -409,9 +524,38 @@ function diffPlanAgainstCode(planItems, code) {
     }
   });
 
-  // Extra code detection
+  // Extra code detection. Only files that live in a folder the plan itself
+  // declares are candidates for "unplanned work". A plan for one feature does
+  // not own every file in the repository, so pre-existing files from other
+  // features (and vendored primitives such as components/ui/*) must not be
+  // reported as extra. This keeps the signal focused on genuinely surprising
+  // additions inside the feature's own area.
+  //
+  // A folder counts as feature-owned only when the plan creates a new file in
+  // it. Folders the plan merely modifies (e.g. app/[locale]/, messages/) are
+  // shared infrastructure that legitimately contains sibling files the plan
+  // never mentions.
+  const plannedFolders = new Set(
+    planItems
+      .filter(
+        (p) =>
+          p.type === "component" &&
+          p.name.includes("/") &&
+          (p.action || "").toLowerCase() === "create"
+      )
+      .map((p) => p.name.split("/").slice(0, -1).join("/"))
+      .filter(Boolean)
+  );
+
   codeComponents.forEach((c) => {
-    if (!planItems.some((p) => p.type === "component" && p.name === c.name)) {
+    if (!c.isPath) return;
+    if (!plannedFolders.has(c.file.split("/").slice(0, -1).join("/"))) return;
+
+    const inPlan = planItems.some(
+      (p) => p.type === "component" && componentMatches(p, c)
+    );
+
+    if (!inPlan) {
       extra.push({ type: "component", name: c.name, file: c.file });
     }
   });
