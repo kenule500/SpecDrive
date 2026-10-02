@@ -21,6 +21,21 @@ function gateClass(status) {
   return "gate pending";
 }
 
+// Human-readable gate metadata. Gates are approval checkpoints a feature must
+// clear before it can advance; without a label users mistake them for metrics.
+const GATE_DEFS = [
+  { key: "specification", label: "Spec", hint: "Specification approved" },
+  { key: "planning", label: "Plan", hint: "Plan approved" },
+  { key: "implementation", label: "Impl", hint: "Implementation approved" },
+  { key: "review", label: "Review", hint: "Review approved" }
+];
+
+function gateStatusMeta(status) {
+  if (status === "approved") return { icon: "âœ“", text: "approved" };
+  if (status === "in_progress") return { icon: "â—", text: "in progress" };
+  return { icon: "â—‹", text: "pending" };
+}
+
 function phaseTone(phase) {
   if (phase === "completed") return "green";
   if (phase === "ongoing") return "blue";
@@ -593,11 +608,22 @@ function renderVersionBlock(feature, version, isCurrent, traceability, verificat
       <span class="version-phase">${escapeHtml(version.phase)} Â· ${escapeHtml(version.currentStep)}</span>
     </div>
 
-    <div class="gate-row">
-      <span class="${gateClass(version.gates?.specification)}">spec</span>
-      <span class="${gateClass(version.gates?.planning)}">plan</span>
-      <span class="${gateClass(version.gates?.implementation)}">impl</span>
-      <span class="${gateClass(version.gates?.review)}">review</span>
+    <div class="gate-section">
+      <div class="gate-section-head">
+        <span class="gate-section-label">Gates</span>
+        <span class="gate-section-hint" title="Approval checkpoints a feature must clear before it can advance">approval checkpoints</span>
+      </div>
+      <div class="gate-row">
+        ${GATE_DEFS.map((g) => {
+          const status = version.gates?.[g.key];
+          const meta = gateStatusMeta(status);
+          return `<span class="${gateClass(status)}" title="${escapeHtml(
+            g.hint
+          )}"><span class="gate-icon">${meta.icon}</span>${escapeHtml(
+            g.label
+          )}<span class="gate-status">${meta.text}</span></span>`;
+        }).join("")}
+      </div>
     </div>
 
     <div class="metric-row">
