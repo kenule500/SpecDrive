@@ -74,6 +74,51 @@ function apiGitInfo() {
   };
 }
 
+// List every local branch with its tip commit, author, and merge status so the
+// Team & Branch page can show the full branch landscape alongside members.
+function apiBranches() {
+  const current = git(["rev-parse", "--abbrev-ref", "HEAD"]);
+  const raw = git([
+    "for-each-ref",
+    "--sort=-committerdate",
+    "--format=%(refname:short)%09%(objectname:short)%09%(committerdate:iso-strict)%09%(authorname)%09%(subject)",
+    "refs/heads"
+  ]);
+
+  if (!raw) {
+    return { available: false, current: current || null, branches: [] };
+  }
+
+  // Branches already merged into the default branch (main/master).
+  const defaultBranch = (git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) || "")
+    .replace(/^origin\//, "") || "main";
+  const mergedRaw = git(["branch", "--merged", defaultBranch, "--format=%(refname:short)"]);
+  const mergedSet = new Set(
+    mergedRaw.split("\n").map((b) => b.trim()).filter(Boolean)
+  );
+
+  const branches = raw
+    .split("\n")
+    .map((line) => line.split("\t"))
+    .filter((parts) => parts.length >= 5 && parts[0])
+    .map(([name, commit, committedAt, author, subject]) => ({
+      name,
+      commit,
+      committedAt,
+      author,
+      subject,
+      current: name === current,
+      merged: mergedSet.has(name)
+    }));
+
+  return {
+    available: true,
+    current: current || null,
+    defaultBranch,
+    branches
+  };
+}
+
 function loadJson(filePath, fallback = null) {
   if (!fs.existsSync(filePath)) return fallback;
   try {
@@ -931,6 +976,10 @@ function handleRequest(req, res) {
 
     if (url === "/api/git-info") {
       return res.end(JSON.stringify(apiGitInfo()));
+    }
+
+    if (url === "/api/branches") {
+      return res.end(JSON.stringify(apiBranches()));
     }
 
     if (url === "/api/project-info") {

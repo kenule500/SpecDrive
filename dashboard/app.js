@@ -832,7 +832,7 @@ async function renderFeatures() {
 }
 
 /* ============================================================
-   TEAM
+   TEAM & BRANCH
    ============================================================ */
 async function renderTeam() {
   const team = await fetchJson("/api/team");
@@ -841,53 +841,97 @@ async function renderTeam() {
   if (!team || !team.members || team.members.length === 0) {
     container.className = "panel-loading";
     container.textContent = "No team members.";
+  } else {
+    container.className = "team-grid";
+    container.innerHTML = "";
+
+    team.members.forEach((m) => {
+      const card = document.createElement("div");
+      card.className = "member-card";
+      card.innerHTML = `
+        <div class="member-avatar role-${escapeHtml(m.role)}">${escapeHtml(initials(m.username))}</div>
+        <div class="member-info">
+          <div class="member-name">${escapeHtml(m.username)}</div>
+          <div class="member-role">${escapeHtml(m.role)}</div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+
+    const rules = team.rules || {};
+    if (rules.approval_required || rules.implementation_allowed) {
+      const rulesCard = document.createElement("div");
+      rulesCard.className = "team-rules";
+      rulesCard.innerHTML = `
+        ${
+          rules.approval_required
+            ? `<div>
+                <div class="rule-block-label">Approval Required</div>
+                <div class="chip-list">${rules.approval_required
+                  .map((r) => `<span class="chip green">${escapeHtml(r)}</span>`)
+                  .join("")}</div>
+              </div>`
+            : ""
+        }
+        ${
+          rules.implementation_allowed
+            ? `<div>
+                <div class="rule-block-label">Implementation Allowed</div>
+                <div class="chip-list">${rules.implementation_allowed
+                  .map((r) => `<span class="chip blue">${escapeHtml(r)}</span>`)
+                  .join("")}</div>
+              </div>`
+            : ""
+        }
+      `;
+      container.appendChild(rulesCard);
+    }
+  }
+
+  await renderBranches();
+}
+
+async function renderBranches() {
+  const container = document.getElementById("branch-list");
+  if (!container) return;
+
+  const data = await fetchJson("/api/branches");
+
+  if (!data || !data.available || !data.branches || data.branches.length === 0) {
+    container.className = "panel-loading";
+    container.textContent = "No git branches found.";
     return;
   }
 
-  container.className = "team-grid";
+  container.className = "branch-list";
   container.innerHTML = "";
 
-  team.members.forEach((m) => {
-    const card = document.createElement("div");
-    card.className = "member-card";
-    card.innerHTML = `
-      <div class="member-avatar role-${escapeHtml(m.role)}">${escapeHtml(initials(m.username))}</div>
-      <div class="member-info">
-        <div class="member-name">${escapeHtml(m.username)}</div>
-        <div class="member-role">${escapeHtml(m.role)}</div>
+  data.branches.forEach((b) => {
+    const row = document.createElement("div");
+    row.className = "branch-row" + (b.current ? " is-current" : "");
+
+    const statusChip = b.current
+      ? `<span class="chip blue">current</span>`
+      : b.merged
+        ? `<span class="chip green">merged</span>`
+        : `<span class="chip amber">active</span>`;
+
+    row.innerHTML = `
+      <div class="branch-main">
+        <div class="branch-name">
+          <span class="branch-icon">⎇</span>${escapeHtml(b.name)}
+          ${statusChip}
+        </div>
+        <div class="branch-subject">${escapeHtml(b.subject || "—")}</div>
+      </div>
+      <div class="branch-meta">
+        <span class="branch-commit">${escapeHtml(b.commit || "")}</span>
+        <span class="branch-author">${escapeHtml(b.author || "")}</span>
+        <span class="branch-date">${escapeHtml(formatDate(b.committedAt))}</span>
       </div>
     `;
-    container.appendChild(card);
+    container.appendChild(row);
   });
-
-  const rules = team.rules || {};
-  if (rules.approval_required || rules.implementation_allowed) {
-    const rulesCard = document.createElement("div");
-    rulesCard.className = "team-rules";
-    rulesCard.innerHTML = `
-      ${
-        rules.approval_required
-          ? `<div>
-              <div class="rule-block-label">Approval Required</div>
-              <div class="chip-list">${rules.approval_required
-                .map((r) => `<span class="chip green">${escapeHtml(r)}</span>`)
-                .join("")}</div>
-            </div>`
-          : ""
-      }
-      ${
-        rules.implementation_allowed
-          ? `<div>
-              <div class="rule-block-label">Implementation Allowed</div>
-              <div class="chip-list">${rules.implementation_allowed
-                .map((r) => `<span class="chip blue">${escapeHtml(r)}</span>`)
-                .join("")}</div>
-            </div>`
-          : ""
-      }
-    `;
-    container.appendChild(rulesCard);
-  }
 }
 
 /* ============================================================
