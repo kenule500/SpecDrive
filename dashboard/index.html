@@ -214,6 +214,49 @@
           </div>
         </section>
 
+        <!-- ===== FEATURE DETAIL (routed page: /features/<name>) ===== -->
+        <section id="feature-detail" class="section">
+          <div class="detail-back-row">
+            <button id="detail-back" class="detail-back" type="button">
+              <span class="detail-back-arrow">←</span> All features
+            </button>
+          </div>
+
+          <div class="section-head">
+            <h2 id="detail-title">Feature</h2>
+            <span id="detail-subtitle" class="section-hint"></span>
+          </div>
+
+          <div id="detail-summary" class="detail-summary">
+            <div class="skeleton-card"></div>
+          </div>
+
+          <div id="detail-filters" class="filters detail-filters">
+            <div class="filter-search">
+              <span class="filter-search-icon">⌕</span>
+              <input id="detail-search" type="text" placeholder="Search tasks…" />
+            </div>
+
+            <select id="detail-status" class="filter-select">
+              <option value="">All tasks</option>
+              <option value="pending">Pending</option>
+              <option value="completed">Completed</option>
+            </select>
+
+            <select id="detail-version" class="filter-select">
+              <option value="">All versions</option>
+            </select>
+
+            <select id="detail-phase" class="filter-select">
+              <option value="">All phases</option>
+            </select>
+          </div>
+
+          <div id="detail-body" class="detail-body">
+            <div class="skeleton-card"></div>
+          </div>
+        </section>
+
         <!-- ===== SKILLS ===== -->
         <section id="skills" class="section">
           <div class="section-head">
@@ -310,25 +353,6 @@
         </section>
       </main>
     </div>
-  </div>
-
-  <!-- Feature detail sheet. Opened by the "View more" button on a feature
-       card; slides in from the right and shows the full task breakdown
-       (pending / completed) per version. -->
-  <div id="feature-modal" class="modal" aria-hidden="true">
-    <div class="modal-backdrop" data-modal-close></div>
-    <aside class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="feature-modal-title">
-      <div class="modal-head">
-        <div class="modal-head-text">
-          <h2 id="feature-modal-title" class="modal-title">Feature</h2>
-          <span id="feature-modal-subtitle" class="modal-subtitle"></span>
-        </div>
-        <button id="feature-modal-close" class="modal-close" type="button" aria-label="Close">✕</button>
-      </div>
-      <div id="feature-modal-body" class="modal-body">
-        <div class="skeleton-card"></div>
-      </div>
-    </aside>
   </div>
 
   <script src="/app.js"></script>

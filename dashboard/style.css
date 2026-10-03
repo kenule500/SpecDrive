@@ -2572,10 +2572,10 @@ body {
 }
 
 /* ============================================================
-   PHASE 20 — Feature detail overlay + optional command badges
+   PHASE 21 — Feature detail page + optional command badges
    ============================================================ */
 
-/* ---- Feature card footer / "View more" button ---- */
+/* ---- Feature card footer / "View more" link ---- */
 .feature-card-foot {
   display: flex;
   justify-content: flex-end;
@@ -2614,174 +2614,72 @@ body {
   transform: translateX(3px);
 }
 
-/* ---- Sheet shell (slides in from the right) ---- */
-body.modal-open {
-  overflow: hidden;
+/* ---- Detail page shell ---- */
+.detail-back-row {
+  margin-bottom: 14px;
 }
 
-.modal {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  display: flex;
-  justify-content: flex-end;
-  visibility: hidden;
-  pointer-events: none;
-}
-
-.modal.open {
-  visibility: visible;
-  pointer-events: auto;
-}
-
-.modal-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(11, 15, 23, 0.55);
-  backdrop-filter: blur(3px);
-  opacity: 0;
-  transition: opacity 0.28s ease;
-}
-
-.modal.open .modal-backdrop {
-  opacity: 1;
-}
-
-.modal-panel {
-  position: relative;
-  z-index: 1;
-  width: min(560px, 100%);
-  height: 100%;
-  max-height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border-left: 1px solid var(--border);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-  transform: translateX(100%);
-  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.modal.open .modal-panel {
-  transform: translateX(0);
-}
-
-.modal-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 22px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
-}
-
-.modal-head-text {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.modal-title {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.01em;
-}
-
-.modal-subtitle {
-  font-size: 12.5px;
-  color: var(--text-3);
-}
-
-.modal-close {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
+.detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px 7px 11px;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: 999px;
   background: var(--surface);
   color: var(--text-2);
-  font-size: 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  transition: background 0.16s ease, color 0.16s ease;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
 }
 
-.modal-close:hover {
-  background: var(--red-soft);
-  color: var(--red);
-  border-color: rgba(220, 38, 38, 0.3);
+.detail-back:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(79, 70, 229, 0.35);
 }
 
-.modal-body {
-  padding: 20px 22px 24px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+.detail-back-arrow {
+  transition: transform 0.16s ease;
 }
 
-/* ---- Modal summary strip ---- */
-.modal-summary {
+.detail-back:hover .detail-back-arrow {
+  transform: translateX(-3px);
+}
+
+.detail-summary {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
+  margin-bottom: 18px;
 }
 
-.modal-stat {
+.detail-filters {
+  margin-bottom: 18px;
+}
+
+.detail-body {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-
-.modal-stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text);
-  line-height: 1.1;
-}
-
-.modal-stat-value.green { color: var(--green); }
-.modal-stat-value.amber { color: var(--amber); }
-
-.modal-stat-label {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-3);
-}
-
-.modal-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
   gap: 18px;
 }
 
-/* ---- Modal version sections ---- */
-.modal-version {
+/* ---- Detail version sections ---- */
+.detail-version {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
   background: var(--surface);
 }
 
-.modal-version.current {
+.detail-version.current {
   border-color: rgba(79, 70, 229, 0.35);
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.06);
 }
 
-.modal-version-head {
+.detail-version-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2790,31 +2688,31 @@ body.modal-open {
   margin-bottom: 14px;
 }
 
-.modal-version-counts {
+.detail-version-counts {
   display: inline-flex;
   gap: 6px;
 }
 
-.modal-phase {
+.detail-phase {
   border-top: 1px solid var(--border);
   padding-top: 12px;
   margin-top: 12px;
 }
 
-.modal-phase:first-of-type {
+.detail-phase:first-of-type {
   border-top: none;
   padding-top: 0;
   margin-top: 0;
 }
 
-.modal-phase-head {
+.detail-phase-head {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
 }
 
-.modal-phase-id {
+.detail-phase-id {
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 700;
@@ -2824,13 +2722,13 @@ body.modal-open {
   border-radius: 6px;
 }
 
-.modal-phase-name {
+.detail-phase-name {
   font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
 }
 
-.modal-phase-count {
+.detail-phase-count {
   margin-left: auto;
   font-size: 11.5px;
   font-weight: 600;
@@ -2838,7 +2736,7 @@ body.modal-open {
   font-family: var(--mono);
 }
 
-.modal-task-list {
+.detail-task-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -2847,7 +2745,7 @@ body.modal-open {
   gap: 6px;
 }
 
-.modal-task {
+.detail-task {
   display: flex;
   gap: 10px;
   padding: 9px 11px;
@@ -2856,12 +2754,12 @@ body.modal-open {
   background: var(--surface-2);
 }
 
-.modal-task.done {
+.detail-task.done {
   background: var(--green-soft);
   border-color: rgba(22, 163, 74, 0.22);
 }
 
-.modal-task-check {
+.detail-task-check {
   flex-shrink: 0;
   width: 18px;
   height: 18px;
@@ -2874,19 +2772,19 @@ body.modal-open {
   background: var(--slate-soft);
 }
 
-.modal-task.done .modal-task-check {
+.detail-task.done .detail-task-check {
   color: var(--green);
   background: rgba(22, 163, 74, 0.16);
 }
 
-.modal-task-body {
+.detail-task-body {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
 }
 
-.modal-task-title {
+.detail-task-title {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
@@ -2895,36 +2793,36 @@ body.modal-open {
   align-items: baseline;
 }
 
-.modal-task.done .modal-task-title {
+.detail-task.done .detail-task-title {
   color: var(--text-2);
 }
 
-.modal-task-id {
+.detail-task-id {
   font-family: var(--mono);
   font-size: 10.5px;
   font-weight: 700;
   color: var(--text-3);
 }
 
-.modal-task-desc {
+.detail-task-desc {
   font-size: 12px;
   color: var(--text-2);
   line-height: 1.5;
 }
 
-.modal-task-links {
+.detail-task-links {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
   margin-top: 2px;
 }
 
-.modal-task-links .chip {
+.detail-task-links .chip {
   font-size: 10px;
   padding: 2px 7px;
 }
 
-.modal-empty {
+.detail-empty {
   font-size: 12.5px;
   color: var(--text-3);
   padding: 10px 0;
@@ -2977,12 +2875,108 @@ body.modal-open {
   color: var(--amber);
 }
 
+/* ---- Detail summary stat tiles ---- */
+.detail-summary .modal-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.detail-summary .modal-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.detail-summary .modal-stat-value.green {
+  color: var(--green);
+}
+
+.detail-summary .modal-stat-value.amber {
+  color: var(--amber);
+}
+
+.detail-summary .modal-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* ---- Optional Commands card (commands page) ---- */
+.optional-commands-card {
+  border-color: rgba(180, 83, 9, 0.28);
+  background: linear-gradient(180deg, var(--amber-soft), var(--surface) 60%);
+}
+
+.optional-commands-card .workflow-icon {
+  color: var(--amber);
+}
+
+.optional-command-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.optional-command {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.optional-command-code {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.optional-command-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.optional-command-what {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.optional-command-when {
+  font-size: 11.5px;
+  color: var(--text-3);
+  line-height: 1.45;
+}
+
 @media (max-width: 640px) {
-  .modal-panel {
-    width: 100%;
+  .detail-summary {
+    grid-template-columns: repeat(2, 1fr);
   }
 
-  .modal-summary {
-    grid-template-columns: repeat(2, 1fr);
+  .optional-command {
+    flex-direction: column;
+    gap: 6px;
   }
 }

@@ -857,10 +857,7 @@ const SLASH_DETAILS = {
   "/sdrive:review": {
     what: "Runs the final audit and produces a pass/fail verdict.",
     why: "The last quality gate before work is considered done. It does not merge or archive.",
-    when: "When the feature is complete. Use --all to review every ongoing feature one after the other.",
-    optional: true,
-    optionalNote:
-      "Optional — run when development is done (end of a sprint or once an MVP is complete), not on every change."
+    when: "When the feature is complete. Use --all to review every ongoing feature one after the other."
   },
   "/sdrive:archive": {
     what: "Merges an approved feature to main and completes its lifecycle.",
@@ -909,7 +906,7 @@ const PRODUCT_WORKFLOWS = [
       "/sdrive:review",
       "/sdrive:archive"
     ],
-    optional: ["/sdrive:test", "/sdrive:review", "/sdrive:archive"],
+    optional: ["/sdrive:test"],
     optionalNote:
       "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
     bestFor: "New products, prototypes, and greenfield builds."
@@ -930,7 +927,7 @@ const PRODUCT_WORKFLOWS = [
       "/sdrive:review",
       "/sdrive:archive"
     ],
-    optional: ["/sdrive:test", "/sdrive:review", "/sdrive:archive"],
+    optional: ["/sdrive:test"],
     optionalNote:
       "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
     bestFor: "Adopting SpecDrive into a live or legacy project."
@@ -950,7 +947,7 @@ const PRODUCT_WORKFLOWS = [
       "/sdrive:review",
       "/sdrive:archive"
     ],
-    optional: ["/sdrive:review", "/sdrive:archive"],
+    optional: [],
     optionalNote:
       "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
     bestFor: "Teams moving from OpenSpec or Spec-Kit."
@@ -970,12 +967,50 @@ const PRODUCT_WORKFLOWS = [
       "/sdrive:review",
       "/sdrive:archive"
     ],
-    optional: ["/sdrive:test", "/sdrive:review", "/sdrive:archive"],
+    optional: ["/sdrive:test"],
     optionalNote:
       "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
     bestFor: "Ongoing development on an established product."
   }
 ];
+
+// Optional commands are not part of the core workflow. They are run on demand —
+// for example when a feature is totally done and ready to ship. They are shown
+// in their own card on the Commands page, separate from the workflow cards.
+const OPTIONAL_COMMANDS = {
+  title: "Optional Commands",
+  tagline: "Run on demand",
+  icon: "✦",
+  summary:
+    "These commands are not part of the core workflow. Run them when you need them — for example when a feature is totally done and ready to ship.",
+  commands: [
+    {
+      command: "/sdrive:performance",
+      what: "Benchmarks and optimizes the code for speed and efficiency.",
+      when: "When performance matters — before a release or after a slowdown."
+    },
+    {
+      command: "/sdrive:docs",
+      what: "Generates inline comments, API docs, and project READMEs.",
+      when: "When you want documentation that matches the code."
+    },
+    {
+      command: "/sdrive:secure",
+      what: "Runs a deep security audit and fixes vulnerabilities.",
+      when: "Before shipping anything that touches auth, data, or payments."
+    },
+    {
+      command: "/sdrive:test",
+      what: "Writes and runs the test suite for the feature.",
+      when: "When development is done and you want coverage before review."
+    },
+    {
+      command: "/sdrive:archive",
+      what: "Merges an approved feature to main and completes its lifecycle.",
+      when: "When the feature is totally done and /sdrive:review has passed."
+    }
+  ]
+};
 
 function apiCommands() {
   const manifestPath = path.join(sdriveRoot, "commands", "manifest.json");
@@ -998,7 +1033,7 @@ function apiCommands() {
     };
   });
 
-  return { slash, cli: CLI_COMMANDS, workflows: PRODUCT_WORKFLOWS };
+  return { slash, cli: CLI_COMMANDS, workflows: PRODUCT_WORKFLOWS, optionalCommands: OPTIONAL_COMMANDS };
 }
 
 function handleRequest(req, res) {
@@ -1094,6 +1129,12 @@ function handleRequest(req, res) {
   // the client router in app.js decides which section to display.
   const PAGE_ROUTES = ["/overview", "/product-plan", "/features", "/team", "/activity", "/commands", "/skills"];
   if (PAGE_ROUTES.includes(url)) {
+    return serveStatic(res, path.join(__dirname, "index.html"), "text/html");
+  }
+
+  // Dynamic feature detail route: /features/<name>. Serves the same shell;
+  // the client router renders the detail page for the named feature.
+  if (/^\/features\/[^/]+\/?$/.test(url)) {
     return serveStatic(res, path.join(__dirname, "index.html"), "text/html");
   }
 

@@ -819,14 +819,20 @@ async function renderFeatures() {
     if (versionRendered > 0) {
       card.appendChild(body);
 
-      // Footer with a "View more" affordance that opens the task-detail overlay.
+      // Footer with a "View more" affordance that navigates to the
+      // feature's own detail page (/features/<name>).
       const foot = document.createElement("div");
       foot.className = "feature-card-foot";
       const moreBtn = document.createElement("button");
       moreBtn.type = "button";
       moreBtn.className = "feature-more-btn";
       moreBtn.innerHTML = `View more <span class="feature-more-arrow">→</span>`;
-      moreBtn.addEventListener("click", () => openFeatureModal(f, team));
+      moreBtn.addEventListener("click", () => {
+        const path = `/features/${encodeURIComponent(f.name)}`;
+        window.history.pushState({ route: "feature-detail", feature: f.name }, "", path);
+        showRoute("feature-detail");
+        openFeatureDetail(f.name);
+      });
       foot.appendChild(moreBtn);
       card.appendChild(foot);
 
@@ -844,147 +850,200 @@ async function renderFeatures() {
 }
 
 /* ============================================================
-   FEATURE DETAIL SHEET
-   Opened from the "View more" button on a feature card. Slides in
-   from the right and shows the full task breakdown (pending /
-   completed) for every version of the feature, grouped by phase.
+   FEATURE DETAIL PAGE
+   Reached from the "View more" button on a feature card. Instead
+   of an overlay, this is its own routed page (/features/<name>)
+   with filters for task status (pending / completed), version,
+   phase, and a free-text search.
    ============================================================ */
-let featureModalOpen = false;
+let detailFeature = null;
+let detailTeam = { members: [] };
+let detailData = null;
+let detailRenderToken = 0;
 
-function openFeatureModal(feature, team) {
-  const modal = document.getElementById("feature-modal");
-  const title = document.getElementById("feature-modal-title");
-  const subtitle = document.getElementById("feature-modal-subtitle");
-  const body = document.getElementById("feature-modal-body");
-  if (!modal || !body) return;
-
-  title.textContent = feature.name;
-  subtitle.textContent = `${feature.currentVersion} · ${feature.phase || ""} · ${feature.currentStep || ""}`;
-  body.innerHTML = `<div class="skeleton-card"></div>`;
-
-  modal.classList.add("open");
-  modal.setAttribute("aria-hidden", "false");
-  featureModalOpen = true;
-  document.body.classList.add("modal-open");
-
-  renderFeatureModalBody(feature, team, body);
+function detailFilters() {
+  return {
+    query: (document.getElementById("detail-search")?.value || "").trim().toLowerCase(),
+    status: document.getElementById("detail-status")?.value || "",
+    version: document.getElementById("detail-version")?.value || "",
+    phase: document.getElementById("detail-phase")?.value || ""
+  };
 }
 
-function closeFeatureModal() {
-  const modal = document.getElementById("feature-modal");
-  if (!modal) return;
-  modal.classList.remove("open");
-  modal.setAttribute("aria-hidden", "true");
-  featureModalOpen = false;
-  document.body.classList.remove("modal-open");
-}
+async function openFeatureDetail(featureName) {
+  const state = await fetchJson("/api/workflow-state");
+  const team = (await fetchJson("/api/team")) || { members: [] };
+  const feature = (state?.features || []).find((f) => f.name === featureName);
 
-async function renderFeatureModalBody(feature, team, body) {
+  if (!feature) {
+    detailFeature = null;
+    detailData = null;
+    const body = document.getElementById("detail-body");
+    if (body) {
+      body.innerHTML = `<div class="panel-loading">Feature “${escapeHtml(
+        featureName
+      )}” was not found.</div>`;
+    }
+    return;
+  }
+
+  detailFeature = feature;
+  detailTeam = team;
+
+  const title = document.getElementById("detail-title");
+  const subtitle = document.getElementById("detail-subtitle");
+  if (title) title.textContent = feature.name;
+  if (subtitle) {
+    subtitle.textContent = `${feature.currentVersion} · ${feature.phase || ""} · ${
+      feature.currentStep || ""
+    }`;
+  }
+
+  // Load every version's task breakdown once, then filter client-side.
   const versions = feature.versions || [];
-  const frag = document.createDocumentFragment();
-
-  // Summary strip: aggregate task counts across every version.
-  let grandTotal = 0;
-  let grandDone = 0;
   const versionData = [];
-
   for (const version of versions) {
     const tasks = (await fetchJson(`/api/tasks/${feature.name}/${version.id}`)) || {
       summary: { total: 0, completed: 0, pending: 0, percent: 0 },
       phases: []
     };
-    grandTotal += tasks.summary?.total || 0;
-    grandDone += tasks.summary?.completed || 0;
     versionData.push({ version, tasks });
   }
+  detailData = { versions: versionData };
 
-  const grandPending = grandTotal - grandDone;
-  const grandPercent = grandTotal === 0 ? 0 : Math.round((grandDone / grandTotal) * 100);
+  populateDetailFilters(versionData);
+  renderDetailSummary();
+  renderDetailBody();
+}
 
-  const summary = document.createElement("div");
-  summary.className = "modal-summary";
-  summary.innerHTML = `
+function populateDetailFilters(versionData) {
+  const versionSelect = document.getElementById("detail-version");
+  const phaseSelect = document.getElementById("detail-phase");
+  if (!versionSelect || !phaseSelect) return;
+
+  const prevVersion = versionSelect.value;
+  const prevPhase = phaseSelect.value;
+
+  versionSelect.innerHTML =
+    `<option value="">All versions</option>` +
+    versionData
+      .map(({ version }) => `<option value="${escapeHtml(version.id)}">${escapeHtml(version.id)}</option>`)
+      .join("");
+
+  const phaseIds = new Set();
+  versionData.forEach(({ tasks }) => {
+    (tasks.phases || []).forEach((p) => phaseIds.add(p.phaseId));
+  });
+  phaseSelect.innerHTML =
+    `<option value="">All phases</option>` +
+    Array.from(phaseIds)
+      .map((id) => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`)
+      .join("");
+
+  if (Array.from(versionSelect.options).some((o) => o.value === prevVersion)) {
+    versionSelect.value = prevVersion;
+  }
+  if (Array.from(phaseSelect.options).some((o) => o.value === prevPhase)) {
+    phaseSelect.value = prevPhase;
+  }
+}
+
+function renderDetailSummary() {
+  const container = document.getElementById("detail-summary");
+  if (!container || !detailData) return;
+
+  let total = 0;
+  let done = 0;
+  detailData.versions.forEach(({ tasks }) => {
+    total += tasks.summary?.total || 0;
+    done += tasks.summary?.completed || 0;
+  });
+  const pending = total - done;
+  const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+
+  container.innerHTML = `
     <div class="modal-stat">
-      <span class="modal-stat-value">${grandTotal}</span>
+      <span class="modal-stat-value">${total}</span>
       <span class="modal-stat-label">Total tasks</span>
     </div>
     <div class="modal-stat">
-      <span class="modal-stat-value green">${grandDone}</span>
+      <span class="modal-stat-value green">${done}</span>
       <span class="modal-stat-label">Completed</span>
     </div>
     <div class="modal-stat">
-      <span class="modal-stat-value amber">${grandPending}</span>
+      <span class="modal-stat-value amber">${pending}</span>
       <span class="modal-stat-label">Pending</span>
     </div>
     <div class="modal-stat">
-      <span class="modal-stat-value">${grandPercent}%</span>
+      <span class="modal-stat-value">${percent}%</span>
       <span class="modal-stat-label">Progress</span>
     </div>
   `;
-  frag.appendChild(summary);
+}
 
-  // Assignee / members context.
-  const members = featureMembers(feature, team);
-  if (feature.assignee || members.length) {
-    const meta = document.createElement("div");
-    meta.className = "modal-meta";
-    const assigneeEl = featureAssigneeEl(feature, team);
-    if (assigneeEl) meta.appendChild(assigneeEl);
-    if (members.length) meta.appendChild(featureMembersEl(members));
-    frag.appendChild(meta);
+function detailTaskMatches(task, filters) {
+  if (filters.status === "pending" && task.completed) return false;
+  if (filters.status === "completed" && !task.completed) return false;
+  if (filters.query) {
+    const haystack = `${task.id || ""} ${task.title || ""} ${task.description || ""}`.toLowerCase();
+    if (!haystack.includes(filters.query)) return false;
   }
+  return true;
+}
 
-  for (const { version, tasks } of versionData) {
-    const isCurrent = version.id === feature.currentVersion;
-    const section = document.createElement("div");
-    section.className = "modal-version" + (isCurrent ? " current" : "");
+function renderDetailBody() {
+  const container = document.getElementById("detail-body");
+  if (!container || !detailData) return;
 
+  const filters = detailFilters();
+  const frag = document.createDocumentFragment();
+  let renderedVersions = 0;
+
+  for (const { version, tasks } of detailData.versions) {
+    if (filters.version && version.id !== filters.version) continue;
+
+    const isCurrent = detailFeature && version.id === detailFeature.currentVersion;
     const s = tasks.summary || { total: 0, completed: 0, pending: 0, percent: 0 };
-    const phases = tasks.phases || [];
 
-    section.innerHTML = `
-      <div class="modal-version-head">
-        <span class="version-id">
-          <span class="chip ${isCurrent ? "accent" : "slate"}">${isCurrent ? "current" : "past"}</span>
-          ${escapeHtml(version.id)}
-        </span>
-        <span class="modal-version-counts">
-          <span class="chip green">${s.completed} done</span>
-          <span class="chip amber">${s.pending} pending</span>
-          <span class="chip slate">${s.percent}%</span>
-        </span>
-      </div>
-      ${
-        phases.length
-          ? phases
-              .map(
-                (p) => `
-        <div class="modal-phase">
-          <div class="modal-phase-head">
-            <span class="modal-phase-id">${escapeHtml(p.phaseId)}</span>
-            <span class="modal-phase-name">${escapeHtml(p.name)}</span>
-            <span class="modal-phase-count">${p.completed}/${p.total}</span>
+    const phaseBlocks = [];
+    let versionTaskCount = 0;
+
+    for (const p of tasks.phases || []) {
+      if (filters.phase && p.phaseId !== filters.phase) continue;
+
+      const visible = (p.tasks || []).filter((t) => detailTaskMatches(t, filters));
+      if (!visible.length) continue;
+
+      versionTaskCount += visible.length;
+      const doneCount = visible.filter((t) => t.completed).length;
+
+      phaseBlocks.push(`
+        <div class="detail-phase">
+          <div class="detail-phase-head">
+            <span class="detail-phase-id">${escapeHtml(p.phaseId)}</span>
+            <span class="detail-phase-name">${escapeHtml(p.name)}</span>
+            <span class="detail-phase-count">${doneCount}/${visible.length}</span>
           </div>
-          <ul class="modal-task-list">
-            ${(p.tasks || [])
+          <ul class="detail-task-list">
+            ${visible
               .map(
                 (t) => `
-              <li class="modal-task ${t.completed ? "done" : "pending"}">
-                <span class="modal-task-check">${t.completed ? "✓" : "○"}</span>
-                <div class="modal-task-body">
-                  <div class="modal-task-title">
-                    <span class="modal-task-id">${escapeHtml(t.id)}</span>
+              <li class="detail-task ${t.completed ? "done" : "pending"}">
+                <span class="detail-task-check">${t.completed ? "✓" : "○"}</span>
+                <div class="detail-task-body">
+                  <div class="detail-task-title">
+                    <span class="detail-task-id">${escapeHtml(t.id)}</span>
                     ${escapeHtml(t.title)}
                   </div>
                   ${
                     t.description
-                      ? `<div class="modal-task-desc">${escapeHtml(t.description)}</div>`
+                      ? `<div class="detail-task-desc">${escapeHtml(t.description)}</div>`
                       : ""
                   }
                   ${
                     (t.linkedRequirements || []).length ||
                     (t.linkedAcceptanceCriteria || []).length
-                      ? `<div class="modal-task-links">
+                      ? `<div class="detail-task-links">
                           ${(t.linkedRequirements || [])
                             .map((r) => `<span class="chip blue">${escapeHtml(r)}</span>`)
                             .join("")}
@@ -1001,32 +1060,56 @@ async function renderFeatureModalBody(feature, team, body) {
               .join("")}
           </ul>
         </div>
-      `
-              )
-              .join("")
-          : `<div class="modal-empty">No tasks recorded for this version.</div>`
-      }
+      `);
+    }
+
+    if (!phaseBlocks.length) continue;
+
+    const section = document.createElement("div");
+    section.className = "detail-version" + (isCurrent ? " current" : "");
+    section.innerHTML = `
+      <div class="detail-version-head">
+        <span class="version-id">
+          <span class="chip ${isCurrent ? "accent" : "slate"}">${isCurrent ? "current" : "past"}</span>
+          ${escapeHtml(version.id)}
+        </span>
+        <span class="detail-version-counts">
+          <span class="chip green">${s.completed} done</span>
+          <span class="chip amber">${s.pending} pending</span>
+          <span class="chip slate">${s.percent}%</span>
+        </span>
+      </div>
+      ${phaseBlocks.join("")}
     `;
     frag.appendChild(section);
+    renderedVersions++;
   }
 
-  body.innerHTML = "";
-  body.appendChild(frag);
+  container.innerHTML = "";
+  if (renderedVersions === 0) {
+    container.innerHTML = `<div class="panel-loading">No tasks match the current filters.</div>`;
+    return;
+  }
+  container.appendChild(frag);
 }
 
-function setupFeatureModal() {
-  const modal = document.getElementById("feature-modal");
-  if (!modal) return;
+function setupFeatureDetail() {
+  const back = document.getElementById("detail-back");
+  if (back) {
+    back.addEventListener("click", () => {
+      window.history.pushState({ route: "features" }, "", "/features");
+      showRoute("features");
+    });
+  }
 
-  const closeBtn = document.getElementById("feature-modal-close");
-  if (closeBtn) closeBtn.addEventListener("click", closeFeatureModal);
-
-  modal.querySelectorAll("[data-modal-close]").forEach((el) => {
-    el.addEventListener("click", closeFeatureModal);
-  });
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && featureModalOpen) closeFeatureModal();
+  [
+    { id: "detail-search", event: "input" },
+    { id: "detail-status", event: "change" },
+    { id: "detail-version", event: "change" },
+    { id: "detail-phase", event: "change" }
+  ].forEach(({ id, event }) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(event, renderDetailBody);
   });
 }
 
@@ -1447,6 +1530,40 @@ function renderWorkflowCards() {
   `
     )
     .join("");
+
+  // Optional Commands card — a separate card below the workflow cards that
+  // groups the on-demand commands (performance, docs, secure, test, archive).
+  const optional = commandData && commandData.optionalCommands;
+  if (optional && (optional.commands || []).length) {
+    const card = document.createElement("article");
+    card.className = "workflow-card optional-commands-card";
+    card.innerHTML = `
+      <div class="workflow-card-head">
+        <span class="workflow-icon">${escapeHtml(optional.icon || "✦")}</span>
+        <div>
+          <h3 class="workflow-name">${escapeHtml(optional.title || "Optional Commands")}</h3>
+          <span class="workflow-tagline">${escapeHtml(optional.tagline || "")}</span>
+        </div>
+      </div>
+      <p class="workflow-summary">${escapeHtml(optional.summary || "")}</p>
+      <ul class="optional-command-list">
+        ${(optional.commands || [])
+          .map(
+            (c) => `
+          <li class="optional-command">
+            <code class="optional-command-code">${escapeHtml(c.command)}</code>
+            <div class="optional-command-body">
+              <div class="optional-command-what">${escapeHtml(c.what || "")}</div>
+              <div class="optional-command-when">${escapeHtml(c.when || "")}</div>
+            </div>
+          </li>
+        `
+          )
+          .join("")}
+      </ul>
+    `;
+    container.appendChild(card);
+  }
 }
 
 async function renderCommands() {
@@ -1480,14 +1597,38 @@ async function renderCommands() {
    /team, /activity, /commands. The server serves the same shell
    for every route; here we show the matching section and keep the
    sidebar highlight in sync.
+
+   /features/<name> is a dynamic route that renders the feature
+   detail page (task breakdown + filters) for a single feature.
    ============================================================ */
-const ROUTES = ["overview", "product-plan", "features", "skills", "team", "activity", "commands"];
+const ROUTES = [
+  "overview",
+  "product-plan",
+  "features",
+  "feature-detail",
+  "skills",
+  "team",
+  "activity",
+  "commands"
+];
 const DEFAULT_ROUTE = "overview";
 
-function currentRoute() {
+// Returns { route, feature } for the current URL. A path like
+// /features/about-page resolves to { route: "feature-detail", feature: "about-page" }.
+function parseLocation() {
   const path = window.location.pathname.replace(/\/+$/, "");
-  const name = path.split("/").pop();
-  return ROUTES.includes(name) ? name : DEFAULT_ROUTE;
+  const parts = path.split("/").filter(Boolean);
+
+  if (parts[0] === "features" && parts.length > 1) {
+    return { route: "feature-detail", feature: decodeURIComponent(parts[1]) };
+  }
+
+  const name = parts[parts.length - 1] || "";
+  return { route: ROUTES.includes(name) ? name : DEFAULT_ROUTE, feature: null };
+}
+
+function currentRoute() {
+  return parseLocation().route;
 }
 
 function showRoute(route) {
@@ -1497,11 +1638,14 @@ function showRoute(route) {
     section.classList.toggle("active", section.id === target);
   });
 
+  // The sidebar highlights "Features" while viewing a feature detail page.
+  const navTarget = target === "feature-detail" ? "features" : target;
   document.querySelectorAll(".nav-item").forEach((item) => {
-    item.classList.toggle("active", item.dataset.nav === target);
+    item.classList.toggle("active", item.dataset.nav === navTarget);
   });
 
-  document.title = `SpecDrive · ${target.charAt(0).toUpperCase()}${target.slice(1)}`;
+  const label = target === "feature-detail" ? "Feature" : target;
+  document.title = `SpecDrive · ${label.charAt(0).toUpperCase()}${label.slice(1)}`;
   window.scrollTo({ top: 0, behavior: "auto" });
 }
 
@@ -1522,7 +1666,11 @@ function setupNav() {
   });
 
   // Handle browser back/forward.
-  window.addEventListener("popstate", () => showRoute(currentRoute()));
+  window.addEventListener("popstate", () => {
+    const { route, feature } = parseLocation();
+    showRoute(route);
+    if (route === "feature-detail" && feature) openFeatureDetail(feature);
+  });
 
   showRoute(currentRoute());
 }
@@ -1611,13 +1759,19 @@ async function main() {
 
   setupNav();
   setupSidebarDrawer();
-  setupFeatureModal();
+  setupFeatureDetail();
 
   await renderFeatures();
   await renderSkills();
   await renderTeam();
   await renderAudit();
   await renderCommands();
+
+  // Deep link: /features/<name> loads the detail page directly.
+  const { route, feature } = parseLocation();
+  if (route === "feature-detail" && feature) {
+    await openFeatureDetail(feature);
+  }
 }
 
 main();
