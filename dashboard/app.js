@@ -939,6 +939,8 @@ async function renderDetailReports() {
   const present = data.types.filter((t) => t.status === "present");
   const missing = data.types.filter((t) => t.status !== "present");
 
+  setDetailTabCount("reports", present.length);
+
   const cards = present
     .map((type) => {
       const rows = type.reports
@@ -1084,6 +1086,7 @@ function renderDetailBody() {
   const filters = detailFilters();
   const frag = document.createDocumentFragment();
   let renderedVersions = 0;
+  let totalVisible = 0;
 
   for (const { version, tasks } of detailData.versions) {
     if (filters.version && version.id !== filters.version) continue;
@@ -1151,6 +1154,8 @@ function renderDetailBody() {
 
     if (!phaseBlocks.length) continue;
 
+    totalVisible += versionTaskCount;
+
     const section = document.createElement("div");
     section.className = "detail-version" + (isCurrent ? " current" : "");
     section.innerHTML = `
@@ -1174,9 +1179,11 @@ function renderDetailBody() {
   container.innerHTML = "";
   if (renderedVersions === 0) {
     container.innerHTML = `<div class="panel-loading">No tasks match the current filters.</div>`;
+    setDetailTabCount("tasks", 0);
     return;
   }
   container.appendChild(frag);
+  setDetailTabCount("tasks", totalVisible);
 }
 
 function setupFeatureDetail() {
@@ -1197,6 +1204,34 @@ function setupFeatureDetail() {
     const el = document.getElementById(id);
     if (el) el.addEventListener(event, renderDetailBody);
   });
+
+  document.querySelectorAll("[data-detail-tab]").forEach((tab) => {
+    tab.addEventListener("click", () => showDetailTab(tab.dataset.detailTab));
+  });
+}
+
+/* Switch between the Tasks and Reports panels on the feature detail page.
+   Reports used to sit below the task list, which meant scrolling past every
+   task to reach them. */
+function showDetailTab(name) {
+  const target = name === "reports" ? "reports" : "tasks";
+
+  document.querySelectorAll("[data-detail-tab]").forEach((tab) => {
+    const active = tab.dataset.detailTab === target;
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", active ? "true" : "false");
+  });
+
+  document.querySelectorAll(".detail-panel").forEach((panel) => {
+    panel.classList.toggle("active", panel.id === `detail-panel-${target}`);
+  });
+}
+
+function setDetailTabCount(tabName, count) {
+  const el = document.getElementById(`detail-tab-${tabName}-count`);
+  if (!el) return;
+  el.textContent = count > 0 ? String(count) : "";
+  el.classList.toggle("empty", !(count > 0));
 }
 
 /* ============================================================

@@ -3141,6 +3141,85 @@ body {
    Surfaces the artifacts each agent writes to .sdrive/reports/.
    ============================================================ */
 
+/* Tabs sit directly under the summary so Reports is reachable without
+   scrolling past the whole task list. */
+.detail-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 22px 0 16px;
+  padding-bottom: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
+  cursor: pointer;
+  border-radius: var(--radius) var(--radius) 0 0;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.detail-tab:hover {
+  color: var(--text);
+  background: var(--surface-2, rgba(127, 127, 127, 0.06));
+}
+
+.detail-tab.active {
+  color: var(--text);
+}
+
+.detail-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+}
+
+.detail-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.12));
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+
+.detail-tab.active .detail-tab-count {
+  background: var(--accent-soft, rgba(99, 102, 241, 0.14));
+  color: var(--accent);
+}
+
+.detail-tab-count:empty {
+  display: none;
+}
+
+.detail-panel {
+  display: none;
+}
+
+.detail-panel.active {
+  display: block;
+}
+
 .detail-reports-head {
   display: flex;
   align-items: baseline;

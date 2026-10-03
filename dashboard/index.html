@@ -231,37 +231,68 @@
             <div class="skeleton-card"></div>
           </div>
 
-          <div id="detail-filters" class="filters detail-filters">
-            <div class="filter-search">
-              <span class="filter-search-icon">⌕</span>
-              <input id="detail-search" type="text" placeholder="Search tasks…" />
+          <div class="detail-tabs" role="tablist" aria-label="Feature detail views">
+            <button
+              id="detail-tab-tasks"
+              class="detail-tab active"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="detail-panel-tasks"
+              data-detail-tab="tasks"
+            >
+              Tasks
+              <span id="detail-tab-tasks-count" class="detail-tab-count"></span>
+            </button>
+            <button
+              id="detail-tab-reports"
+              class="detail-tab"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="detail-panel-reports"
+              data-detail-tab="reports"
+            >
+              Reports
+              <span id="detail-tab-reports-count" class="detail-tab-count"></span>
+            </button>
+          </div>
+
+          <div id="detail-panel-tasks" class="detail-panel active" role="tabpanel" aria-labelledby="detail-tab-tasks">
+            <div id="detail-filters" class="filters detail-filters">
+              <div class="filter-search">
+                <span class="filter-search-icon">⌕</span>
+                <input id="detail-search" type="text" placeholder="Search tasks…" />
+              </div>
+
+              <select id="detail-status" class="filter-select">
+                <option value="">All tasks</option>
+                <option value="pending">Pending</option>
+                <option value="completed">Completed</option>
+              </select>
+
+              <select id="detail-version" class="filter-select">
+                <option value="">All versions</option>
+              </select>
+
+              <select id="detail-phase" class="filter-select">
+                <option value="">All phases</option>
+              </select>
             </div>
 
-            <select id="detail-status" class="filter-select">
-              <option value="">All tasks</option>
-              <option value="pending">Pending</option>
-              <option value="completed">Completed</option>
-            </select>
-
-            <select id="detail-version" class="filter-select">
-              <option value="">All versions</option>
-            </select>
-
-            <select id="detail-phase" class="filter-select">
-              <option value="">All phases</option>
-            </select>
+            <div id="detail-body" class="detail-body">
+              <div class="skeleton-card"></div>
+            </div>
           </div>
 
-          <div id="detail-body" class="detail-body">
-            <div class="skeleton-card"></div>
-          </div>
-
-          <div class="detail-reports-head">
-            <h3>Reports</h3>
-            <span class="section-hint">Artifacts written by the agents for this feature</span>
-          </div>
-          <div id="detail-reports" class="detail-reports">
-            <div class="skeleton-card"></div>
+          <div id="detail-panel-reports" class="detail-panel" role="tabpanel" aria-labelledby="detail-tab-reports">
+            <div class="detail-reports-head">
+              <h3>Reports</h3>
+              <span class="section-hint">Artifacts written by the agents for this feature</span>
+            </div>
+            <div id="detail-reports" class="detail-reports">
+              <div class="skeleton-card"></div>
+            </div>
           </div>
         </section>
 
