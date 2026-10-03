@@ -2202,11 +2202,9 @@ body {
   }
 }
 
-/* Lifecycle cards stretch across the whole row so each one gets the full
-   width for its steps and sub-card. The optional-commands card below them
-   also spans the row. */
+/* The two lifecycle cards sit side by side, one per grid column. The
+   optional-commands card below them spans the full row. */
 .workflow-card {
-  grid-column: 1 / -1;
   position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -2216,6 +2214,10 @@ body {
   flex-direction: column;
   gap: 12px;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.optional-commands-card {
+  grid-column: 1 / -1;
 }
 
 .workflow-card:hover {
