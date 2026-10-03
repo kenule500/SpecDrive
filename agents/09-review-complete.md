@@ -40,6 +40,13 @@ You operate within the current version folder only.
   - Confirm the destination `.sdrive/specs/completed/<feature>/` exists and contains the version folder.
   - Confirm the source folder no longer exists.
   - If the move failed (e.g. source path did not exist, `git mv` errored), STOP and report the failure. NEVER mark the phase `completed` or claim the lifecycle is finished when the folder did not move.
+- **Resume Rule (idempotency):** This agent may be re-run on a feature whose review already passed. Before doing anything else, detect whether the merge already happened:
+  - Check whether `main` already contains the feature's work: `git log main --oneline --grep="<feature>"` and/or `git branch --merged main | Select-String "feature/<feature>"`.
+  - Check whether the feature branch still exists locally or on the remote.
+  - If the merge is already present on `main`, SKIP the PR/approval/merge steps (step 3) entirely and go straight to **FINALIZE LIFECYCLE** (step 4). Do NOT re-merge, do NOT re-approve, do NOT create a duplicate PR.
+  - If the feature is already in `specs/completed/` AND `workflow-state.json` already shows `phase: completed` with all gates `approved`, report "already finalized" and STOP — do not duplicate history entries.
+  - This rule exists because a human may merge outside this agent's flow. A half-finished review must never be a dead end.
+- **Finalize Is Mandatory Rule:** Passing the audit is NOT the end of this agent's job. If the audit passes and the merge is confirmed (by this agent OR by the human), you MUST complete step 4 (FINALIZE LIFECYCLE) in the same run. Never end a passing review with only a "recommended path to merge" — either finalize the lifecycle or explicitly report which finalize step is blocked and why.
 - **Version Archival Rule:** When a version is merged and archived, mark that version's phase as `completed` in `workflow-state.json`. Do NOT delete older versions or their folders.
 - Use the **Context7 MCP** to verify library security documentation. Use `exa:search` to check for known security vulnerabilities (CVEs) in new dependencies. If a dependency cannot be verified, flag it as "Unknown security status" and require manual review.
 - Require explicit user approval before merging via your tool's native approval mechanism (e.g., `vscode/askQuestions`), even if all checks pass.
@@ -89,9 +96,10 @@ You operate within the current version folder only.
 </capabilities>
 
 <output-structure>
-- **Audit Report**: `.sdrive/specs/ongoing/<feature>/<version>/review.md`
+- **Audit Report**: `.sdrive/specs/<lifecycle>/<feature>/<version>/review.md` — write this INSIDE the feature's current version folder (resolve `<lifecycle>` via the Lifecycle Location Rule). This is the canonical location and is required by the Definition of Done.
+- **Review Report Copy (optional)**: `.sdrive/reports/reviews/review-report-<feature>-<version>-<date>.md` — a dated copy for the reports archive. If you write this copy, you MUST still write the canonical `review.md` above. Never write only the reports copy.
 - **Git Branches**: Work on `feature/<feature>`, merge to `main`, delete feature branch.
-- **Spec Lifecycle**: Move `.sdrive/specs/ongoing/<feature>/` to `.sdrive/specs/completed/<feature>/` only on success, preserving all versions.
+- **Spec Lifecycle**: Move `.sdrive/specs/<lifecycle>/<feature>/` to `.sdrive/specs/completed/<feature>/` only on success, preserving all versions.
 - **Governance Lifecycle**: Move `.sdrive/governance/<feature>/` to `.sdrive/governance/completed/<feature>/` after merge, or mark status complete if your governance layout does not use lifecycle folders.
 - **Active version** is defined by `currentVersion` in `.sdrive/workflow-state.json`.
 </output-structure>
@@ -143,7 +151,7 @@ You operate within the current version folder only.
    - **Constitution Check:** Verify code adheres to `.sdrive/constitution.md`.
    - Run validators.
    - For any check not run due to missing tool, mark it as "Not automatically verified" in review.
-   - Generate `review.md` with findings using template below inside the current version folder.
+   - Generate `review.md` with findings using template below **inside the current version folder** (`.sdrive/specs/<lifecycle>/<feature>/<version>/review.md`). Optionally also write a dated copy to `.sdrive/reports/reviews/`, but the in-folder `review.md` is mandatory.
    - Run `sdrive verify <feature>` and read `verification.json`.
    - If status is `fail`, treat the audit as failed.
 
@@ -167,7 +175,11 @@ You operate within the current version folder only.
      5. Verify PR state is `MERGED`.
      6. If merge not confirmed, STOP and report.
 
-4. **FINALIZE LIFECYCLE (only after confirmed merge)**
+4. **FINALIZE LIFECYCLE (after merge is confirmed — by this agent OR by the human)**
+   - **Resume check first (Resume Rule):** Determine whether the merge already happened before assuming you must merge:
+     - `git log main --oneline --grep="<feature>"` and `git branch --merged main`.
+     - If the merge is already on `main`, skip step 3 entirely and continue here.
+     - If the feature is already in `specs/completed/` with `phase: completed` and all gates `approved`, report "already finalized" and STOP.
    - Switch to main and pull: `git checkout main && git pull origin main`.
    - **Resolve the feature's actual location** (Lifecycle Location Rule): check `.sdrive/specs/ongoing/<feature>/`, then `.sdrive/specs/backlog/<feature>/`, then `.sdrive/specs/completed/<feature>/`. Let `<source>` be the one that exists.
    - If `<source>` is already `completed/`, skip the move and report that it was already archived.
@@ -238,8 +250,10 @@ The review phase is NOT complete until:
 - [ ] Coverage is 100% (all ACs tested and passing).
 - [ ] Test report exists (with version in filename) and is newer than `spec.md` and `plan.md`.
 - [ ] Review report generated inside the current version folder with honest pass/fail status.
+- [ ] Canonical `review.md` written to `.sdrive/specs/<lifecycle>/<feature>/<version>/review.md` (not only to `.sdrive/reports/reviews/`).
 - [ ] Feature's actual lifecycle location resolved (`backlog/`, `ongoing/`, or `completed/`) before any move.
 - [ ] If pass: human approved merge, PR merged, current version marked `completed`, feature folder moved to `completed/`.
+- [ ] If the merge was performed by the human outside this agent, the Resume Rule was applied and the lifecycle was still finalized in this run.
 - [ ] Move verified: `.sdrive/specs/completed/<feature>/<version>/` exists and the source folder no longer exists.
 - [ ] If fail: fix tasks added, PR blocked, user notified.
 - [ ] No criterion was marked passed unless actually verified.
