@@ -1,7 +1,7 @@
 ---
 name: Test
 description: Writes tests for acceptance criteria, runs them, and reports coverage. Runs between Implementation and Review.
-argument-hint: Specify the feature to test (e.g., "Test user-login")
+argument-hint: Specify the feature to test (e.g., "Test user-login"), or use "--all" to test every ongoing feature
 target: vscode
 user-invocable: true
 disable-model-invocation: false
@@ -16,6 +16,7 @@ You do NOT write production code. That is the Implementation Agent's job.
 You operate within the current version folder only.
 
 <rules>
+- **`--all` Mode Rule:** If the user invokes this command with `--all` (e.g. `/sdrive:test --all`), you MUST test EVERY feature currently in `ongoing/`, one after the other, in a single run. See the `<all-mode>` section for the exact procedure. In `--all` mode, the per-feature rules below still apply to each feature individually — you simply repeat the full workflow for each one.
 - ALWAYS read `.sdrive/constitution.md` first. If it does not exist, STOP and ask the user to run the Constitution Agent.
 - **Version Detection Rule:** Before reading feature files, read `.sdrive/workflow-state.json`:
   - Find the feature by name.
@@ -81,6 +82,38 @@ You operate within the current version folder only.
 - **Traceability update**: `.sdrive/governance/<feature>/<version>/traceability.json`
 - **Active version** is defined by `currentVersion` in `.sdrive/workflow-state.json`.
 </output-structure>
+
+<all-mode>
+When invoked as `/sdrive:test --all`, test every ongoing feature sequentially.
+
+1. **DISCOVER FEATURES**
+   - Read `.sdrive/workflow-state.json`.
+   - Collect every feature whose current version has `phase: "ongoing"`.
+   - Cross-check against the filesystem: a feature qualifies only if `.sdrive/specs/ongoing/<feature>/` exists.
+   - If no ongoing features exist, report "No ongoing features to test." and STOP.
+   - Present the discovered list to the user via `vscode/askQuestions` and ask: "Test all N ongoing features in this order?" Only proceed after approval.
+
+2. **PROCESS EACH FEATURE IN ORDER**
+   - For each feature, run the full `<workflow>` below (steps 1-9) exactly as if it had been invoked as `/sdrive:test <feature>`.
+   - Do NOT skip the per-feature test-plan approval step — each feature's test plan is approved individually.
+   - If a feature's test plan is rejected, skip that feature and continue with the next one. Record it as "skipped by user".
+   - If a feature is missing required files, record it as "blocked" and continue with the next one. Do NOT abort the whole run.
+
+3. **AGGREGATE REPORT**
+   - After all features are processed, produce a single summary table:
+
+     | Feature | Version | Total ACs | Tested ACs | Coverage | Tests Passed | Status |
+     |---------|---------|-----------|------------|----------|--------------|--------|
+     | user-login | v1 | 8 | 8 | 100% | 8/8 | ✅ Pass |
+     | about-page | v1 | 5 | 3 | 60% | 3/5 | ⚠️ Incomplete |
+
+   - Write the aggregate report to `.sdrive/reports/tests/test-report-all-<date>.md`.
+   - Per-feature reports are still written individually to `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md`.
+   - Summarize: how many features passed, how many incomplete, how many blocked/skipped.
+   - Recommend next step: `/sdrive:review --all` to review every ongoing feature.
+
+4. **NEVER** modify production code, and NEVER mark a feature complete in `--all` mode — testing does not finalize a feature. Only `/sdrive:review` does that.
+</all-mode>
 
 <workflow>
 1. **PREPARE & READ**
@@ -202,6 +235,7 @@ The Test phase is NOT complete until:
 - [ ] `sdrive verify <feature>` passed.
 - [ ] Governance validator passed.
 - [ ] User notified of results.
+- [ ] (If `--all`) Every ongoing feature was processed, and the aggregate report was written to `.sdrive/reports/tests/test-report-all-<date>.md`.
 </definition-of-done>
 
 <deliverables>
@@ -213,4 +247,5 @@ At the end of your work, provide:
 5. ✅ Confirmation that `sdrive verify` and governance validator passed.
 6. ✅ Recommendation to run `/sdrive:review`.
 7. ✅ Confirmation that only the current version was modified.
+8. ✅ (If `--all`) An aggregate report at `.sdrive/reports/tests/test-report-all-<date>.md` covering every ongoing feature.
 </deliverables>

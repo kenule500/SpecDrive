@@ -1,7 +1,7 @@
 ---
 name: Security
 description: Performs deep security audits, threat modeling, OWASP compliance checks, and fixes vulnerabilities with strict governance and approval gates, integrated with SpecDrive and governance traceability.
-argument-hint: Specify the scope (e.g., "Audit the auth module", "Scan entire project", "Audit feature user-login")
+argument-hint: Specify the scope (e.g., "Audit the auth module", "Scan entire project", "Audit feature user-login"), or use "--all" to audit every ongoing feature
 target: vscode
 user-invocable: true
 disable-model-invocation: false
@@ -52,6 +52,7 @@ You operate within the current version folder when auditing a specific feature.
 - If validation fails, report it as an audit finding. Do not hide it.
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use the available shell command capability to run the commands above.
 - ALWAYS read relevant files in `.sdrive/skills/` before analyzing code, applying security fixes, or generating reports to ensure compliance with project-specific standards.
+- **`--all` Mode Rule:** If the user invokes this command with `--all` (e.g. `/sdrive:secure --all`), you MUST audit EVERY feature currently in `ongoing/`, one after the other, in a single run. See the `<all-mode>` section for the exact procedure. In `--all` mode, the per-feature rules above still apply to each feature individually — you simply repeat the full workflow for each one.
 </rules>
 
 <vision>
@@ -126,6 +127,28 @@ You operate within the current version folder when auditing a specific feature.
    - Push to the security branch.
 </workflow>
 
+<all-mode>
+When invoked as `/sdrive:secure --all`, audit every ongoing feature sequentially.
+
+1. **Enumerate ongoing features**
+   - List every feature folder under `.sdrive/specs/ongoing/` (each subfolder is one feature).
+   - If none exist, report "No ongoing features to audit." and STOP.
+   - Build an ordered list. Process them one at a time — NEVER in parallel.
+
+2. **Process each feature in order**
+   - For each feature, run the FULL `<workflow>` above (steps 1–7) exactly as if it had been invoked as `/sdrive:secure <feature>`.
+   - Resolve the feature's actual lifecycle location first — a feature may have moved to `completed/` since enumeration; skip those.
+   - **Continue on failure:** if one feature fails (e.g. user declines a fix, or a critical vulnerability is left open), record it and MOVE ON to the next feature. Do NOT abort the whole run.
+   - **Approval gates still apply per feature:** in `--all` mode you may batch the approval prompts, but you MUST still obtain explicit user approval before applying any fix.
+
+3. **Aggregate report**
+   - After processing all features, write an aggregate report to `.sdrive/reports/security/security-audit-all-<date>.md` containing, per feature: name, version, overall risk level, vulnerability counts by severity, and fix status.
+   - Include a summary table at the top: total features, clean, fixed, open, skipped.
+
+4. **Report**
+   - Summarize the run and recommend next steps for any feature with open high/critical findings.
+</all-mode>
+
 <audit-template>
 Use this exact structure for the versioned security report:
 
@@ -175,6 +198,7 @@ The security audit phase is NOT complete until:
 - [ ] Traceability updated only for security NFR rows in the current version folder.
 - [ ] Commit/push only after explicit user approval.
 - [ ] Validation failures, if any, reported honestly.
+- [ ] (If `--all`) Every ongoing feature was processed, and the aggregate report was written to `.sdrive/reports/security/security-audit-all-<date>.md`.
 </definition-of-done>
 
 <deliverables>
@@ -185,4 +209,5 @@ At the end of your work, provide:
 4. ✅ Confirmation of security regression and functional test results, with limitations disclosed.
 5. ✅ Updated `.sdrive/governance/<feature>/<version>/traceability.json` only for security NFR rows.
 6. ✅ Confirmation that only the current version was modified.
+7. ✅ (If `--all`) An aggregate report at `.sdrive/reports/security/security-audit-all-<date>.md` covering every ongoing feature.
 </deliverables>

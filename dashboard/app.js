@@ -1129,6 +1129,7 @@ function commandRowEl(item) {
 
   const meta = [];
   if (item.acceptsFeature) meta.push(`<span class="chip blue">feature</span>`);
+  if (item.acceptsAll) meta.push(`<span class="chip green">--all</span>`);
   if (item.agent) meta.push(`<span class="chip slate">${escapeHtml(item.agent)}</span>`);
   (item.gates || []).forEach((g) => meta.push(`<span class="chip amber">gate: ${escapeHtml(g)}</span>`));
 

@@ -34,6 +34,7 @@ It adds:
 - [Onboarding an Existing Project](#onboarding-an-existing-project)
 - [Migrating from OpenSpec or Spec-Kit](#migrating-from-openspec-or-spec-kit)
 - [Core Workflow](#core-workflow)
+- [Batch Mode: the `--all` Flag](#batch-mode-the---all-flag)
 - [Optional Commands](#optional-commands)
 - [Terminal Commands](#terminal-commands)
 - [Agents](#agents)
@@ -416,6 +417,10 @@ Writes production code from the approved tasks.
 - After spec and plan are approved
 - When implementation is ready
 
+**Batch mode:**
+
+- `/sdrive:apply --all` — implement every ongoing feature, one branch each (never merges)
+
 ---
 
 ### 4. `/sdrive:test`
@@ -438,6 +443,10 @@ Writes tests for every acceptance criterion, runs them, and reports coverage.
 - After `/sdrive:apply`
 - Before `/sdrive:review`
 
+**Batch mode:**
+
+- `/sdrive:test --all` — test every ongoing feature, one after the other
+
 ---
 
 ### 5. `/sdrive:review`
@@ -459,6 +468,41 @@ Final audit, merge, and archive.
 
 - After `/sdrive:test`
 - Before shipping to production
+
+**Batch mode:**
+
+- `/sdrive:review --all` — review every ongoing feature one after the other (a failed feature is never merged)
+
+---
+
+## Batch Mode: the `--all` Flag
+
+When you have several features in flight, you can run a command against **every ongoing feature** in one go by appending `--all`:
+
+```text
+/sdrive:test --all
+/sdrive:review --all
+```
+
+The command enumerates every feature in `specs/ongoing/`, processes them **sequentially** (one after the other), and writes a single aggregate report to `.sdrive/reports/<type>/<type>-report-all-<date>.md`.
+
+**Commands that support `--all`:**
+
+| Command | What `--all` does |
+|---------|-------------------|
+| `/sdrive:apply --all` | Implements every ongoing feature, one branch each. Does **not** merge. |
+| `/sdrive:test --all` | Writes and runs tests for every ongoing feature. |
+| `/sdrive:review --all` | Reviews and finalizes every ongoing feature one after the other. Never merges a feature that fails review. |
+| `/sdrive:secure --all` | Runs the security audit against every ongoing feature. |
+| `/sdrive:performance --all` | Optimises every ongoing feature. |
+| `/sdrive:docs --all` | Generates documentation for every ongoing feature. |
+
+**Behaviour notes:**
+
+- **Gates are evaluated per feature.** In `--all` mode the router does not gate-check a single feature; each feature's gates are checked individually by the agent as it is processed.
+- **Failures do not stop the batch.** If one feature fails, the agent records the failure and continues with the next, then summarises everything in the aggregate report.
+- **`/sdrive:apply --all` never merges.** Each feature gets its own branch and its own approval gate; merging stays a deliberate, per-feature action.
+- **Commands that do not support `--all`** (e.g. `/sdrive:propose`, `/sdrive:constitution`, `/sdrive:design`) reject the flag with a clear error.
 
 ---
 
@@ -496,6 +540,8 @@ Builds interactive prototype using vanilla HTML, CSS, and JavaScript.
 
 ### `/sdrive:secure`
 
+Supports `--all` to audit every ongoing feature.
+
 Performs deep security audit.
 
 **What it does:**
@@ -516,6 +562,8 @@ Performs deep security audit.
 
 ### `/sdrive:performance`
 
+Supports `--all` to optimise every ongoing feature.
+
 Benchmarks and optimizes performance.
 
 **What it does:**
@@ -533,6 +581,8 @@ Benchmarks and optimizes performance.
 ---
 
 ### `/sdrive:docs`
+
+Supports `--all` to document every ongoing feature.
 
 Generates documentation.
 

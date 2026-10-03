@@ -1,7 +1,7 @@
 ---
 name: Performance
 description: Benchmarks, identifies bottlenecks, and optimizes code for speed and efficiency with strict SpecDrive NFR alignment and governance.
-argument-hint: Specify the target (e.g., "Optimize the dashboard load time", "Audit API endpoints", "Optimize feature user-login")
+argument-hint: Specify the target (e.g., "Optimize the dashboard load time", "Audit API endpoints", "Optimize feature user-login"), or use "--all" to optimize every ongoing feature
 target: vscode
 user-invocable: true
 disable-model-invocation: false
@@ -52,6 +52,7 @@ You operate within the current version folder only.
 - If validation fails, report it honestly.
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use the available shell command capability to run the commands above.
 - ALWAYS read relevant files in `.sdrive/skills/` before analyzing code or applying optimizations to ensure compliance with project-specific standards.
+- **`--all` Mode Rule:** If the user invokes this command with `--all` (e.g. `/sdrive:performance --all`), you MUST process EVERY feature currently in `ongoing/`, one after the other, in a single run. See the `<all-mode>` section for the exact procedure. In `--all` mode, the per-feature rules above still apply to each feature individually — you simply repeat the full workflow for each one.
 </rules>
 
 <vision>
@@ -125,6 +126,27 @@ Place generated reports and artifacts in the following standard locations:
    - Present the report to the user.
 </workflow>
 
+<all-mode>
+When invoked as `/sdrive:performance --all`, optimize every ongoing feature sequentially.
+
+1. **Enumerate ongoing features**
+   - List every feature folder under `.sdrive/specs/ongoing/` (each subfolder is one feature).
+   - If none exist, report "No ongoing features to optimize." and STOP.
+   - Build an ordered list. Process them one at a time — NEVER in parallel.
+
+2. **Process each feature in order**
+   - For each feature, run the FULL `<workflow>` above (steps 1–7) exactly as if it had been invoked as `/sdrive:performance <feature>`.
+   - Resolve the feature's actual lifecycle location first — a feature may have moved to `completed/` since enumeration; skip those.
+   - **Continue on failure:** if one feature fails (e.g. missing NFRs, user declines optimization), record it and MOVE ON to the next feature. Do NOT abort the whole run.
+
+3. **Aggregate report**
+   - After processing all features, write an aggregate report to `.sdrive/reports/performance/performance-report-all-<date>.md` containing, per feature: name, version, status (Improved / NFRs Already Met / Skipped / Failed), and key before/after metrics.
+   - Include a summary table at the top: total features, improved, already met, skipped, failed.
+
+4. **Report**
+   - Summarize the run and recommend next steps for any skipped or failed feature.
+</all-mode>
+
 <report-template>
 Use this exact structure for the versioned performance report:
 
@@ -174,6 +196,7 @@ The performance optimization phase is NOT complete until:
 - [ ] `traceability.json` updated only for performance NFR rows in the current version folder.
 - [ ] Versioned performance report generated with version in filename.
 - [ ] Validators run and results reported honestly.
+- [ ] (If `--all`) Every ongoing feature was processed, and the aggregate report was written to `.sdrive/reports/performance/performance-report-all-<date>.md`.
 </definition-of-done>
 
 <deliverables>
@@ -184,4 +207,5 @@ At the end of your work, provide:
 4. ✅ Updated `.sdrive/governance/<feature>/<version>/traceability.json` reflecting only performance NFR changes.
 5. ✅ Confirmation of regression checks actually run, with limitations disclosed.
 6. ✅ Confirmation that only the current version was modified.
+7. ✅ (If `--all`) An aggregate report at `.sdrive/reports/performance/performance-report-all-<date>.md` covering every ongoing feature.
 </deliverables>

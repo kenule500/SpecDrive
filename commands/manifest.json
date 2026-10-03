@@ -71,6 +71,7 @@
       "agentFile": ".sdrive/agents/06-documentation.md",
       "description": "Generate documentation and detect drift",
       "acceptsFeature": true,
+      "acceptsAll": true,
       "gates": [],
       "validators": ["governance"]
     },
@@ -80,6 +81,7 @@
       "agentFile": ".sdrive/agents/07-implementation.md",
       "description": "Write production code from approved tasks",
       "acceptsFeature": true,
+      "acceptsAll": true,
       "gates": ["implementation"],
       "validators": ["governance"]
     },
@@ -89,6 +91,7 @@
       "agentFile": ".sdrive/agents/08-performance.md",
       "description": "Benchmark and optimize performance",
       "acceptsFeature": true,
+      "acceptsAll": true,
       "gates": [],
       "validators": ["governance"]
     },
@@ -98,6 +101,7 @@
       "agentFile": ".sdrive/agents/09-review-complete.md",
       "description": "Final audit, merge, and archive",
       "acceptsFeature": true,
+      "acceptsAll": true,
       "gates": ["review"],
       "validators": ["governance"]
     },
@@ -107,6 +111,7 @@
       "agentFile": ".sdrive/agents/10-security.md",
       "description": "Security audit, threat modeling, and fixes",
       "acceptsFeature": true,
+      "acceptsAll": true,
       "gates": [],
       "validators": ["governance"]
     },
@@ -116,6 +121,7 @@
       "agentFile": ".sdrive/agents/11-test.md",
       "description": "Write tests for acceptance criteria, run them, and report coverage",
       "acceptsFeature": true,
+      "acceptsAll": true,
       "gates": [],
       "validators": ["governance"]
     },

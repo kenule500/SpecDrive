@@ -793,32 +793,32 @@ const SLASH_DETAILS = {
   "/sdrive:docs": {
     what: "Generates documentation and flags drift from the code.",
     why: "Keeps docs honest and up to date automatically.",
-    when: "After implementation, or on a schedule."
+    when: "After implementation, or on a schedule. Use --all to document every ongoing feature."
   },
   "/sdrive:apply": {
     what: "Writes the production code from the approved tasks.",
     why: "This is where the plan becomes real, working software.",
-    when: "After the plan is approved."
+    when: "After the plan is approved. Use --all to implement every ongoing feature, one branch each."
   },
   "/sdrive:performance": {
     what: "Benchmarks and optimises performance.",
     why: "Ensures the feature is not just correct, but fast enough.",
-    when: "After implementation, before review."
+    when: "After implementation, before review. Use --all to optimise every ongoing feature."
   },
   "/sdrive:review": {
     what: "Runs the final audit, then merges and archives the feature.",
     why: "The last quality gate before work is considered done.",
-    when: "When the feature is complete."
+    when: "When the feature is complete. Use --all to review every ongoing feature one after the other."
   },
   "/sdrive:secure": {
     what: "Performs a security audit, threat modelling, and fixes.",
     why: "Catches vulnerabilities before they reach users.",
-    when: "Before the review gate."
+    when: "Before the review gate. Use --all to audit every ongoing feature."
   },
   "/sdrive:test": {
     what: "Writes tests for the acceptance criteria and reports coverage.",
     why: "Proves the feature actually does what was promised.",
-    when: "After implementation."
+    when: "After implementation. Use --all to test every ongoing feature."
   },
   "/sdrive:onboard": {
     what: "Adopts an existing project into SpecDrive.",
@@ -909,6 +909,7 @@ function apiCommands() {
       description: c.description || "",
       agent: c.agent || "",
       acceptsFeature: Boolean(c.acceptsFeature),
+      acceptsAll: Boolean(c.acceptsAll),
       gates: c.gates || [],
       what: detail.what || "",
       why: detail.why || "",

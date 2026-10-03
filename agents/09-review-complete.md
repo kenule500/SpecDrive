@@ -1,7 +1,7 @@
 ---
 name: Review & Complete Feature
 description: Audits code for quality, security, and spec alignment. If it passes, merges to main and completes feature lifecycle with human approval and strict governance controls.
-argument-hint: Specify the feature to review and finalize (e.g., "Review and finalize user-login")
+argument-hint: Specify the feature to review and finalize (e.g., "Review and finalize user-login"), or use "--all" to review every ongoing feature one after the other
 target: vscode
 user-invocable: true
 disable-model-invocation: false
@@ -77,6 +77,7 @@ You operate within the current version folder only.
 - ALWAYS read relevant files in `.sdrive/skills/` before auditing code or finalizing documentation to ensure compliance with project-specific standards.
 - **Permission Rule:** Before auditing, run `node .sdrive/scripts/check-permission.js slash /sdrive:review`. If denied, STOP immediately.
 - **Merge Permission Rule:** Before merging, run `node .sdrive/scripts/check-permission.js slash /sdrive:review` again to confirm the user is still authorized to merge.
+- **`--all` Mode Rule:** If the user invokes this command with `--all` (e.g. `/sdrive:review --all`), you MUST review EVERY feature currently in `ongoing/`, one after the other, in a single run. See the `<all-mode>` section for the exact procedure. In `--all` mode, the per-feature rules above still apply to each feature individually — you simply repeat the full workflow for each one. NEVER skip a feature because an earlier one failed; continue to the next and report the failure.
 </rules>
 
 <vision>
@@ -123,6 +124,31 @@ You operate within the current version folder only.
 11. **Spec-to-Code Verification**: `sdrive verify <feature>` returns `pass` or `warn`.
 12. **Permission**: The current user is authorized to review and merge.
 </audit-criteria>
+
+<all-mode>
+When invoked as `/sdrive:review --all`, review and finalize every ongoing feature sequentially.
+
+1. **Enumerate ongoing features**
+   - List every feature folder under `.sdrive/specs/ongoing/` (each subfolder is one feature).
+   - If none exist, report "No ongoing features to review." and STOP.
+   - Build an ordered list. Process them one at a time — NEVER in parallel.
+
+2. **Process each feature in order**
+   - For each feature, run the FULL `<workflow>` above (steps 1–5) exactly as if it had been invoked as `/sdrive:review <feature>`.
+   - Resolve the feature's actual lifecycle location first (Lifecycle Location Rule) — a feature may have moved to `completed/` since enumeration.
+   - If a feature is already finalized (in `completed/` with `phase: completed` and all gates `approved`), skip it and record "already finalized".
+   - **Continue on failure:** if one feature fails its audit, record the failure and MOVE ON to the next feature. Do NOT abort the whole run. A failing feature stays in `ongoing/` with its fix tasks.
+
+3. **Aggregate report**
+   - After processing all features, write an aggregate report to `.sdrive/reports/reviews/review-report-all-<date>.md` containing, per feature: name, version, audit status (PASS/FAIL), coverage %, merge status, and lifecycle result.
+   - Include a summary table at the top: total features, passed, failed, skipped.
+
+4. **Report**
+   - Summarize the run: which features were merged and archived, which failed and why, and which were skipped.
+   - Recommend next steps for any failed feature (e.g. `/sdrive:apply <feature>` to fix, then re-run `/sdrive:review <feature>`).
+
+5. **NEVER** merge a feature that failed its audit, and NEVER mark a feature complete without a confirmed merge. In `--all` mode each feature is still gated independently.
+</all-mode>
 
 <workflow>
 1. **PREPARE & READ**
@@ -259,6 +285,7 @@ The review phase is NOT complete until:
 - [ ] No criterion was marked passed unless actually verified.
 - [ ] Merge success verified before branch deletion.
 - [ ] Other versions preserved.
+- [ ] (If `--all`) Every ongoing feature was processed, and the aggregate report was written to `.sdrive/reports/reviews/review-report-all-<date>.md`.
 </definition-of-done>
 
 <deliverables>
@@ -268,6 +295,7 @@ At the end of your work, provide:
 3. ✅ (If failed) List of blocking issues and updated tasks.
 4. ✅ Confirmation of human approval for merge.
 5. ✅ Confirmation that merge success was verified before branch deletion.
+6. ✅ (If `--all`) An aggregate report at `.sdrive/reports/reviews/review-report-all-<date>.md` covering every ongoing feature.
 6. ✅ Confirmation that only the current version was archived and other versions preserved.
 7. ✅ Confirmation of the source lifecycle folder the feature was moved from (e.g. `backlog/` → `completed/`) and that the move was verified.
 </deliverables>

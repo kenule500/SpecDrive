@@ -84,10 +84,10 @@ function toKebabCase(text) {
 
 function main() {
   const commandName = process.argv[2];
-  const rawFeature = process.argv[3];
+  const rawArgs = process.argv.slice(3);
 
   if (!commandName) {
-    console.error("❌ Usage: node router.js /sdrive:<command> [feature-description]");
+    console.error("❌ Usage: node router.js /sdrive:<command> [feature-description] [--all]");
     process.exit(1);
   }
 
@@ -98,14 +98,26 @@ function main() {
     process.exit(1);
   }
 
+  // Detect the --all flag anywhere in the arguments.
+  const allFlag = rawArgs.includes("--all");
+  const rawFeature = rawArgs.find((arg) => arg !== "--all");
+
   // Permission check
   if (!checkPermission(command)) {
     process.exit(1);
   }
 
+  if (allFlag && !command.acceptsAll) {
+    console.error(`❌ ${command.command} does not support the --all flag.`);
+    console.error(`   Run it against a single feature instead.`);
+    process.exit(1);
+  }
+
   let featureName = null;
 
-  if (rawFeature) {
+  if (allFlag) {
+    console.log(`\n📦 Mode: --all (every ongoing feature)`);
+  } else if (rawFeature) {
     featureName = toKebabCase(rawFeature);
     console.log(`\n📦 Feature: ${featureName}`);
   }
@@ -116,22 +128,31 @@ function main() {
   console.log(`📝 Description: ${command.description}`);
 
   if (command.gates && command.gates.length > 0) {
-    if (!featureName) {
+    // In --all mode gates are evaluated per feature by the agent, not here.
+    if (!featureName && !allFlag) {
       console.error(`❌ This command requires a feature name or description.`);
       console.error(`   Usage: node router.js ${commandName} "<feature-description>"`);
       process.exit(1);
     }
 
-    console.log(`\n🚧 Required Gates: ${command.gates.join(", ")}`);
+    if (allFlag) {
+      console.log(`\n🚧 Required Gates: ${command.gates.join(", ")} (evaluated per feature in --all mode)`);
+    } else {
+      console.log(`\n🚧 Required Gates: ${command.gates.join(", ")}`);
+    }
 
-    for (const gate of command.gates) {
-      if (!isGateApproved(featureName, gate)) {
-        console.log(`\n⏸️  Gate "${gate}" is NOT approved for "${featureName}".`);
-        console.log(`   Please approve this gate before running this command.`);
-        console.log(`   Use: sdrive approve ${gate}\n`);
-        process.exit(1);
+    // In --all mode there is no single feature to gate-check here; the agent
+    // evaluates each feature's gates individually as it processes them.
+    if (!allFlag) {
+      for (const gate of command.gates) {
+        if (!isGateApproved(featureName, gate)) {
+          console.log(`\n⏸️  Gate "${gate}" is NOT approved for "${featureName}".`);
+          console.log(`   Please approve this gate before running this command.`);
+          console.log(`   Use: sdrive approve ${gate}\n`);
+          process.exit(1);
+        }
+        console.log(`✅ Gate "${gate}" is approved.`);
       }
-      console.log(`✅ Gate "${gate}" is approved.`);
     }
   }
 

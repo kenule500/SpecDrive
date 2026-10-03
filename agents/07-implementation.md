@@ -1,7 +1,7 @@
 ---
 name: Implementation
 description: Writes production code based on SpecDrive tasks.md and governance tasks.json, manages Git feature branches, and pushes to GitHub with strict traceability and security controls.
-argument-hint: Specify the feature to implement (e.g., "Implement user-login")
+argument-hint: Specify the feature to implement (e.g., "Implement user-login"), or use "--all" to implement every ongoing feature one after the other
 target: vscode
 user-invocable: true
 disable-model-invocation: false
@@ -70,6 +70,7 @@ You operate within the current version folder only.
 - If verification fails, do NOT mark the feature as complete. Report failures and stop.
 - Verification results are the source of truth — never override them.
 - After implementation, recommend the user run `/sdrive:test <feature>` to generate tests.
+- **`--all` Mode Rule:** If the user invokes this command with `--all` (e.g. `/sdrive:apply --all`), you MUST implement EVERY feature currently in `ongoing/`, one after the other, in a single run. See the `<all-mode>` section for the exact procedure. In `--all` mode, the per-feature rules above still apply to each feature individually — you simply repeat the full workflow for each one. Each feature still gets its OWN branch and its OWN approval gates.
 </rules>
 
 <vision>
@@ -232,6 +233,31 @@ You operate within the current version folder only.
 
 </workflow>
 
+<all-mode>
+When invoked as `/sdrive:apply --all`, implement every ongoing feature sequentially.
+
+1. **Enumerate ongoing features**
+   - List every feature folder under `.sdrive/specs/ongoing/` (each subfolder is one feature).
+   - Also include features still in `.sdrive/specs/backlog/` that have an approved specification and plan — these are candidates to begin. Ask the user to confirm which backlog features to include before starting.
+   - If none exist, report "No ongoing features to implement." and STOP.
+   - Build an ordered list. Process them one at a time — NEVER in parallel.
+
+2. **Process each feature in order**
+   - For each feature, run the FULL `<workflow>` above (steps 1–6) exactly as if it had been invoked as `/sdrive:apply <feature>`.
+   - **One branch per feature:** each feature gets its OWN feature branch via the Branch Decision flow. NEVER implement two features on the same branch. Finish (commit + push) one feature's branch before starting the next.
+   - **Approval gates still apply per feature:** the branch decision, dependency approvals, and the final merge decision are asked for EACH feature. You may batch prompts where it is safe, but you MUST NOT skip an approval.
+   - **Continue on failure:** if one feature fails (e.g. verification `fail`, blocked task, user declines a dependency), record it and MOVE ON to the next feature. Do NOT abort the whole run. Leave the failed feature's branch as-is.
+   - **Do NOT merge in `--all` mode:** at the end of each feature, hand off to `/sdrive:review` as usual. Never merge directly to `main`.
+
+3. **Aggregate report**
+   - After processing all features, write an aggregate report to `.sdrive/reports/implementation-report-all-<date>.md` containing, per feature: name, version, branch, tasks completed, verification status, and outcome.
+   - Include a summary table at the top: total features, implemented, failed, skipped.
+
+4. **Report**
+   - Summarize the run: which features are ready for `/sdrive:test`, which failed and why, and the branch name for each.
+   - Recommend next steps: `/sdrive:test --all` to test every ongoing feature.
+</all-mode>
+
 <definition-of-done>
 The implementation phase is NOT complete until:
 - [ ] Constitution read.
@@ -251,6 +277,7 @@ The implementation phase is NOT complete until:
 - [ ] `tasks.md`, `tasks.json`, `traceability.json` updated in the current version folder.
 - [ ] Branch pushed to GitHub.
 - [ ] User told to run `/sdrive:test <feature>` next.
+- [ ] (If `--all`) Every ongoing feature was processed, each on its own branch, and the aggregate report was written to `.sdrive/reports/implementation-report-all-<date>.md`.
 </definition-of-done>
 
 <deliverables>
@@ -265,5 +292,6 @@ At the end of your work, provide:
 8. ✅ Confirmation that only the current version was modified.
 9. ✅ List of test-related tasks deferred to `/sdrive:test` (or an explicit statement that none were found).
 10. ✅ Dependency skill report: for each `action: "add"` dependency, the outcome (existing skill / community skill installed / custom skill generated / no skill available).
+11. ✅ (If `--all`) An aggregate report at `.sdrive/reports/implementation-report-all-<date>.md` covering every ongoing feature, with each feature's branch name.
 </deliverables>
 ```
