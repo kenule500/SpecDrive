@@ -314,7 +314,7 @@ function renderOverviewPanels(onboarding, git, summary) {
   if (summary) sidePanels.push(renderOpenQuestionsPanel(summary));
   if (onboarding) sidePanels.push(renderOnboardingPanel(onboarding));
 
-  const mainPanel = summary ? renderBlueprintPanel(summary) : "";
+  const mainPanel = summary ? renderProductPlanPanel(summary) : "";
 
   return `
     <div class="ov-panels">
@@ -324,7 +324,7 @@ function renderOverviewPanels(onboarding, git, summary) {
   `;
 }
 
-function renderBlueprintPanel(summary) {
+function renderProductPlanPanel(summary) {
   const goals = summary.goals || [];
   const nonGoals = summary.nonGoals || [];
   const users = summary.targetUsers || [];
@@ -531,7 +531,7 @@ function renderProduct(product) {
     : `<tr><td colspan="5" class="product-empty">No backlog items yet.</td></tr>`;
 
   div.innerHTML = `
-    <div class="blueprint-wrap">
+    <div class="product-plan-wrap">
       <div class="stat-card tone-accent">
         <span class="stat-icon">â–¤</span>
         <span class="stat-label">Backlog Items</span>
@@ -552,9 +552,9 @@ function renderProduct(product) {
       </div>
     </div>
 
-    <div class="blueprint-panel">
+    <div class="product-plan-panel">
       <div class="detail-block-label">Artifacts</div>
-      <div class="blueprint-artifacts">
+      <div class="product-plan-artifacts">
         ${product.overview ? `<span class="artifact-chip">ðŸ“„ overview.md</span>` : ""}
         ${product.mockup ? `<span class="artifact-chip">ðŸ—ºï¸ mockup.md</span>` : ""}
         ${product.designSystem ? `<span class="artifact-chip">ðŸŽ¨ design-system.md</span>` : ""}

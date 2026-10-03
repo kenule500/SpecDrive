@@ -887,14 +887,14 @@ body {
 }
 
 /* ============ PRODUCT PLAN ============ */
-.blueprint-wrap {
+.product-plan-wrap {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 16px;
   margin-bottom: 16px;
 }
 
-.blueprint-panel {
+.product-plan-panel {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -902,7 +902,7 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
-.blueprint-artifacts {
+.product-plan-artifacts {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -2385,7 +2385,7 @@ body {
 
   .skills-grid,
   .team-grid,
-  .blueprint-wrap,
+  .product-plan-wrap,
   .overview-grid {
     grid-template-columns: 1fr;
   }
