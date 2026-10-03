@@ -70,6 +70,33 @@ function copyRecursiveForce(src, dest) {
   return written;
 }
 
+// Remove files/directories in `dest` that no longer exist in `src`. This keeps
+// framework-owned directories a true mirror of the package, so renames and
+// deletions (e.g. blueprint -> product-plan) don't leave stale artifacts behind.
+// Returns the list of removed paths (relative to `dest`). When `dryRun` is true
+// nothing is deleted — the stale paths are only collected and returned.
+function pruneRecursive(src, dest, removed = [], relBase = "", dryRun = false) {
+  if (!fs.existsSync(dest)) return removed;
+
+  for (const entry of fs.readdirSync(dest, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    const relPath = relBase ? path.join(relBase, entry.name) : entry.name;
+
+    if (!fs.existsSync(srcPath)) {
+      // Gone from the package entirely — remove it from the project.
+      if (!dryRun) {
+        fs.rmSync(destPath, { recursive: true, force: true });
+      }
+      removed.push(relPath);
+    } else if (entry.isDirectory()) {
+      pruneRecursive(srcPath, destPath, removed, relPath, dryRun);
+    }
+  }
+
+  return removed;
+}
+
 function mergeBundledSlashCommands(packageRoot, sdriveRoot) {
   const packagedManifestPath = path.join(packageRoot, "commands", "manifest.json");
   const installedManifestPath = path.join(sdriveRoot, "commands", "manifest.json");
@@ -780,6 +807,7 @@ program
     }
 
     let totalWritten = 0;
+    let totalPruned = 0;
 
     frameworkDirs.forEach((dir) => {
       const srcDir = path.join(packageRoot, dir);
@@ -792,12 +820,28 @@ program
 
       if (options.dryRun) {
         console.log(`  Would refresh: .sdrive/${dir}/`);
+        const wouldPrune = pruneRecursive(srcDir, destDir, [], "", true);
+        if (wouldPrune.length > 0) {
+          console.log(`  Would remove ${wouldPrune.length} stale file${wouldPrune.length === 1 ? "" : "s"} from .sdrive/${dir}/:`);
+          wouldPrune.forEach((rel) => console.log(`      - ${rel}`));
+        }
         return;
       }
 
       const written = copyRecursiveForce(srcDir, destDir);
       totalWritten += written;
-      console.log(`  ✅ Refreshed: .sdrive/${dir}/ (${written} file${written === 1 ? "" : "s"})`);
+
+      // Prune files that no longer exist in the package so renames/deletions
+      // don't leave stale artifacts (e.g. the old blueprint command).
+      const pruned = pruneRecursive(srcDir, destDir, [], "", false);
+      totalPruned += pruned.length;
+
+      let line = `  ✅ Refreshed: .sdrive/${dir}/ (${written} file${written === 1 ? "" : "s"})`;
+      if (pruned.length > 0) {
+        line += `, removed ${pruned.length} stale`;
+      }
+      console.log(line);
+      pruned.forEach((rel) => console.log(`      - removed ${rel}`));
     });
 
     // The logo is served by the dashboard, so keep it in sync too.
@@ -822,7 +866,12 @@ program
     if (options.dryRun) {
       console.log("✅ Dry run complete. Re-run without --dry-run to apply.\n");
     } else {
-      console.log(`✅ SpecDrive updated (${totalWritten} file${totalWritten === 1 ? "" : "s"} refreshed).`);
+      let summary = `✅ SpecDrive updated (${totalWritten} file${totalWritten === 1 ? "" : "s"} refreshed`;
+      if (totalPruned > 0) {
+        summary += `, ${totalPruned} stale file${totalPruned === 1 ? "" : "s"} removed`;
+      }
+      summary += ").";
+      console.log(summary);
       console.log("   Your specs, governance, and constitution were left untouched.\n");
     }
   });
