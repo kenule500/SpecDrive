@@ -528,11 +528,123 @@ function apiTestReport(feature, version) {
   };
 }
 
+// Report types produced by the agents. Each agent writes to
+// .sdrive/reports/<dir>/ using the filename pattern
+// <prefix>-report-<feature>-<version>-<date>.md (or -all-<date>.md).
+// The dashboard surfaces whichever of these exist for a feature.
+const REPORT_TYPES = [
+  { id: "tests", dir: "tests", prefix: "test", label: "Tests" },
+  { id: "performance", dir: "performance", prefix: "performance", label: "Performance" },
+  { id: "security", dir: "security", prefix: "security", label: "Security" },
+  { id: "reviews", dir: "reviews", prefix: "review", label: "Review" },
+  { id: "docs", dir: "docs", prefix: "coverage", label: "Documentation" },
+  { id: "debug", dir: "debug", prefix: "debug", label: "Debug" }
+];
+
+// Read the first markdown heading of a report so the UI can show a title
+// without shipping the whole file. Falls back to null when absent.
+function readReportTitle(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, "utf8");
+    const match = content.match(/^#\s+(.+)$/m);
+    return match ? match[1].trim() : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Extract a "Status: PASS" / "**Status:** PASS" style verdict if present.
+function readReportStatus(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, "utf8");
+    const match = content.match(/\*{0,2}Status:?\*{0,2}\s*:?\s*\*{0,2}\s*(PASS|FAIL|PASSED|FAILED|CLEAN|IMPROVED|REGRESSED)/i);
+    return match ? match[1].toUpperCase() : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Collect every report for a feature across all report types.
+// Feature-scoped reports are matched by "<prefix>-report-<feature>-<version>-".
+// Global reports (e.g. debug-report-all-<date>.md) are matched separately and
+// flagged so the UI can distinguish them.
+function apiReports(feature, version) {
+  const reportsRoot = path.join(sdriveRoot, "reports");
+  const types = [];
+
+  for (const type of REPORT_TYPES) {
+    const dir = path.join(reportsRoot, type.dir);
+    if (!fs.existsSync(dir)) {
+      types.push({ id: type.id, label: type.label, status: "missing", reports: [] });
+      continue;
+    }
+
+    let files = [];
+    try {
+      files = fs.readdirSync(dir).filter((f) => f.endsWith(".md"));
+    } catch (error) {
+      files = [];
+    }
+
+    const scoped = files
+      .filter((f) => f.startsWith(`${type.prefix}-report-${feature}-${version}-`))
+      .sort()
+      .reverse();
+
+    const global = files
+      .filter((f) => f.startsWith(`${type.prefix}-report-all-`))
+      .sort()
+      .reverse();
+
+    const reports = [];
+
+    if (scoped.length) {
+      const latest = scoped[0];
+      const full = path.join(dir, latest);
+      reports.push({
+        file: latest,
+        scope: "feature",
+        date: latest.replace(/\.md$/, "").split("-").slice(-3).join("-"),
+        title: readReportTitle(full),
+        status: readReportStatus(full),
+        history: scoped.length
+      });
+    }
+
+    if (global.length) {
+      const latest = global[0];
+      const full = path.join(dir, latest);
+      reports.push({
+        file: latest,
+        scope: "all",
+        date: latest.replace(/\.md$/, "").split("-").slice(-3).join("-"),
+        title: readReportTitle(full),
+        status: readReportStatus(full),
+        history: global.length
+      });
+    }
+
+    types.push({
+      id: type.id,
+      label: type.label,
+      status: reports.length ? "present" : "missing",
+      reports
+    });
+  }
+
+  return { feature, version, types };
+}
+
 function parseFeatureVersion(url) {
-  const parts = url.split("/").filter(Boolean);
+  // Strip the query string, then drop the leading "/api/<resource>" segments so
+  // only the feature/version tail remains. Without this, "/api/reports/foo"
+  // would yield feature="reports", version="foo".
+  const clean = url.split("?")[0];
+  const parts = clean.split("/").filter(Boolean);
+  const tail = parts.slice(2);
   return {
-    feature: parts[parts.length - 2],
-    version: parts[parts.length - 1]
+    feature: tail.length >= 2 ? tail[tail.length - 2] : tail[0],
+    version: tail.length >= 2 ? tail[tail.length - 1] : null
   };
 }
 
@@ -1056,6 +1168,11 @@ function handleRequest(req, res) {
     if (url.startsWith("/api/tests/")) {
       const { feature, version } = parseFeatureVersion(url);
       return res.end(JSON.stringify(apiTestReport(feature, version)));
+    }
+
+    if (url.startsWith("/api/reports/")) {
+      const { feature, version } = parseFeatureVersion(url);
+      return res.end(JSON.stringify(apiReports(feature, version)));
     }
 
     if (url === "/api/onboarding") {

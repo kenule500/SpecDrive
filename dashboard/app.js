@@ -914,6 +914,92 @@ async function openFeatureDetail(featureName) {
   populateDetailFilters(versionData);
   renderDetailSummary();
   renderDetailBody();
+  renderDetailReports();
+}
+
+/* ============================================================
+   FEATURE DETAIL — REPORTS PANEL
+   Surfaces the artifacts each agent writes to .sdrive/reports/.
+   Only reports/tests/ was previously wired up; this covers every
+   report type (tests, performance, security, reviews, docs, debug)
+   through the generic /api/reports/<feature>/<version> endpoint.
+   ============================================================ */
+async function renderDetailReports() {
+  const container = document.getElementById("detail-reports");
+  if (!container || !detailFeature) return;
+
+  const version = detailFeature.currentVersion;
+  const data = await fetchJson(`/api/reports/${detailFeature.name}/${version}`);
+
+  if (!data || !Array.isArray(data.types)) {
+    container.innerHTML = `<div class="panel-loading">No reports available.</div>`;
+    return;
+  }
+
+  const present = data.types.filter((t) => t.status === "present");
+  const missing = data.types.filter((t) => t.status !== "present");
+
+  const cards = present
+    .map((type) => {
+      const rows = type.reports
+        .map((r) => {
+          const statusChip = r.status
+            ? `<span class="chip ${reportStatusClass(r.status)}">${escapeHtml(r.status)}</span>`
+            : "";
+          const scopeChip =
+            r.scope === "all"
+              ? `<span class="chip slate" title="Covers every ongoing feature">all features</span>`
+              : "";
+          const historyChip =
+            r.history > 1
+              ? `<span class="chip slate" title="${r.history} reports on file">${r.history} on file</span>`
+              : "";
+          return `
+            <li class="report-row">
+              <div class="report-row-main">
+                <span class="report-file">${escapeHtml(r.file)}</span>
+                ${r.title ? `<span class="report-title">${escapeHtml(r.title)}</span>` : ""}
+              </div>
+              <div class="report-row-meta">
+                ${statusChip}
+                ${scopeChip}
+                ${historyChip}
+                <span class="report-date">${escapeHtml(r.date)}</span>
+              </div>
+            </li>
+          `;
+        })
+        .join("");
+
+      return `
+        <div class="report-card">
+          <div class="report-card-head">
+            <span class="report-card-label">${escapeHtml(type.label)}</span>
+            <span class="chip green">${type.reports.length}</span>
+          </div>
+          <ul class="report-list">${rows}</ul>
+        </div>
+      `;
+    })
+    .join("");
+
+  const missingNote = missing.length
+    ? `<div class="report-missing">
+         <span class="report-missing-label">Not yet produced:</span>
+         ${missing.map((t) => `<span class="chip slate">${escapeHtml(t.label)}</span>`).join("")}
+       </div>`
+    : "";
+
+  container.innerHTML = present.length
+    ? `<div class="report-grid">${cards}</div>${missingNote}`
+    : `<div class="panel-loading">No reports have been produced for this feature yet.</div>${missingNote}`;
+}
+
+function reportStatusClass(status) {
+  const s = (status || "").toUpperCase();
+  if (s === "PASS" || s === "PASSED" || s === "CLEAN" || s === "IMPROVED") return "green";
+  if (s === "FAIL" || s === "FAILED" || s === "REGRESSED") return "red";
+  return "slate";
 }
 
 function populateDetailFilters(versionData) {
