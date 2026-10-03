@@ -10,7 +10,7 @@ SpecDrive gives AI coding tools like GitHub Copilot, Cline, Claude Code, and Cur
 
 It adds:
 
-- 14 specialized governance agents
+- 16 specialized governance agents
 - Machine-readable JSON schemas
 - Requirement → AC → task → test traceability
 - Per-version lifecycle tracking
@@ -249,10 +249,16 @@ Optional: If you have an app idea but no product roadmap yet, run `/sdrive:produ
 /sdrive:test user-login
 ```
 
-6. Review and merge:
+6. Review:
 
 ```text
 /sdrive:review
+```
+
+7. Archive (merge to `main` and complete the lifecycle):
+
+```text
+/sdrive:archive
 ```
 
 ---
@@ -472,18 +478,17 @@ Writes tests for every acceptance criterion, runs them, and reports coverage.
 
 ### 5. `/sdrive:review`
 
-Final audit, merge, and archive.
+Final audit and pass/fail verdict. Does **not** merge or archive.
 
 **What it does:**
 
 - Verifies coverage: every AC has a linked, existing, passing test
 - Runs spec-to-code verification
 - Audits code against spec and traceability
-- Requires human approval before merging
-- Merges to main and archives the feature
-- Marks the current version as `completed`
-- Moves the feature folder from `ongoing/` to `completed/`
-- Preserves older versions
+- Writes a `review.md` report with `Status: PASS` or `Status: FAIL`
+- On failure: creates a PR, comments the findings, adds fix tasks, and stops
+- On pass: notifies you to run `/sdrive:archive <feature>`
+- Requires human approval before the verdict is recorded
 
 **When to use:**
 
@@ -492,7 +497,31 @@ Final audit, merge, and archive.
 
 **Batch mode:**
 
-- `/sdrive:review --all` — review every ongoing feature one after the other (a failed feature is never merged)
+- `/sdrive:review --all` — review every ongoing feature one after the other (a failed feature is never cleared for archive)
+
+---
+
+### 6. `/sdrive:archive`
+
+Merges an approved feature to `main` and completes its lifecycle.
+
+**What it does:**
+
+- Requires a passing `review.md` for the current version (Review-First Rule)
+- Requires human merge approval
+- Merges the current version and marks it as `completed`
+- Moves the feature folder from `ongoing/` to `completed/`
+- Preserves older versions
+- Updates governance and workflow state, then cleans up the branch
+- Verifies permission before and after merge
+
+**When to use:**
+
+- Only after `/sdrive:review` has returned `Status: PASS`
+
+**Batch mode:**
+
+- `/sdrive:archive --all` — archive every ongoing feature that has passed review, one after the other
 
 ---
 
@@ -513,7 +542,8 @@ The command enumerates every feature in `specs/ongoing/`, processes them **seque
 |---------|-------------------|
 | `/sdrive:apply --all` | Implements every ongoing feature, one branch each. Does **not** merge. |
 | `/sdrive:test --all` | Writes and runs tests for every ongoing feature. |
-| `/sdrive:review --all` | Reviews and finalizes every ongoing feature one after the other. Never merges a feature that fails review. |
+| `/sdrive:review --all` | Reviews every ongoing feature one after the other. Never clears a feature that fails review for archive. |
+| `/sdrive:archive --all` | Archives every ongoing feature that has passed review. |
 | `/sdrive:secure --all` | Runs the security audit against every ongoing feature. |
 | `/sdrive:performance --all` | Optimises every ongoing feature. |
 | `/sdrive:debug --all` | Sweeps every ongoing feature for defects. |
@@ -750,9 +780,10 @@ Audits and manages AI skills.
 | Documentation | `06-documentation.md` | Generate docs, detect drift |
 | Implementation | `07-implementation.md` | Write production code |
 | Performance | `08-performance.md` | Benchmark and optimize for speed and SEO |
-| Review & Complete | `09-review-complete.md` | Final audit and merge |
+| Review & Complete | `09-review-complete.md` | Final audit and pass/fail verdict (no merge) |
 | Security | `10-security.md` | Security audit and fixes |
 | Test | `11-test.md` | Write tests, run them, report coverage |
+| Archive | `14-archive.md` | Merge an approved feature to `main` and complete its lifecycle |
 | Debug | `15-debug.md` | Reproduce, isolate, and fix defects — layout, APIs, runtime, glitches |
 
 ---
@@ -838,7 +869,7 @@ A feature moves through three spec folders. Each transition has exactly one owne
 |------------|-------|-------|
 | → `specs/backlog/<feature>/<version>/` | `/sdrive:propose` | New specs are created in `backlog/` with `phase: backlog` |
 | `backlog/` → `ongoing/` | `/sdrive:apply` | Happens at the start of implementation; sets `phase: ongoing` |
-| `ongoing/` → `completed/` | `/sdrive:review` | Happens after merge and archive; sets `phase: completed` |
+| `ongoing/` → `completed/` | `/sdrive:archive` | Happens after merge and archive; sets `phase: completed` |
 | `completed/` → `ongoing/` | `sdrive reopen <feature>` | Manual reopen for further work |
 
 `/sdrive:apply` MUST NOT begin implementation while the spec is still in `backlog/`. If the feature is in neither `backlog/` nor `ongoing/`, the agent stops and asks.
@@ -851,7 +882,7 @@ A feature moves through three spec folders. Each transition has exactly one owne
 
 ```text
 .sdrive/
-├── agents/               # 14 agent definitions
+├── agents/               # 16 agent definitions
 ├── commands/             # Manifest, router, gates, permissions
 ├── schemas/              # JSON schemas
 ├── specs/                # Human-readable specs (lifecycle-partitioned)
@@ -859,14 +890,14 @@ A feature moves through three spec folders. Each transition has exactly one owne
 │   │   └── <feature>/
 │   │       └── <version>/
 │   ├── ongoing/          # Entered by /sdrive:apply
-│   └── completed/        # Entered by /sdrive:review
+│   └── completed/        # Entered by /sdrive:archive
 ├── governance/           # Machine-readable JSON (NOT lifecycle-partitioned)
 │   └── <feature>/
 │       └── <version>/
 ├── onboarding/           # Brownfield onboarding inventory + migration results
 ├── mcp/                  # MCP server + vision-bridge config for AI chat integration
 ├── prototype/            # UI/UX prototypes
-├── reports/              # Security, performance, docs, tests reports
+├── reports/              # Security, performance, docs, tests, debug reports
 ├── context/              # Discovered project context
 ├── dashboard/            # Local web dashboard
 ├── skills/               # AI skills
@@ -1046,7 +1077,7 @@ SpecDrive never overwrites existing MCP entries. It merges safely.
 
 Text-only models (DeepSeek, etc.) cannot see images. SpecDrive wires
 [`vision-bridge-mcp`](https://www.npmjs.com/package/vision-bridge-mcp) alongside
-its own MCP server so **all 14 agents** can read screenshots, mockups, and
+its own MCP server so **all 16 agents** can read screenshots, mockups, and
 diagrams by delegating to a vision model.
 
 It is added automatically on `sdrive init` for every MCP-capable tool, and can be
@@ -1133,6 +1164,18 @@ http://localhost:4747
 - Test coverage per version
 - Team members and roles
 - Recent audit activity
+
+### Feature Detail Page
+
+Click any feature to open its detail page, which has three tabs:
+
+- **Tasks** — the task list for the current version, with status
+- **Reports** — every report written for the feature (docs, performance, reviews, security, tests, debug), read straight from `.sdrive/reports/`
+- **Spec Files** — the raw spec, plan, tasks, traceability, and review documents for the current version, rendered in the dashboard so you never have to open your repo to read them
+
+### Command Reference
+
+The dashboard also includes a **Commands** page listing every slash command, its owning agent, and its description. Clicking a command opens a detail drawer with its purpose, gates, and validators.
 
 ### Filters
 

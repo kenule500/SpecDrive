@@ -153,17 +153,23 @@ The Test Agent:
 
 ---
 
-## 7. Review and Merge
+## 7. Review and Archive
 
 ```text
 /sdrive:review
 ```
 
-Review runs verification and coverage checks before allowing merge.
+Review runs verification and coverage checks and writes a pass/fail verdict. It does **not** merge.
 
+If the audit fails, the feature stays in `ongoing/` and review reports the findings.
 
-On success, the feature folder moves from `specs/ongoing/` to `specs/completed/` and the version's `phase` becomes `completed`. If the audit fails, the feature stays in `ongoing/`.
-Approve the final merge.
+Once review returns `Status: PASS`, archive the feature:
+
+```text
+/sdrive:archive
+```
+
+Archive merges the approved feature to `main` and completes its lifecycle. The feature folder moves from `specs/ongoing/` to `specs/completed/` and the version's `phase` becomes `completed`.
 
 ---
 

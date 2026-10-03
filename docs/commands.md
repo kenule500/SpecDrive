@@ -638,7 +638,7 @@ Archives every ongoing feature that has passed review, one after the other, and 
 ---
 ## Batch Mode (`--all`)
 
-Six commands accept a `--all` flag that runs them across **every ongoing feature** instead of a single one. Features are processed sequentially and an aggregate report is written at the end.
+Eight commands accept a `--all` flag that runs them across **every ongoing feature** instead of a single one. Features are processed sequentially and an aggregate report is written at the end.
 
 | Command | `--all` behaviour | Aggregate report |
 |---------|-------------------|------------------|

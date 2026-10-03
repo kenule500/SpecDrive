@@ -1,6 +1,6 @@
 # SpecDrive Agent Reference
 
-SpecDrive uses 15 specialized agents. Each agent has one slash command.
+SpecDrive uses 16 specialized agents. Each agent has one slash command.
 
 ---
 
@@ -369,7 +369,7 @@ SpecDrive uses 15 specialized agents. Each agent has one slash command.
 - Updates `traceability.json` with test IDs and status in the current version
 - Generates a coverage report at `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md`
 - Writes all artifacts (reports, logs, captured output) under `.sdrive/` — never to the project root
-
-**Batch mode:** `/sdrive:test --all` tests every ongoing feature, one after the other, and writes an aggregate report to `.sdrive/reports/tests/test-report-all-<date>.md`.
 - Runs `sdrive verify <feature>` and the governance validator
 - Does NOT write production code
+
+**Batch mode:** `/sdrive:test --all` tests every ongoing feature, one after the other, and writes an aggregate report to `.sdrive/reports/tests/test-report-all-<date>.md`.

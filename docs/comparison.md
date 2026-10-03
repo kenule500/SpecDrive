@@ -12,6 +12,7 @@
 | Performance agent | ❌ | ❌ | ✅ |
 | SEO optimization (metadata, structured data, crawlability) | ❌ | ❌ | ✅ |
 | Debug agent (layout, API, runtime, glitches) | ❌ | ❌ | ✅ |
+| Archive agent (merge + lifecycle completion) | ❌ | ❌ | ✅ |
 | UI/UX prototype agent | ❌ | ❌ | ✅ |
 | Test agent | ❌ | ⚠️ partial | ✅ dedicated |
 | Deterministic validator | ❌ | ❌ | ✅ |
@@ -48,7 +49,7 @@ SpecDrive is the only system that combines:
 - Per-version lifecycle tracking
 - Explicit feature lifecycle transitions (`backlog` → `ongoing` → `completed`)
 - Enterprise governance
-- Security, performance, and test agents
+- Security, performance, debug, archive, and test agents
 - Spec-to-code verification
 - Coverage enforcement
 - Role-based permissions

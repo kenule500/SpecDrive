@@ -112,7 +112,7 @@ no separate prompt. Each client uses its own config schema:
 
 Text-only models (DeepSeek, etc.) cannot see images. SpecDrive wires
 [`vision-bridge-mcp`](https://www.npmjs.com/package/vision-bridge-mcp) alongside
-its own MCP server so **all 14 agents** can read screenshots, mockups, and
+its own MCP server so **all 16 agents** can read screenshots, mockups, and
 diagrams by delegating to a vision model.
 
 It is added automatically on `sdrive init` for every MCP-capable tool, and can be
