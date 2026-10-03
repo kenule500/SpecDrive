@@ -854,6 +854,11 @@ const SLASH_DETAILS = {
     why: "Ensures the feature is not just correct, but fast enough.",
     when: "After implementation, before review. Use --all to optimise every ongoing feature."
   },
+  "/sdrive:debug": {
+    what: "Reproduces, isolates, and fixes defects — layout, APIs, runtime, and glitches.",
+    why: "Turns a vague \"something is broken\" into a reproduced defect, a root cause, and a verified fix.",
+    when: "When something is visibly wrong. Use --all to sweep every ongoing feature for defects."
+  },
   "/sdrive:review": {
     what: "Runs the final audit and produces a pass/fail verdict.",
     why: "The last quality gate before work is considered done. It does not merge or archive.",
@@ -948,6 +953,11 @@ const OPTIONAL_COMMANDS = {
       command: "/sdrive:performance",
       what: "Benchmarks and optimizes the code for speed and efficiency.",
       when: "When performance matters — before a release or after a slowdown."
+    },
+    {
+      command: "/sdrive:debug",
+      what: "Reproduces, isolates, and fixes defects — layout, APIs, runtime, and glitches.",
+      when: "When something is visibly wrong — a broken layout, a failing endpoint, a console error."
     },
     {
       command: "/sdrive:docs",

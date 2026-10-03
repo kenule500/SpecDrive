@@ -10,6 +10,7 @@
 | Constitution governance | ⚠️ basic | ⚠️ basic | ✅ advanced |
 | Security agent | ❌ | ❌ | ✅ |
 | Performance agent | ❌ | ❌ | ✅ |
+| Debug agent (layout, API, runtime, glitches) | ❌ | ❌ | ✅ |
 | UI/UX prototype agent | ❌ | ❌ | ✅ |
 | Test agent | ❌ | ⚠️ partial | ✅ dedicated |
 | Deterministic validator | ❌ | ❌ | ✅ |

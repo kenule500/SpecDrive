@@ -1,6 +1,6 @@
 # SpecDrive Agent Reference
 
-SpecDrive uses 14 specialized agents. Each agent has one slash command.
+SpecDrive uses 15 specialized agents. Each agent has one slash command.
 
 ---
 
@@ -23,6 +23,7 @@ SpecDrive uses 14 specialized agents. Each agent has one slash command.
 | 12 | Product Plan | `/sdrive:product-plan` | `12-product-plan.md` |
 | 13 | Update Proposal | `/sdrive:update-propose` | `13-update-propose.md` |
 | 14 | Archive | `/sdrive:archive` | `14-archive.md` |
+| 15 | Debug | `/sdrive:debug` | `15-debug.md` |
 
 ---
 
@@ -233,7 +234,7 @@ SpecDrive uses 14 specialized agents. Each agent has one slash command.
 
 **Command:** `/sdrive:performance`
 
-**Purpose:** Benchmark and optimize.
+**Purpose:** Benchmark and optimize for speed.
 
 **What it does:**
 
@@ -244,7 +245,42 @@ SpecDrive uses 14 specialized agents. Each agent has one slash command.
 - Writes report with version in filename
 - Updates traceability only for performance NFR rows in the current version
 
+**Scope:** Speed only. If the baseline already meets the NFRs, the agent stops — it does not over-optimize. Correctness defects (layout breakage, failing APIs, runtime errors, visual glitches) are **not** fixed here; they are recorded under "Defects Handed Off" and handed to `/sdrive:debug`.
+
 **Batch mode:** `/sdrive:performance --all` optimises every ongoing feature and writes an aggregate report to `.sdrive/reports/performance/performance-report-all-<date>.md`.
+
+---
+
+## Debug Agent
+
+**Command:** `/sdrive:debug`
+
+**Purpose:** Reproduce, isolate, and fix defects — layout, APIs, runtime, and glitches. This is the chief debugger.
+
+**What it does:**
+
+- Reproduces the defect and captures before evidence
+- Isolates it to the smallest unit that still exhibits it
+- States the root cause in one sentence, distinguished from the symptom
+- Gets approval, then applies the smallest correct fix
+- Re-runs the reproduction and captures after evidence
+- Adds a regression test that would have caught the defect
+- Writes a versioned report to `.sdrive/reports/debug/`
+
+**Defect classes:**
+
+| Class | Examples | Detection |
+|-------|----------|-----------|
+| **LAYOUT** | Overlap, overflow, clipping, z-index collision, container escape, breakpoint breakage | Headless-browser bounding-box comparison; `vision-bridge` screenshot fallback |
+| **API** | Failing endpoint, wrong status code, malformed payload, schema mismatch, auth failure, timeout | Issue the request, capture status/headers/body, compare to contract |
+| **RUNTIME** | Uncaught exception, console error, hydration mismatch, unhandled rejection, state bug | Capture console output and stack trace |
+| **GLITCH** | Flicker, shift on interaction, broken transition, misaligned icon, inconsistent spacing | Interaction trace plus before/after screenshots |
+
+**Reactive, not proactive:** Run this when something is visibly wrong. It does not optimize for speed (that is `/sdrive:performance`) and does not audit against acceptance criteria (that is `/sdrive:review`).
+
+**Evidence rule:** A fix is only verified when the same check that found the defect now passes. Reading the code is not verification.
+
+**Batch mode:** `/sdrive:debug --all` sweeps every ongoing feature and writes an aggregate report to `.sdrive/reports/debug/debug-report-all-<date>.md`.
 
 ---
 

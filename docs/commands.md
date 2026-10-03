@@ -404,7 +404,8 @@ The dashboard also supports filters:
 | `/sdrive:docs` | Documentation | Generate docs |
 | `/sdrive:apply` | Implementation | Write production code; move feature from `backlog/` to `ongoing/` |
 | `/sdrive:test` | Test | Write tests, run them, report coverage |
-| `/sdrive:performance` | Performance | Benchmark and optimize |
+| `/sdrive:performance` | Performance | Benchmark and optimize for speed |
+| `/sdrive:debug` | Debug | Reproduce, isolate, and fix defects — layout, APIs, runtime, glitches |
 | `/sdrive:review` | Review | Final audit — pass/fail verdict, no merge |
 | `/sdrive:archive` | Archive | Merge an approved feature to `main` and complete its lifecycle |
 | `/sdrive:secure` | Security | Security audit |
@@ -549,6 +550,55 @@ Tests every ongoing feature, one after the other, and writes an aggregate report
 - Merge
 
 ---
+### `/sdrive:debug`
+
+Reproduces, isolates, and fixes defects — layout breakage, API failures, runtime errors, and visual glitches. This is the chief debugger.
+
+```text
+/sdrive:debug "cards overlap on the services page"
+```
+
+**What it does:**
+
+- Reproduces the defect and captures before evidence (measurements, status codes, stack traces, screenshots)
+- Isolates it to the smallest unit that still exhibits it
+- States the root cause in one sentence, distinguished from the symptom
+- Requires approval before changing code
+- Applies the smallest correct fix — no unrelated refactoring
+- Re-runs the reproduction and captures after evidence with the same method
+- Adds a regression test that would have caught the defect
+- Writes a versioned report to `.sdrive/reports/debug/debug-report-<feature>-<version>-<date>.md`
+
+**Defect classes:**
+
+| Class | Examples | Detection |
+|-------|----------|-----------|
+| **LAYOUT** | Overlap, overflow, clipping, z-index collision, container escape, breakpoint breakage | Headless-browser bounding-box comparison; `vision-bridge` screenshot fallback |
+| **API** | Failing endpoint, wrong status code, malformed payload, schema mismatch, auth failure, timeout | Issue the request, capture status/headers/body, compare to contract |
+| **RUNTIME** | Uncaught exception, console error, hydration mismatch, unhandled rejection, state bug | Capture console output and stack trace |
+| **GLITCH** | Flicker, shift on interaction, broken transition, misaligned icon, inconsistent spacing | Interaction trace plus before/after screenshots |
+
+**When to use:**
+
+- When something is visibly wrong — a broken layout, a failing endpoint, a console error, a visual glitch
+- After `/sdrive:performance` hands off a correctness defect
+
+**Batch mode:**
+
+```text
+/sdrive:debug --all
+```
+
+Sweeps every ongoing feature for defects, one after the other, and writes an aggregate report to `.sdrive/reports/debug/debug-report-all-<date>.md`.
+
+**What it does NOT do:**
+
+- Optimize for speed (use `/sdrive:performance`)
+- Audit against acceptance criteria (use `/sdrive:review`)
+- Write new features (use `/sdrive:apply`)
+
+---
+
 ### `/sdrive:archive`
 
 Merges an approved feature to `main` and completes its lifecycle.
@@ -598,6 +648,7 @@ Six commands accept a `--all` flag that runs them across **every ongoing feature
 | `/sdrive:archive --all` | Archives every ongoing feature that has passed review. | `.sdrive/reports/reviews/archive-report-all-<date>.md` |
 | `/sdrive:secure --all` | Audits every ongoing feature. Approval gates still apply per feature. | `.sdrive/reports/security/security-audit-all-<date>.md` |
 | `/sdrive:performance --all` | Optimises every ongoing feature. | `.sdrive/reports/performance/performance-report-all-<date>.md` |
+| `/sdrive:debug --all` | Sweeps every ongoing feature for defects. | `.sdrive/reports/debug/debug-report-all-<date>.md` |
 | `/sdrive:docs --all` | Documents every ongoing feature. | `.sdrive/docs/coverage-report-all-<date>.md` |
 
 **Behaviour notes:**

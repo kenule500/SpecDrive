@@ -12,6 +12,7 @@
     "/sdrive:apply": ["admin", "developer"],
     "/sdrive:test": ["admin", "developer"],
     "/sdrive:performance": ["admin", "developer"],
+    "/sdrive:debug": ["admin", "developer"],
     "/sdrive:review": ["admin", "reviewer"],
     "/sdrive:archive": ["admin", "reviewer"],
     "/sdrive:secure": ["admin", "developer"],

@@ -516,6 +516,7 @@ The command enumerates every feature in `specs/ongoing/`, processes them **seque
 | `/sdrive:review --all` | Reviews and finalizes every ongoing feature one after the other. Never merges a feature that fails review. |
 | `/sdrive:secure --all` | Runs the security audit against every ongoing feature. |
 | `/sdrive:performance --all` | Optimises every ongoing feature. |
+| `/sdrive:debug --all` | Sweeps every ongoing feature for defects. |
 | `/sdrive:docs --all` | Generates documentation for every ongoing feature. |
 
 **Behaviour notes:**
@@ -534,7 +535,8 @@ The command enumerates every feature in `specs/ongoing/`, processes them **seque
 | `/sdrive:update-propose` | Extend an existing feature spec | When adding requirements to a feature that already exists |
 | `/sdrive:design` | Build UI/UX prototype | When there is no existing prototype |
 | `/sdrive:secure` | Security audit and fixes | When security is a concern |
-| `/sdrive:performance` | Benchmark and optimize | When performance NFRs are not met |
+| `/sdrive:performance` | Benchmark and optimize for speed | When performance NFRs are not met |
+| `/sdrive:debug` | Reproduce, isolate, and fix defects | When something is visibly wrong — broken layout, failing API, console error, glitch |
 | `/sdrive:docs` | Generate documentation | When docs are outdated or missing |
 | `/sdrive:sync` | Sync spec → plan → tasks | After manually hand-editing a single file |
 | `/sdrive:skills` | Manage AI skills | When auditing or discovering skills |
@@ -594,10 +596,49 @@ Benchmarks and optimizes performance.
 - Applies optimizations with approval
 - Verifies improvements
 
+**Scope:** Speed only. If the baseline already meets the NFRs, the agent stops — it does not over-optimize. Correctness defects (layout breakage, failing APIs, runtime errors, visual glitches) are **not** fixed here; they are recorded under "Defects Handed Off" and handed to `/sdrive:debug`.
+
 **When to use:**
 
 - When performance NFRs are not met
 - After major feature implementations
+
+---
+
+### `/sdrive:debug`
+
+Supports `--all` to sweep every ongoing feature for defects.
+
+Reproduces, isolates, and fixes defects — layout breakage, API failures, runtime errors, and visual glitches. This is the chief debugger.
+
+**What it does:**
+
+- Reproduces the defect and captures before evidence
+- Isolates it to the smallest unit that still exhibits it
+- States the root cause in one sentence, distinguished from the symptom
+- Applies the smallest correct fix after approval
+- Re-runs the reproduction and captures after evidence with the same method
+- Adds a regression test that would have caught the defect
+- Writes a versioned report to `.sdrive/reports/debug/`
+
+**Defect classes:**
+
+| Class | Examples | Detection |
+|-------|----------|-----------|
+| **LAYOUT** | Overlap, overflow, clipping, z-index collision, container escape, breakpoint breakage | Headless-browser bounding-box comparison; `vision-bridge` screenshot fallback |
+| **API** | Failing endpoint, wrong status code, malformed payload, schema mismatch, auth failure, timeout | Issue the request, capture status/headers/body, compare to contract |
+| **RUNTIME** | Uncaught exception, console error, hydration mismatch, unhandled rejection, state bug | Capture console output and stack trace |
+| **GLITCH** | Flicker, shift on interaction, broken transition, misaligned icon, inconsistent spacing | Interaction trace plus before/after screenshots |
+
+**When to use:**
+
+- When something is visibly wrong — a broken layout, a failing endpoint, a console error, a visual glitch
+- After `/sdrive:performance` hands off a correctness defect
+
+**What it does NOT do:**
+
+- Optimize for speed (use `/sdrive:performance`)
+- Audit against acceptance criteria (use `/sdrive:review`)
 
 ---
 
@@ -704,10 +745,11 @@ Audits and manages AI skills.
 | Discover-skills | `05-discover-skills.md` | Audit AI skills |
 | Documentation | `06-documentation.md` | Generate docs, detect drift |
 | Implementation | `07-implementation.md` | Write production code |
-| Performance | `08-performance.md` | Benchmark and optimize |
+| Performance | `08-performance.md` | Benchmark and optimize for speed |
 | Review & Complete | `09-review-complete.md` | Final audit and merge |
 | Security | `10-security.md` | Security audit and fixes |
 | Test | `11-test.md` | Write tests, run them, report coverage |
+| Debug | `15-debug.md` | Reproduce, isolate, and fix defects — layout, APIs, runtime, glitches |
 
 ---
 

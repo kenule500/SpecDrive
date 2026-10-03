@@ -96,6 +96,16 @@
       "validators": ["governance"]
     },
     {
+      "command": "/sdrive:debug",
+      "agent": "debug",
+      "agentFile": ".sdrive/agents/15-debug.md",
+      "description": "Reproduce, isolate, and fix defects — layout, APIs, runtime, and glitches",
+      "acceptsFeature": true,
+      "acceptsAll": true,
+      "gates": [],
+      "validators": ["governance"]
+    },
+    {
       "command": "/sdrive:review",
       "agent": "review-complete",
       "agentFile": ".sdrive/agents/09-review-complete.md",

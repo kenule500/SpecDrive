@@ -248,6 +248,12 @@ Performance issues?
 /sdrive:performance
 ```
 
+Something visibly broken — a layout defect, a failing endpoint, a console error?
+
+```text
+/sdrive:debug "cards overlap on the services page"
+```
+
 Docs outdated?
 
 ```text

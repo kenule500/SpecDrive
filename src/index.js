@@ -463,7 +463,7 @@ function safeMergeVisionBridge(configPath, clientName) {
 }
 
 // Installs vision-bridge-mcp for every MCP client implied by the selected tools.
-// This gives text-only models image-reading capability across all 14 agents.
+// This gives text-only models image-reading capability across all 15 agents.
 function autoWireVisionBridge(selectedTools) {
   const clientNames = new Set();
 
