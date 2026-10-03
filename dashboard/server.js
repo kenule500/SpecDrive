@@ -898,7 +898,7 @@ const PRODUCT_WORKFLOWS = [
     tagline: "Brand-new project",
     icon: "✦",
     summary:
-      "You are starting from nothing — an empty folder, or a repo that has only just been scaffolded and has no plan yet. SpecDrive guides you from that blank slate to governed, specified, tested code.",
+      "You are beginning with a clean slate — either an empty folder or a freshly scaffolded repo that has no plan in place yet. SpecDrive walks you from that starting point all the way to governed, specified, and tested code.",
     steps: ["/sdrive:constitution", "/sdrive:product-plan"],
     iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"]
   },
@@ -908,7 +908,7 @@ const PRODUCT_WORKFLOWS = [
     tagline: "Existing codebase",
     icon: "◈",
     summary:
-      "You already have a codebase that has been under development for a while — you have a plan and the work has progressed well beyond the start. SpecDrive inventories it, writes retroactive specs, and marks gaps as deferred so nothing breaks.",
+      "Your codebase is already well underway — a plan exists and development has moved far past the early stages. SpecDrive takes stock of what is there, writes specs after the fact, and flags the gaps as deferred so nothing breaks.",
     steps: ["/sdrive:onboard", "/sdrive:constitution"],
     iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"]
   },
@@ -918,7 +918,7 @@ const PRODUCT_WORKFLOWS = [
     tagline: "Coming from another spec framework",
     icon: "⇄",
     summary:
-      "You are coming from another spec-driven framework such as Software Factory or OpenSpec. SpecDrive detects it and migrates your existing specs in, preserving the originals.",
+      "You are arriving from a different spec-driven framework, such as Software Factory or OpenSpec. SpecDrive recognizes it, brings your existing specs across, and leaves the originals untouched.",
     steps: ["/sdrive:onboard", "/sdrive:constitution", "/sdrive:sync"],
     iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"]
   }
