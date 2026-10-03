@@ -632,10 +632,14 @@ program
       console.log("  Created: .sdrive/workflow-state.json");
     }
 
+    // NOTE: `sdrive init` deliberately does NOT write a constitution. A stub
+    // file would make the project look governed while saying nothing, and it
+    // would silently satisfy the "constitution exists" checks. The real
+    // constitution is authored by `/sdrive:constitution`, which interviews the
+    // user and writes a meaningful document.
     const constitutionPath = path.join(sdriveRoot, "constitution.md");
     if (!fs.existsSync(constitutionPath)) {
-      fs.writeFileSync(constitutionPath, "# SpecDrive Constitution\n\nInitialized by `sdrive init`.\n");
-      console.log("  Created: .sdrive/constitution.md");
+      console.log("  Next: run /sdrive:constitution to author .sdrive/constitution.md");
     }
 
     const configPath = path.join(sdriveRoot, "config.json");

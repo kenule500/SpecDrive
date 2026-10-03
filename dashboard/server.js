@@ -915,12 +915,15 @@ const PRODUCT_WORKFLOWS = [
   {
     id: "migration",
     name: "Migration",
-    tagline: "Coming from another spec framework",
+    tagline: "Brownfield + migration",
     icon: "⇄",
+    badge: "Detected automatically",
     summary:
       "You are arriving from a different spec-driven framework, such as Software Factory or OpenSpec. SpecDrive recognizes it, brings your existing specs across, and leaves the originals untouched.",
-    steps: ["/sdrive:onboard", "/sdrive:constitution", "/sdrive:sync"],
-    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"]
+    steps: ["/sdrive:onboard", "/sdrive:constitution"],
+    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"],
+    afterNote:
+      "After migration, run /sdrive:sync to align spec, plan, tasks, and traceability."
   }
 ];
 

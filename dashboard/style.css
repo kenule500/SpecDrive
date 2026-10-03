@@ -2251,6 +2251,43 @@ body {
   color: var(--text-3);
 }
 
+/* Small pill on a lifecycle card that flags a path SpecDrive detects on its
+   own (e.g. Migration is only offered when an external spec system is found). */
+.workflow-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+}
+
+.workflow-badge::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #f59e0b;
+}
+
+/* Footnote on a lifecycle card for a step that happens after the setup steps
+   but is not part of the numbered lifecycle (e.g. /sdrive:sync after migration). */
+.workflow-after-note {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
 .workflow-summary {
   margin: 0;
   font-size: 13px;

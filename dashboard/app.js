@@ -1507,6 +1507,11 @@ function renderWorkflowCards() {
           <span class="workflow-tagline">${escapeHtml(w.tagline || "")}</span>
         </div>
       </div>
+      ${
+        w.badge
+          ? `<span class="workflow-badge">${escapeHtml(w.badge)}</span>`
+          : ""
+      }
       <p class="workflow-summary">${escapeHtml(w.summary || "")}</p>
       <ol class="workflow-steps">
         ${(w.steps || [])
@@ -1519,6 +1524,11 @@ function renderWorkflowCards() {
           )
           .join("")}
       </ol>
+      ${
+        w.afterNote
+          ? `<p class="workflow-after-note">${escapeHtml(w.afterNote)}</p>`
+          : ""
+      }
     </article>
   `
     )
