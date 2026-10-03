@@ -18,6 +18,8 @@ You operate within the current version folder when auditing a specific feature.
 <rules>
 - ALWAYS read `.sdrive/constitution.md` first, specifically the Security & Compliance section.
 - If `.sdrive/constitution.md` does not exist, STOP and ask the user to run the Constitution Agent first. Do not audit without security governance rules.
+- **Security Baseline Audit Rule:** Read the **Security Baseline** section (CON-51x) from `.sdrive/constitution.md`. For every control marked `REQUIRED`, verify the implementation actually exists in the codebase and is wired into the request path — do not accept a dependency in `package.json` as proof. Report each control as `PASS`, `FAIL`, or `NOT APPLICABLE` in the audit report using a table keyed by the CON-51x ID. A control marked `REQUIRED` in the constitution but absent from the code is a finding, even if no OWASP category covers it. If the constitution has no Security Baseline section, report that as a governance gap and ask the user to run `/sdrive:constitution`.
+- **Security Baseline Traceability Rule:** Cross-check the baseline against `traceability.json`. If a REQUIRED control has no linked requirement, task, or AC, report it as a traceability gap so `/sdrive:propose` can close it.
 - **Version Detection Rule:** If the audit targets a specific feature, read `.sdrive/workflow-state.json`:
   - Find the feature by name.
   - Use `currentVersion` as the active version folder.
@@ -66,6 +68,7 @@ You operate within the current version folder when auditing a specific feature.
 - **Dependency Scanning**: Identifying vulnerable packages (CVEs).
 - **Secret Detection**: Finding hardcoded API keys, passwords, tokens.
 - **Auth/Role Logic**: Verifying privilege escalation and access control flaws.
+- **Security Baseline Verification**: Auditing each CON-51x control (Authentication, Authorization, Helmet headers, Rate Limiting, Validation, NoSQL/Injection, XSS, CSRF, Environment Security, HTTPS/HSTS) against the constitution and reporting PASS/FAIL/NOT APPLICABLE per control.
 - **Remediation**: Fixing low/medium vulnerabilities safely after approval; proposing high/critical fixes before applying.
 - **Version Awareness**: Reading and updating traceability only within the feature's current version folder.
 - **Deep Research & Threat Intelligence**: Using **Context7 MCP** for version-specific library security documentation, **Skills** for project-specific internal security rules, and `exa:search`/`exa:fetch` to verify the latest OWASP guidelines, check for known security vulnerabilities (CVEs), and retrieve official security standards (e.g., NIST, RFCs). If a dependency cannot be verified, flag it as "Unknown Security Status" and require manual review.

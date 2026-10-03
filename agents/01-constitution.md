@@ -35,6 +35,8 @@ You extract prescriptive rules, standards, and constraints from the discovered c
 - If conflicts exist between context files, universal security defaults, or the existing constitution, STOP and ask the user to resolve them. Never silently resolve conflicts.
 - Before assigning new IDs, scan the existing constitution for all currently used IDs. Continue numbering from the highest existing ID in each category. NEVER reassign or reuse an existing rule ID.
 - Universal security defaults are additions, not extracted rules. They MUST be listed separately in the approval summary and require explicit approval.
+- **Security Baseline Rule:** The constitution MUST declare a **Security Baseline** section (CON-5xx) listing the security controls that apply to any feature touching authentication, user input, or an HTTP surface. The baseline is the single source of truth that `/sdrive:propose` expands into concrete tasks. At minimum it MUST cover: Authentication, Authorization, Security Headers (Helmet), Rate Limiting, Input Validation, NoSQL/Injection Protection, XSS Protection, CSRF Protection, Environment Security, and HTTPS/HSTS. Each control MUST state whether it is REQUIRED or NOT APPLICABLE for this project, with a one-line rationale. If a control is not applicable, say so explicitly — never omit it silently.
+- **Security Baseline Ownership Rule:** The constitution DECLARES the baseline. It does NOT implement it and does NOT generate tasks. Implementation belongs to `/sdrive:apply`; task generation belongs to `/sdrive:propose`; verification belongs to `/sdrive:secure`. Never write application code or task lists from this agent.
 - After writing, scan the constitution for accidental secret patterns before reporting completion.
 - ALWAYS update the Version and Changelog when modifying the file.
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use your environment's native approval mechanism (e.g., `vscode/askQuestions`) when user approval is required.
@@ -176,6 +178,25 @@ This document is the single source of truth for all project standards, rules, an
 - **CON-504:** If a task requires environment configuration, AI agents MUST create or update `.env.example` only, NEVER `.env` or `.env.local`. <!-- source: Universal Security Default -->
 - **CON-505:** AI agents MUST NEVER commit actual secrets, API keys, passwords, or tokens to the repository, even in test files or comments. <!-- source: Universal Security Default -->
 
+### Security Baseline (CON-51x)
+
+Every feature that touches authentication, user input, or an HTTP surface MUST address each control below. `/sdrive:propose` expands the REQUIRED controls into concrete tasks; `/sdrive:apply` builds them; `/sdrive:secure` verifies them.
+
+| ID | Control | Status | Rationale |
+|----|---------|--------|-----------|
+| CON-511 | Authentication | [REQUIRED / NOT APPLICABLE] | [one-line rationale] |
+| CON-512 | Authorization | [REQUIRED / NOT APPLICABLE] | [one-line rationale] |
+| CON-513 | Security Headers (Helmet) | [REQUIRED / NOT APPLICABLE] | [one-line rationale] |
+| CON-514 | Rate Limiting | [REQUIRED / NOT APPLICABLE] | [one-line rationale] |
+| CON-515 | Input Validation | [REQUIRED / NOT APPLICABLE] | [one-line rationale] |
+| CON-516 | NoSQL / Injection Protection | [REQUIRED / NOT APPLICABLE] | [one-line rationale] |
+| CON-517 | XSS Protection | [REQUIRED / NOT APPLICABLE] | [one-line rationale] |
+| CON-518 | CSRF Protection | [REQUIRED / NOT APPLICABLE] | [one-line rationale] |
+| CON-519 | Environment Security | [REQUIRED / NOT APPLICABLE] | [one-line rationale] |
+| CON-520 | HTTPS / HSTS | [REQUIRED / NOT APPLICABLE] | [one-line rationale] |
+
+<!-- source: SpecDrive Security Baseline -->
+
 ## 6. Git Workflow & Process (CON-6xx)
 - **CON-601:** [Rule text] <!-- source: .sdrive/context/ai-workflow-rules.md -->
 - **CON-602:** No feature may be marked complete unless `sdrive verify <feature>` returns `pass` or `warn`. <!-- source: SpecDrive -->
@@ -202,6 +223,7 @@ The constitution phase is NOT complete until:
 - [ ] Prescriptive rules extracted with source provenance.
 - [ ] Conflicts detected and resolved with user input.
 - [ ] Universal Security Defaults presented separately and approved.
+- [ ] Security Baseline (CON-51x) section present with all 10 controls, each marked REQUIRED or NOT APPLICABLE with a rationale.
 - [ ] Rule IDs assigned with continuity, no reuse.
 - [ ] Versioning rules (CON-603 to CON-605) included.
 - [ ] Version and Changelog updated.
@@ -215,7 +237,8 @@ At the end of your work, provide:
 2. ✅ Generated/updated context files with sources.
 3. ✅ Summary of rules extracted from context files.
 4. ✅ Separate confirmation of "Universal Security Defaults" approval.
-5. ✅ The complete, merged `.sdrive/constitution.md` file content.
-6. ✅ Confirmation that the post-write secret scan passed.
-7. ✅ Confirmation that versioning rules (CON-603 to CON-605) are included.
+5. ✅ The complete Security Baseline (CON-51x) table with each control marked REQUIRED or NOT APPLICABLE and a rationale.
+6. ✅ The complete, merged `.sdrive/constitution.md` file content.
+7. ✅ Confirmation that the post-write secret scan passed.
+8. ✅ Confirmation that versioning rules (CON-603 to CON-605) are included.
 </deliverables>

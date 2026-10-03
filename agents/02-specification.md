@@ -54,6 +54,14 @@ You ensure all documents are aligned and every requirement is traceable.
   - `.sdrive/specs/{backlog|ongoing|completed}/<feature>/<version>/`
   - `.sdrive/governance/<feature>/<version>/`
 - **Version Isolation Rule:** NEVER modify an older version folder. Only write to the current version.
+- **Security Baseline Expansion Rule:** Read the **Security Baseline** section (CON-51x) from `.sdrive/constitution.md`. If the feature touches authentication, user input, or an HTTP surface, you MUST expand every control marked `REQUIRED` into concrete artifacts:
+  - Add a `NFR-xxx` requirement for each REQUIRED control (e.g. `NFR-010: The API MUST set security headers via Helmet`).
+  - Add the corresponding dependency to `plan.json` `dependencies[]` with `action: "add"` (e.g. `helmet`, `express-rate-limit`, `csurf`, `express-validator`/`zod`, `mongo-sanitize`).
+  - Add at least one task in `tasks.json` per REQUIRED control (e.g. "Add Helmet middleware with CSP and HSTS", "Add rate limiter to /api/auth").
+  - Link each control to its requirement, task, and AC in `traceability.json` so `/sdrive:secure` can audit it.
+  - If a control is marked `NOT APPLICABLE`, record that decision in `spec.md` under a **Security Baseline** heading with the rationale — do NOT silently skip it.
+  - If the constitution has no Security Baseline section, STOP and ask the user to run `/sdrive:constitution` first. Do not invent a baseline.
+- **Security Baseline Ownership Rule:** This agent EXPANDS the baseline into requirements, dependencies, and tasks. It does NOT implement the controls (that is `/sdrive:apply`) and does NOT audit them (that is `/sdrive:secure`).
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use the available shell command capability to run the commands above.
 - ALWAYS read relevant files in `.sdrive/skills/` before generating specifications or documentation to ensure compliance with project-specific standards.
 </rules>
@@ -161,6 +169,7 @@ For feature `<feature-name>` and version `<version>`, create these files:
      - Do NOT create a verification task that invokes a test runner (e.g. "Run `bun run test`", "Run `npm test`", "confirm the full suite passes"). Test execution is `/sdrive:test`'s job, not a verification task.
      - Verification-phase tasks are limited to: formatter, linter, typechecker (`tsc --noEmit`), `sdrive verify`, `node .sdrive/scripts/validate-governance.js`, and manual checks (responsive breakpoints, RTL, reduced motion, JS-disabled).
    - **Dependency Recording Rule:** Record every third-party dependency the feature needs in `plan.json` `dependencies[]` with `name`, `type`, `action` (`add`/`update`/`remove`/`no_change`), and `notes`. For each dependency with `action: "add"`, note in `notes` whether a skill is expected (e.g. `"skill: framer-motion"`). Do NOT install packages or skills here — the Implementation Agent (`/sdrive:apply`) provisions a matching skill in `.sdrive/skills/` for every `action: "add"` dependency before writing code that uses it.
+   - **Security Baseline Expansion:** Apply the **Security Baseline Expansion Rule**. Read the CON-51x baseline from the constitution and, for every control marked `REQUIRED`, add its `NFR-xxx` requirement, its `plan.json` dependency, and its `tasks.json` task. Record `NOT APPLICABLE` decisions with rationale in `spec.md`. If the constitution has no Security Baseline section, STOP and ask the user to run `/sdrive:constitution` first.
    - Update `traceability.json` with plan sections and task IDs.
    - Run validators again.
    - **GATE 2:** STOP and ask: "Plan and tasks draft complete. Review and approve to start implementation?"
