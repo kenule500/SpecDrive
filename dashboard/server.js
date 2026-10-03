@@ -855,12 +855,20 @@ const SLASH_DETAILS = {
     when: "After implementation, before review. Use --all to optimise every ongoing feature."
   },
   "/sdrive:review": {
-    what: "Runs the final audit, then merges and archives the feature.",
-    why: "The last quality gate before work is considered done.",
+    what: "Runs the final audit and produces a pass/fail verdict.",
+    why: "The last quality gate before work is considered done. It does not merge or archive.",
     when: "When the feature is complete. Use --all to review every ongoing feature one after the other.",
     optional: true,
     optionalNote:
       "Optional — run when development is done (end of a sprint or once an MVP is complete), not on every change."
+  },
+  "/sdrive:archive": {
+    what: "Merges an approved feature to main and completes its lifecycle.",
+    why: "Turns a passing review into shipped, archived work — specs move to completed/ and the branch is cleaned up.",
+    when: "Only after /sdrive:review has passed. Use --all to archive every ongoing feature that passed review.",
+    optional: true,
+    optionalNote:
+      "Optional — run after a passing review, when you are ready to ship and close out the feature."
   },
   "/sdrive:secure": {
     what: "Performs a security audit, threat modelling, and fixes.",
@@ -898,9 +906,10 @@ const PRODUCT_WORKFLOWS = [
       "/sdrive:propose",
       "/sdrive:apply",
       "/sdrive:test",
-      "/sdrive:review"
+      "/sdrive:review",
+      "/sdrive:archive"
     ],
-    optional: ["/sdrive:test", "/sdrive:review"],
+    optional: ["/sdrive:test", "/sdrive:review", "/sdrive:archive"],
     optionalNote:
       "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
     bestFor: "New products, prototypes, and greenfield builds."
@@ -918,9 +927,10 @@ const PRODUCT_WORKFLOWS = [
       "/sdrive:propose",
       "/sdrive:apply",
       "/sdrive:test",
-      "/sdrive:review"
+      "/sdrive:review",
+      "/sdrive:archive"
     ],
-    optional: ["/sdrive:test", "/sdrive:review"],
+    optional: ["/sdrive:test", "/sdrive:review", "/sdrive:archive"],
     optionalNote:
       "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
     bestFor: "Adopting SpecDrive into a live or legacy project."
@@ -937,11 +947,12 @@ const PRODUCT_WORKFLOWS = [
       "/sdrive:constitution",
       "/sdrive:sync",
       "/sdrive:apply",
-      "/sdrive:review"
+      "/sdrive:review",
+      "/sdrive:archive"
     ],
-    optional: ["/sdrive:review"],
+    optional: ["/sdrive:review", "/sdrive:archive"],
     optionalNote:
-      "Run this when development is done — at the end of a sprint or once an MVP is complete. It is not needed on every change.",
+      "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
     bestFor: "Teams moving from OpenSpec or Spec-Kit."
   },
   {
@@ -956,9 +967,10 @@ const PRODUCT_WORKFLOWS = [
       "/sdrive:design",
       "/sdrive:apply",
       "/sdrive:test",
-      "/sdrive:review"
+      "/sdrive:review",
+      "/sdrive:archive"
     ],
-    optional: ["/sdrive:test", "/sdrive:review"],
+    optional: ["/sdrive:test", "/sdrive:review", "/sdrive:archive"],
     optionalNote:
       "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
     bestFor: "Ongoing development on an established product."

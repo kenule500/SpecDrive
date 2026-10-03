@@ -112,7 +112,7 @@ When invoked as `/sdrive:test --all`, test every ongoing feature sequentially.
    - Summarize: how many features passed, how many incomplete, how many blocked/skipped.
    - Recommend next step: `/sdrive:review --all` to review every ongoing feature.
 
-4. **NEVER** modify production code, and NEVER mark a feature complete in `--all` mode — testing does not finalize a feature. Only `/sdrive:review` does that.
+4. **NEVER** modify production code, and NEVER mark a feature complete in `--all` mode — testing does not finalize a feature. Only `/sdrive:review` (audit) and `/sdrive:archive` (merge + lifecycle) do that.
 </all-mode>
 
 <workflow>

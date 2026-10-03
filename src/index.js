@@ -120,8 +120,24 @@ function mergeBundledSlashCommands(packageRoot, sdriveRoot) {
       return true;
     });
 
+    // Refresh metadata (description, agent, gates, validators, flags) on commands
+    // that already exist so wording changes ship with `sdrive update`. User-owned
+    // fields are preserved; only the framework-owned metadata is overwritten.
+    let updatedCommands = 0;
+    for (const packaged of packagedManifest.commands || []) {
+      const installed = installedManifest.commands.find((c) => c.command === packaged.command);
+      if (!installed) continue;
+      for (const key of ["agent", "agentFile", "description", "acceptsFeature", "acceptsAll", "gates", "validators"]) {
+        if (packaged[key] === undefined) continue;
+        if (JSON.stringify(installed[key]) !== JSON.stringify(packaged[key])) {
+          installed[key] = packaged[key];
+          updatedCommands += 1;
+        }
+      }
+    }
+
     let installedPermissions;
-    if (addedCommands.length > 0 && fs.existsSync(packagedPermissionsPath) && fs.existsSync(installedPermissionsPath)) {
+    if ((addedCommands.length > 0 || updatedCommands > 0) && fs.existsSync(packagedPermissionsPath) && fs.existsSync(installedPermissionsPath)) {
       const packagedPermissions = JSON.parse(fs.readFileSync(packagedPermissionsPath, "utf8"));
       installedPermissions = JSON.parse(fs.readFileSync(installedPermissionsPath, "utf8"));
       installedPermissions.rules = installedPermissions.rules || {};
@@ -138,9 +154,12 @@ function mergeBundledSlashCommands(packageRoot, sdriveRoot) {
       fs.writeFileSync(installedPermissionsPath, JSON.stringify(installedPermissions, null, 2));
     }
 
-    if (addedCommands.length > 0) {
+    if (addedCommands.length > 0 || updatedCommands > 0) {
       fs.writeFileSync(installedManifestPath, JSON.stringify(installedManifest, null, 2));
-      console.log(`  Updated: .sdrive/commands/manifest.json (${addedCommands.length} new command(s))`);
+      const parts = [];
+      if (addedCommands.length > 0) parts.push(`${addedCommands.length} new command(s)`);
+      if (updatedCommands > 0) parts.push(`${updatedCommands} metadata update(s)`);
+      console.log(`  Updated: .sdrive/commands/manifest.json (${parts.join(", ")})`);
     }
   } catch (error) {
     console.warn("  ⚠️  Could not merge bundled slash commands. Check .sdrive/commands/manifest.json and permissions.json.");

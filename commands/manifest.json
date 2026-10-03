@@ -99,7 +99,17 @@
       "command": "/sdrive:review",
       "agent": "review-complete",
       "agentFile": ".sdrive/agents/09-review-complete.md",
-      "description": "Final audit, merge, and archive",
+      "description": "Final audit — pass/fail verdict, no merge",
+      "acceptsFeature": true,
+      "acceptsAll": true,
+      "gates": ["review"],
+      "validators": ["governance"]
+    },
+    {
+      "command": "/sdrive:archive",
+      "agent": "archive",
+      "agentFile": ".sdrive/agents/14-archive.md",
+      "description": "Merge an approved feature to main and complete its lifecycle",
       "acceptsFeature": true,
       "acceptsAll": true,
       "gates": ["review"],

@@ -17,11 +17,12 @@ SpecDrive uses 14 specialized agents. Each agent has one slash command.
 | 6 | Documentation | `/sdrive:docs` | `06-documentation.md` |
 | 7 | Implementation | `/sdrive:apply` | `07-implementation.md` |
 | 8 | Performance | `/sdrive:performance` | `08-performance.md` |
-| 9 | Review & Complete | `/sdrive:review` | `09-review-complete.md` |
+| 9 | Review | `/sdrive:review` | `09-review-complete.md` |
 | 10 | Security | `/sdrive:secure` | `10-security.md` |
 | 11 | Test | `/sdrive:test` | `11-test.md` |
 | 12 | Product Plan | `/sdrive:product-plan` | `12-product-plan.md` |
 | 13 | Update Proposal | `/sdrive:update-propose` | `13-update-propose.md` |
+| 14 | Archive | `/sdrive:archive` | `14-archive.md` |
 
 ---
 
@@ -247,27 +248,48 @@ SpecDrive uses 14 specialized agents. Each agent has one slash command.
 
 ---
 
-## Review & Complete Agent
+## Review Agent
 
 **Command:** `/sdrive:review`
 
-**Purpose:** Final audit, merge, and archive.
+**Purpose:** Final audit and pass/fail verdict. Does NOT merge or archive.
 
 **What it does:**
 
-- Requires `sdrive verify <feature>` to return `pass` or `warn` before merging
+- Requires `sdrive verify <feature>` to return `pass` or `warn`
 - Verifies coverage: every AC has a linked, existing, passing test
 - Requires the test report for the current version
 - Audits code against spec
+- Writes a `review.md` report with `Status: PASS` or `Status: FAIL`
+- On failure: creates a PR, comments the findings, adds fix tasks, and stops
+- On pass: notifies the user to run `/sdrive:archive <feature>`
+- Verifies permission before and after the audit
+
+**Lifecycle ownership:** `/sdrive:apply` owns `backlog/` → `ongoing/`; `/sdrive:archive` owns `ongoing/` → `completed/`; `sdrive reopen` owns `completed/` → `ongoing/`.
+
+**Batch mode:** `/sdrive:review --all` reviews every ongoing feature one after the other and writes an aggregate report to `.sdrive/reports/reviews/review-report-all-<date>.md`. A feature that fails review is never cleared for archive.
+
+---
+
+## Archive Agent
+
+**Command:** `/sdrive:archive`
+
+**Purpose:** Merge an approved feature to `main` and complete its lifecycle.
+
+**What it does:**
+
+- Requires a passing `review.md` for the current version (Review-First Rule)
 - Requires human merge approval
 - Merges the current version and marks it as `completed`
 - Preserves other versions
 - Moves feature folder from `ongoing/` to `completed/` (the ongoing → completed transition)
+- Updates governance and workflow state, then cleans up the branch
 - Verifies permission before and after merge
 
-**Lifecycle ownership:** `/sdrive:apply` owns `backlog/` → `ongoing/`; `/sdrive:review` owns `ongoing/` → `completed/`; `sdrive reopen` owns `completed/` → `ongoing/`.
+**Lifecycle ownership:** `/sdrive:archive` owns `ongoing/` → `completed/`.
 
-**Batch mode:** `/sdrive:review --all` reviews every ongoing feature one after the other and writes an aggregate report to `.sdrive/reports/reviews/review-report-all-<date>.md`. A feature that fails review is never merged.
+**Batch mode:** `/sdrive:archive --all` archives every ongoing feature that has passed review, one after the other, and writes an aggregate report to `.sdrive/reports/reviews/archive-report-all-<date>.md`.
 
 ---
 

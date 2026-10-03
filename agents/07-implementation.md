@@ -40,7 +40,7 @@ You operate within the current version folder only.
 - **Task Filter Rule:** Before executing, scan `tasks.json` / `tasks.md` for any task whose purpose is writing, adding, updating, or running tests. Do NOT execute those tasks. Mark them as deferred and report them under a "Deferred to `/sdrive:test`" heading. If a task mixes production code with test code, implement only the production-code portion and defer the test portion.
 - **Test-Runner Command Rule:** NEVER invoke a command that executes the test suite, regardless of which phase the task lives in. This includes verification-phase tasks such as "Run `bun run test` and confirm the suite passes", "Run `npm test`", or "confirm all tests pass". A task's phase does NOT change its nature — if the command runs a test runner, it belongs to `/sdrive:test`. Defer it and report it under "Deferred to `/sdrive:test`". Allowed verification commands are limited to: formatter, linter, typechecker (`tsc --noEmit`), `sdrive verify`, and `node .sdrive/scripts/validate-governance.js`.
 - Use Conventional Commits with task ID references: `feat(T1.3): add login form`, `fix(T2.1): resolve validation bug`.
-- Do NOT create a Pull Request unless the user explicitly asks. PR creation is handled by `/sdrive:review`.
+- Do NOT create a Pull Request unless the user explicitly asks. PR creation is handled by `/sdrive:archive`.
 - If GitHub Actions or CI is configured, verify CI status after pushing. Do not assume checks passed.
 - Run formatter/linter/typechecker (if configured) before committing. Use `execute`.
 - If formatter/linter/typechecker are not configured, explicitly report: "No automated lint/type/format validation configured." Do not claim these passed.
@@ -227,7 +227,7 @@ You operate within the current version folder only.
    - Only proceed after explicit user selection.
    - If the user chooses to merge:
      - Do **not** merge directly.
-     - Hand off to `/sdrive:review` for final audit and merge.
+     - Hand off to `/sdrive:review` for the final audit, then `/sdrive:archive` to merge and archive.
    - If the user chooses not to merge yet:
      - Stop here and inform the user the branch is ready.
 
@@ -247,7 +247,7 @@ When invoked as `/sdrive:apply --all`, implement every ongoing feature sequentia
    - **One branch per feature:** each feature gets its OWN feature branch via the Branch Decision flow. NEVER implement two features on the same branch. Finish (commit + push) one feature's branch before starting the next.
    - **Approval gates still apply per feature:** the branch decision, dependency approvals, and the final merge decision are asked for EACH feature. You may batch prompts where it is safe, but you MUST NOT skip an approval.
    - **Continue on failure:** if one feature fails (e.g. verification `fail`, blocked task, user declines a dependency), record it and MOVE ON to the next feature. Do NOT abort the whole run. Leave the failed feature's branch as-is.
-   - **Do NOT merge in `--all` mode:** at the end of each feature, hand off to `/sdrive:review` as usual. Never merge directly to `main`.
+   - **Do NOT merge in `--all` mode:** at the end of each feature, hand off to `/sdrive:review` (audit) and then `/sdrive:archive` (merge) as usual. Never merge directly to `main`.
 
 3. **Aggregate report**
    - After processing all features, write an aggregate report to `.sdrive/reports/implementation-report-all-<date>.md` containing, per feature: name, version, branch, tasks completed, verification status, and outcome.

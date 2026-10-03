@@ -387,7 +387,7 @@ The dashboard also supports filters:
 
 ## Slash Commands
 
-> **Typical workflow:** `/sdrive:onboard` (brownfield only) → `/sdrive:constitution` → optionally `/sdrive:product-plan` → `/sdrive:propose` → `/sdrive:apply` → `/sdrive:test` → `/sdrive:review`
+> **Typical workflow:** `/sdrive:onboard` (brownfield only) → `/sdrive:constitution` → optionally `/sdrive:product-plan` → `/sdrive:propose` → `/sdrive:apply` → `/sdrive:test` → `/sdrive:review` → `/sdrive:archive`
 
 > **Extending an existing feature:** `/sdrive:update-propose "<feature>" <what to add>` → `sdrive approve specification` → `/sdrive:apply` → `/sdrive:test`
 
@@ -405,7 +405,8 @@ The dashboard also supports filters:
 | `/sdrive:apply` | Implementation | Write production code; move feature from `backlog/` to `ongoing/` |
 | `/sdrive:test` | Test | Write tests, run them, report coverage |
 | `/sdrive:performance` | Performance | Benchmark and optimize |
-| `/sdrive:review` | Review & Complete | Final audit and merge; move feature from `ongoing/` to `completed/` |
+| `/sdrive:review` | Review | Final audit — pass/fail verdict, no merge |
+| `/sdrive:archive` | Archive | Merge an approved feature to `main` and complete its lifecycle |
 | `/sdrive:secure` | Security | Security audit |
 
 ---
@@ -533,7 +534,6 @@ Writes tests for every acceptance criterion, runs them, and reports coverage.
 
 - After `/sdrive:apply`
 - Before `/sdrive:review`
-
 **Batch mode:**
 
 ```text
@@ -549,7 +549,43 @@ Tests every ongoing feature, one after the other, and writes an aggregate report
 - Merge
 
 ---
+### `/sdrive:archive`
 
+Merges an approved feature to `main` and completes its lifecycle.
+
+```text
+/sdrive:archive user-login
+```
+
+**What it does:**
+
+- Requires a passing `review.md` for the current version (Review-First Rule)
+- Requires human merge approval
+- Merges the current version and marks it as `completed`
+- Preserves other versions
+- Moves the feature folder from `ongoing/` to `completed/`
+- Updates governance and workflow state, then cleans up the branch
+- Verifies permission before and after merge
+
+**When to use:**
+
+- Only after `/sdrive:review` has returned `Status: PASS`
+
+**Batch mode:**
+
+```text
+/sdrive:archive --all
+```
+
+Archives every ongoing feature that has passed review, one after the other, and writes an aggregate report to `.sdrive/reports/reviews/archive-report-all-<date>.md`.
+
+**What it does NOT do:**
+
+- Audit code (use `/sdrive:review`)
+- Write or fix production code
+- Write or run tests
+
+---
 ## Batch Mode (`--all`)
 
 Six commands accept a `--all` flag that runs them across **every ongoing feature** instead of a single one. Features are processed sequentially and an aggregate report is written at the end.
@@ -558,7 +594,8 @@ Six commands accept a `--all` flag that runs them across **every ongoing feature
 |---------|-------------------|------------------|
 | `/sdrive:apply --all` | Implements every ongoing feature, one branch each. Does **not** merge. | `.sdrive/reports/implementation-report-all-<date>.md` |
 | `/sdrive:test --all` | Tests every ongoing feature. | `.sdrive/reports/tests/test-report-all-<date>.md` |
-| `/sdrive:review --all` | Reviews every ongoing feature one after the other. Never merges a feature that fails review. | `.sdrive/reports/reviews/review-report-all-<date>.md` |
+| `/sdrive:review --all` | Reviews every ongoing feature one after the other. Never clears a feature that fails review for archive. | `.sdrive/reports/reviews/review-report-all-<date>.md` |
+| `/sdrive:archive --all` | Archives every ongoing feature that has passed review. | `.sdrive/reports/reviews/archive-report-all-<date>.md` |
 | `/sdrive:secure --all` | Audits every ongoing feature. Approval gates still apply per feature. | `.sdrive/reports/security/security-audit-all-<date>.md` |
 | `/sdrive:performance --all` | Optimises every ongoing feature. | `.sdrive/reports/performance/performance-report-all-<date>.md` |
 | `/sdrive:docs --all` | Documents every ongoing feature. | `.sdrive/docs/coverage-report-all-<date>.md` |
@@ -568,6 +605,7 @@ Six commands accept a `--all` flag that runs them across **every ongoing feature
 - **Gates are evaluated per feature.** In `--all` mode the router does not gate-check a single feature; each feature's gates are checked individually by the agent as it is processed.
 - **Failures do not stop the batch.** If one feature fails, the agent records the failure and continues with the next, then summarises everything in the aggregate report.
 - **`/sdrive:apply --all` never merges.** Each feature gets its own branch and its own approval gate.
+- **`/sdrive:archive --all` only archives features that passed review.** A feature without a passing `review.md` is skipped and reported.
 - **Commands that do not support `--all`** (e.g. `/sdrive:propose`, `/sdrive:constitution`, `/sdrive:design`) reject the flag with a clear error.
 
 ---
@@ -584,6 +622,7 @@ Some commands accept a feature name or description.
 /sdrive:apply user-login
 /sdrive:test user-login
 /sdrive:review user-login
+/sdrive:archive user-login
 ```
 
 The natural description is converted to kebab-case automatically.
@@ -610,7 +649,7 @@ A feature moves through three spec folders. Each transition has exactly one owne
 |------------|-------|-------|
 | → `specs/backlog/<feature>/<version>/` | `/sdrive:propose` | New specs are created in `backlog/` with `phase: backlog` |
 | `backlog/` → `ongoing/` | `/sdrive:apply` | Happens at the start of implementation; sets `phase: ongoing` |
-| `ongoing/` → `completed/` | `/sdrive:review` | Happens after merge and archive; sets `phase: completed` |
+| `ongoing/` → `completed/` | `/sdrive:archive` | Happens after merge and archive; sets `phase: completed` |
 | `completed/` → `ongoing/` | `sdrive reopen <feature>` | Manual reopen for further work |
 
 `/sdrive:apply` MUST NOT begin implementation while the spec is still in `backlog/`. If the feature is in neither `backlog/` nor `ongoing/`, the agent stops and asks.
@@ -629,6 +668,7 @@ Some commands require approval before they run.
 | `/sdrive:update-propose` | specification, planning |
 | `/sdrive:apply` | implementation |
 | `/sdrive:review` | review |
+| `/sdrive:archive` | review |
 
 If a gate is not approved, the command is blocked.
 
