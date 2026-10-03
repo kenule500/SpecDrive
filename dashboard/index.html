@@ -394,6 +394,28 @@
     </div>
   </div>
 
+  <!-- ===== COMMAND DETAIL DRAWER ===== -->
+  <div id="command-drawer-backdrop" class="command-drawer-backdrop"></div>
+  <aside
+    id="command-drawer"
+    class="command-drawer"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="command-drawer-title"
+    aria-hidden="true"
+  >
+    <div class="command-drawer-head">
+      <div class="command-drawer-head-text">
+        <span class="command-drawer-eyebrow">Command</span>
+        <h2 id="command-drawer-title" class="command-drawer-title">—</h2>
+      </div>
+      <button id="command-drawer-close" class="command-drawer-close" type="button" aria-label="Close details">
+        ✕
+      </button>
+    </div>
+    <div id="command-drawer-body" class="command-drawer-body"></div>
+  </aside>
+
   <script src="/app.js"></script>
 </body>
 </html>

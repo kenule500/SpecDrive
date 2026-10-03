@@ -919,67 +919,213 @@ const SLASH_DETAILS = {
   "/sdrive:constitution": {
     what: "Establishes the project's ground rules and context.",
     why: "Every later decision is checked against this shared foundation.",
-    when: "First, before any feature work."
+    when: "First, before any feature work.",
+    does: [
+      "Interviews you about the product, stack, and constraints",
+      "Merges the answers into a single constitution document",
+      "Assigns stable IDs to every principle so later work can cite them"
+    ],
+    produces: [
+      ".sdrive/constitution.md",
+      ".sdrive/context/ (product, stack, constraints)"
+    ],
+    reads: ["Your answers", "Existing repo files (brownfield)"],
+    handsOff: "/sdrive:product-plan"
   },
   "/sdrive:product-plan": {
     what: "Creates the product overview, mockup, roadmap, and feature backlog.",
     why: "Gives the whole team a shared picture of what is being built and why.",
-    when: "Early, once the constitution exists."
+    when: "Early, once the constitution exists.",
+    does: [
+      "Drafts the product overview and positioning",
+      "Produces a UI mockup and roadmap",
+      "Breaks the roadmap into a prioritised feature backlog"
+    ],
+    produces: [
+      ".sdrive/product/overview.md",
+      ".sdrive/product/mockup.html",
+      ".sdrive/product/roadmap.md",
+      ".sdrive/product/backlog.md"
+    ],
+    reads: [".sdrive/constitution.md"],
+    handsOff: "/sdrive:propose"
   },
   "/sdrive:propose": {
     what: "Turns an idea into a full specification, plan, and task list.",
     why: "Nothing gets built until it is clearly specified and approved.",
-    when: "When starting a new feature."
+    when: "When starting a new feature.",
+    does: [
+      "Writes the feature specification with numbered requirements",
+      "Derives acceptance criteria and a traceability matrix",
+      "Produces a technical plan and an ordered task list",
+      "Opens a feature branch for the work"
+    ],
+    produces: [
+      ".sdrive/specs/ongoing/<feature>/<version>/spec.md",
+      ".sdrive/specs/ongoing/<feature>/<version>/plan.md",
+      ".sdrive/specs/ongoing/<feature>/<version>/tasks.md",
+      ".sdrive/specs/ongoing/<feature>/<version>/traceability.md",
+      ".sdrive/governance/<feature>/<version>/*.json"
+    ],
+    reads: [".sdrive/constitution.md", ".sdrive/product/backlog.md"],
+    handsOff: "/sdrive:apply"
   },
   "/sdrive:update-propose": {
     what: "Extends an existing specification with new requirements.",
     why: "Lets features grow without rewriting their history.",
-    when: "When scope changes on an existing feature."
+    when: "When scope changes on an existing feature.",
+    does: [
+      "Adds new requirements without renumbering existing ones",
+      "Updates the plan and task list to cover the additions",
+      "Refreshes the traceability matrix"
+    ],
+    produces: [
+      "Updated spec.md, plan.md, tasks.md, traceability.md",
+      "Updated governance JSON for the version"
+    ],
+    reads: ["The existing feature spec and governance"],
+    handsOff: "/sdrive:apply"
   },
   "/sdrive:design": {
     what: "Builds the UI/UX prototype and design system.",
     why: "Agrees on the look and feel before code is written.",
-    when: "After the spec, before implementation."
+    when: "After the spec, before implementation.",
+    does: [
+      "Produces an interactive HTML/CSS/JS prototype",
+      "Defines the design tokens and component inventory",
+      "Maps every screen back to its requirements"
+    ],
+    produces: [
+      ".sdrive/design/<feature>/prototype.html",
+      ".sdrive/design/<feature>/design-system.md"
+    ],
+    reads: ["The feature spec and acceptance criteria"],
+    handsOff: "/sdrive:apply"
   },
   "/sdrive:sync": {
     what: "Keeps the spec, plan, tasks, and traceability in agreement.",
     why: "Prevents documents from drifting out of sync as things change.",
-    when: "After any change to the spec or plan."
+    when: "After any change to the spec or plan.",
+    does: [
+      "Diffs the spec against the plan, tasks, and traceability",
+      "Repairs mismatched IDs and orphaned references",
+      "Reports anything it could not reconcile"
+    ],
+    produces: ["Updated spec, plan, tasks, and traceability files"],
+    reads: ["Every document in the feature's version folder"],
+    handsOff: "/sdrive:apply"
   },
   "/sdrive:skills": {
     what: "Audits and manages the AI skills available to the project.",
     why: "Keeps the AI's capabilities current and trustworthy.",
-    when: "Periodically, or when adding new tooling."
+    when: "Periodically, or when adding new tooling.",
+    does: [
+      "Inventories the skills currently available",
+      "Verifies each skill against its source",
+      "Discovers and proposes new skills from GitHub"
+    ],
+    produces: [".sdrive/skills/ (skill workspace and audit notes)"],
+    reads: ["The project's skill configuration"],
+    handsOff: "Nothing — this is a maintenance command"
   },
   "/sdrive:docs": {
     what: "Generates documentation and flags drift from the code.",
     why: "Keeps docs honest and up to date automatically.",
-    when: "After implementation, or on a schedule. Use --all to document every ongoing feature."
+    when: "After implementation, or on a schedule. Use --all to document every ongoing feature.",
+    does: [
+      "Writes inline comments and API documentation",
+      "Generates or refreshes the project README",
+      "Flags places where the docs no longer match the code"
+    ],
+    produces: [
+      ".sdrive/reports/docs/coverage-report-<feature>-<version>-<date>.md",
+      "Updated README and inline docs"
+    ],
+    reads: ["The implementation", "The feature spec"],
+    handsOff: "/sdrive:review"
   },
   "/sdrive:apply": {
     what: "Writes the production code from the approved tasks.",
     why: "This is where the plan becomes real, working software.",
-    when: "After the plan is approved. Use --all to implement every ongoing feature, one branch each."
+    when: "After the plan is approved. Use --all to implement every ongoing feature, one branch each.",
+    does: [
+      "Works through the task list in order",
+      "Commits to the feature branch as tasks complete",
+      "Updates the governance task state as it goes"
+    ],
+    produces: [
+      "Production source code",
+      "Updated .sdrive/governance/<feature>/<version>/tasks.json",
+      "Git commits on the feature branch"
+    ],
+    reads: ["tasks.md", "plan.md", "spec.md"],
+    handsOff: "/sdrive:test"
   },
   "/sdrive:performance": {
     what: "Benchmarks and optimises performance and search visibility (SEO).",
     why: "Ensures the feature is not just correct, but fast enough and discoverable.",
-    when: "After implementation, before review. Use --all to optimise every ongoing feature."
+    when: "After implementation, before review. Use --all to optimise every ongoing feature.",
+    does: [
+      "Benchmarks against the feature's speed NFRs",
+      "Audits metadata, semantic HTML, structured data, and crawlability",
+      "Applies approved speed and SEO fixes",
+      "Re-measures to prove the fix landed"
+    ],
+    produces: [
+      ".sdrive/reports/performance/performance-report-<feature>-<version>-<date>.md"
+    ],
+    reads: ["The implementation", "The feature's NFRs"],
+    handsOff: "/sdrive:review"
   },
   "/sdrive:debug": {
     what: "Reproduces, isolates, and fixes defects — layout, APIs, runtime, and glitches.",
     why: "Turns a vague \"something is broken\" into a reproduced defect, a root cause, and a verified fix.",
-    when: "When something is visibly wrong. Use --all to sweep every ongoing feature for defects."
+    when: "When something is visibly wrong. Use --all to sweep every ongoing feature for defects.",
+    does: [
+      "Reproduces the symptom and captures evidence",
+      "Isolates the smallest failing case",
+      "Identifies the root cause before touching code",
+      "Applies a minimal fix and re-verifies"
+    ],
+    produces: [
+      ".sdrive/reports/debug/debug-report-<feature>-<version>-<date>.md",
+      ".sdrive/reports/debug/repro/ (reproduction steps)",
+      ".sdrive/reports/debug/evidence/ (before/after captures)"
+    ],
+    reads: ["The implementation", "Runtime logs and console output"],
+    handsOff: "/sdrive:review"
   },
   "/sdrive:review": {
     what: "Runs the final audit and produces a pass/fail verdict.",
     why: "The last quality gate before work is considered done. It does not merge or archive.",
-    when: "When the feature is complete. Use --all to review every ongoing feature one after the other."
+    when: "When the feature is complete. Use --all to review every ongoing feature one after the other.",
+    does: [
+      "Audits the code against the spec and acceptance criteria",
+      "Checks quality, security, and governance compliance",
+      "Issues a pass/fail verdict with findings"
+    ],
+    produces: [
+      ".sdrive/reports/reviews/review-report-<feature>-<version>-<date>.md"
+    ],
+    reads: ["The implementation", "The spec", "Every prior report"],
+    handsOff: "/sdrive:archive"
   },
   "/sdrive:archive": {
     what: "Merges an approved feature to main and completes its lifecycle.",
     why: "Turns a passing review into shipped, archived work — specs move to completed/ and the branch is cleaned up.",
     when: "Only after /sdrive:review has passed. Use --all to archive every ongoing feature that passed review.",
+    does: [
+      "Merges the feature branch into main",
+      "Moves the spec from ongoing/ to completed/",
+      "Deletes the merged feature branch",
+      "Marks the feature complete in the workflow state"
+    ],
+    produces: [
+      ".sdrive/specs/completed/<feature>/<version>/",
+      "A merge commit on main"
+    ],
+    reads: ["The passing review report"],
+    handsOff: "Nothing — the feature lifecycle ends here",
     optional: true,
     optionalNote:
       "Optional — run after a passing review, when you are ready to ship and close out the feature."
@@ -987,12 +1133,33 @@ const SLASH_DETAILS = {
   "/sdrive:secure": {
     what: "Performs a security audit, threat modelling, and fixes.",
     why: "Catches vulnerabilities before they reach users.",
-    when: "Before the review gate. Use --all to audit every ongoing feature."
+    when: "Before the review gate. Use --all to audit every ongoing feature.",
+    does: [
+      "Threat-models the feature's attack surface",
+      "Scans for OWASP-class vulnerabilities",
+      "Applies approved fixes and re-tests"
+    ],
+    produces: [
+      ".sdrive/reports/security/security-report-<feature>-<version>-<date>.md"
+    ],
+    reads: ["The implementation", "The feature spec"],
+    handsOff: "/sdrive:review"
   },
   "/sdrive:test": {
     what: "Writes tests for the acceptance criteria and reports coverage.",
     why: "Proves the feature actually does what was promised.",
     when: "After implementation. Use --all to test every ongoing feature.",
+    does: [
+      "Writes tests covering each acceptance criterion",
+      "Runs the suite and records the results",
+      "Reports coverage and any unmet criteria"
+    ],
+    produces: [
+      ".sdrive/reports/tests/test-report-<feature>-<version>-<date>.md",
+      "Test files in the project's test directory"
+    ],
+    reads: ["The acceptance criteria", "The implementation"],
+    handsOff: "/sdrive:review",
     optional: true,
     optionalNote:
       "Optional — run when development is done (end of a sprint or once an MVP is complete), not on every change."
@@ -1000,7 +1167,19 @@ const SLASH_DETAILS = {
   "/sdrive:onboard": {
     what: "Adopts an existing project into SpecDrive.",
     why: "Brings legacy code under governance without breaking it.",
-    when: "Only for existing projects, at the very start."
+    when: "Only for existing projects, at the very start.",
+    does: [
+      "Reads the existing repository structure and conventions",
+      "Detects other spec frameworks (OpenSpec, Spec Kit, Software Factory)",
+      "Brings existing specs across without touching the originals",
+      "Writes the project context files"
+    ],
+    produces: [
+      ".sdrive/context/ (product, stack, constraints)",
+      ".sdrive/onboarding-report.md"
+    ],
+    reads: ["The existing repository", "Any existing spec documents"],
+    handsOff: "/sdrive:constitution"
   }
 };
 
@@ -1110,6 +1289,10 @@ function apiCommands() {
       what: detail.what || "",
       why: detail.why || "",
       when: detail.when || "",
+      does: detail.does || [],
+      produces: detail.produces || [],
+      reads: detail.reads || [],
+      handsOff: detail.handsOff || "",
       optional: Boolean(detail.optional),
       optionalNote: detail.optionalNote || ""
     };

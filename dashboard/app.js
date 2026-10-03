@@ -1537,7 +1537,14 @@ function commandRowEl(item) {
   (item.gates || []).forEach((g) => meta.push(`<span class="chip amber">gate: ${escapeHtml(g)}</span>`));
   if (item.optional) meta.push(`<span class="chip optional-chip" title="${escapeHtml(item.optionalNote || "")}">optional</span>`);
 
-  const hasDetail = Boolean(item.what || item.why || item.when || item.example);
+  const hasDetail = Boolean(
+    item.what ||
+      item.why ||
+      item.when ||
+      item.example ||
+      (item.does || []).length ||
+      (item.produces || []).length
+  );
   const summary = item.what || item.description;
 
   tr.innerHTML = `
@@ -1548,7 +1555,7 @@ function commandRowEl(item) {
     </td>
     <td class="col-meta">
       ${meta.length ? `<div class="command-meta">${meta.join("")}</div>` : ""}
-      ${hasDetail ? `<button class="command-toggle" type="button" aria-expanded="false">Details ▾</button>` : ""}
+      ${hasDetail ? `<button class="command-toggle" type="button" aria-expanded="false">Details</button>` : ""}
     </td>
   `;
 
@@ -1565,46 +1572,155 @@ function commandRowEl(item) {
   });
 
   if (hasDetail) {
-    const detailRow = document.createElement("tr");
-    detailRow.className = "command-detail-row";
-    detailRow.hidden = true;
-
-    const cells = [];
-    if (item.what) cells.push(detailCell("What it does", item.what));
-    if (item.why) cells.push(detailCell("Why it matters", item.why));
-    if (item.when) cells.push(detailCell("When to use it", item.when));
-    if (item.example) cells.push(detailCell("Example", item.example, true));
-
-    detailRow.innerHTML = `<td colspan="3"><div class="command-detail">${cells.join("")}${
-      item.optional && item.optionalNote
-        ? `<div class="command-detail-item command-detail-optional"><span class="command-detail-label">Optional</span><span>${escapeHtml(
-            item.optionalNote
-          )}</span></div>`
-        : ""
-    }</div></td>`;
-
     const toggle = tr.querySelector(".command-toggle");
-    toggle.addEventListener("click", () => {
-      const open = detailRow.hidden;
-      detailRow.hidden = !open;
-      toggle.setAttribute("aria-expanded", String(open));
-      toggle.textContent = open ? "Details ▴" : "Details ▾";
-    });
-
-    frag.appendChild(tr);
-    frag.appendChild(detailRow);
-    return frag;
+    toggle.addEventListener("click", () => openCommandDrawer(item));
   }
 
   frag.appendChild(tr);
   return frag;
 }
 
-function detailCell(label, value, isCode) {
-  const body = isCode
-    ? `<code class="command-example">${escapeHtml(value)}</code>`
-    : `<span>${escapeHtml(value)}</span>`;
-  return `<div class="command-detail-item"><span class="command-detail-label">${escapeHtml(label)}</span>${body}</div>`;
+/* ============================================================
+   COMMAND DETAIL DRAWER
+   Slides in from the right with the full picture of a command:
+   what it does, why it matters, when to run it, the concrete
+   steps it performs, and the files it reads and writes.
+   ============================================================ */
+let commandDrawerReturnFocus = null;
+
+function openCommandDrawer(item) {
+  const drawer = document.getElementById("command-drawer");
+  const backdrop = document.getElementById("command-drawer-backdrop");
+  const title = document.getElementById("command-drawer-title");
+  const body = document.getElementById("command-drawer-body");
+  if (!drawer || !body) return;
+
+  commandDrawerReturnFocus = document.activeElement;
+
+  if (title) title.textContent = item.command;
+  body.innerHTML = commandDrawerBody(item);
+
+  drawer.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  if (backdrop) backdrop.classList.add("open");
+  document.body.classList.add("drawer-open");
+
+  const close = document.getElementById("command-drawer-close");
+  if (close) close.focus();
+}
+
+function closeCommandDrawer() {
+  const drawer = document.getElementById("command-drawer");
+  const backdrop = document.getElementById("command-drawer-backdrop");
+  if (!drawer || !drawer.classList.contains("open")) return;
+
+  drawer.classList.remove("open");
+  drawer.setAttribute("aria-hidden", "true");
+  if (backdrop) backdrop.classList.remove("open");
+  document.body.classList.remove("drawer-open");
+
+  if (commandDrawerReturnFocus && commandDrawerReturnFocus.focus) {
+    commandDrawerReturnFocus.focus();
+  }
+  commandDrawerReturnFocus = null;
+}
+
+function commandDrawerBody(item) {
+  const sections = [];
+
+  const prose = [];
+  if (item.what) prose.push(drawerProse("What it does", item.what));
+  if (item.why) prose.push(drawerProse("Why it matters", item.why));
+  if (item.when) prose.push(drawerProse("When to use it", item.when));
+  if (prose.length) sections.push(`<div class="drawer-prose">${prose.join("")}</div>`);
+
+  if ((item.does || []).length) {
+    sections.push(`
+      <section class="drawer-section">
+        <h3 class="drawer-section-title">What it does, step by step</h3>
+        <ol class="drawer-steps">
+          ${item.does.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}
+        </ol>
+      </section>
+    `);
+  }
+
+  if ((item.produces || []).length) {
+    sections.push(`
+      <section class="drawer-section">
+        <h3 class="drawer-section-title">Files &amp; artifacts it generates</h3>
+        <ul class="drawer-paths">
+          ${item.produces
+            .map((p) => `<li><code class="drawer-path">${escapeHtml(p)}</code></li>`)
+            .join("")}
+        </ul>
+      </section>
+    `);
+  }
+
+  if ((item.reads || []).length) {
+    sections.push(`
+      <section class="drawer-section">
+        <h3 class="drawer-section-title">What it reads</h3>
+        <ul class="drawer-paths drawer-paths-read">
+          ${item.reads
+            .map((p) => `<li><code class="drawer-path">${escapeHtml(p)}</code></li>`)
+            .join("")}
+        </ul>
+      </section>
+    `);
+  }
+
+  const facts = [];
+  if (item.agent) facts.push(drawerFact("Agent", item.agent));
+  if (item.acceptsFeature) facts.push(drawerFact("Scope", "Single feature"));
+  if (item.acceptsAll) facts.push(drawerFact("Batch", "Supports --all"));
+  if ((item.gates || []).length) facts.push(drawerFact("Gates", item.gates.join(", ")));
+  if (item.handsOff) facts.push(drawerFact("Hands off to", item.handsOff));
+  if (facts.length) {
+    sections.push(`
+      <section class="drawer-section">
+        <h3 class="drawer-section-title">At a glance</h3>
+        <dl class="drawer-facts">${facts.join("")}</dl>
+      </section>
+    `);
+  }
+
+  if (item.optional && item.optionalNote) {
+    sections.push(`
+      <aside class="drawer-note">
+        <span class="drawer-note-label">Optional</span>
+        <p>${escapeHtml(item.optionalNote)}</p>
+      </aside>
+    `);
+  }
+
+  return sections.join("");
+}
+
+function drawerProse(label, value) {
+  return `<div class="drawer-prose-item">
+    <span class="drawer-prose-label">${escapeHtml(label)}</span>
+    <p>${escapeHtml(value)}</p>
+  </div>`;
+}
+
+function drawerFact(label, value) {
+  return `<div class="drawer-fact">
+    <dt>${escapeHtml(label)}</dt>
+    <dd>${escapeHtml(value)}</dd>
+  </div>`;
+}
+
+function setupCommandDrawer() {
+  const close = document.getElementById("command-drawer-close");
+  const backdrop = document.getElementById("command-drawer-backdrop");
+  if (close) close.addEventListener("click", closeCommandDrawer);
+  if (backdrop) backdrop.addEventListener("click", closeCommandDrawer);
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeCommandDrawer();
+  });
 }
 
 function renderWorkflowCards() {
@@ -1721,6 +1837,7 @@ async function renderCommands() {
 
   renderCommandList();
   renderWorkflowCards();
+  setupCommandDrawer();
 }
 
 /* ============================================================
