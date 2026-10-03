@@ -935,6 +935,16 @@ const OPTIONAL_COMMANDS = {
     "These commands are not part of the core workflow. Run them when you need them — for example when a feature is totally done and ready to ship.",
   commands: [
     {
+      command: "/sdrive:update-propose",
+      what: "Revises an existing proposal after feedback, without starting over.",
+      when: "When a proposal needs changes before it is approved."
+    },
+    {
+      command: "/sdrive:sync",
+      what: "Re-aligns spec, plan, tasks, and traceability after a change.",
+      when: "After a migration, or whenever the spec and the code drift apart."
+    },
+    {
       command: "/sdrive:performance",
       what: "Benchmarks and optimizes the code for speed and efficiency.",
       when: "When performance matters — before a release or after a slowdown."

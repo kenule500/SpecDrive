@@ -2192,7 +2192,7 @@ body {
 
 .workflow-cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -2202,7 +2202,11 @@ body {
   }
 }
 
+/* Lifecycle cards stretch across the whole row so each one gets the full
+   width for its steps and sub-card. The optional-commands card below them
+   also spans the row. */
 .workflow-card {
+  grid-column: 1 / -1;
   position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
