@@ -312,11 +312,12 @@
     </div>
   </div>
 
-  <!-- Feature detail overlay. Opened by the "View more" button on a feature
-       card; shows the full task breakdown (pending / completed) per version. -->
+  <!-- Feature detail sheet. Opened by the "View more" button on a feature
+       card; slides in from the right and shows the full task breakdown
+       (pending / completed) per version. -->
   <div id="feature-modal" class="modal" aria-hidden="true">
     <div class="modal-backdrop" data-modal-close></div>
-    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="feature-modal-title">
+    <aside class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="feature-modal-title">
       <div class="modal-head">
         <div class="modal-head-text">
           <h2 id="feature-modal-title" class="modal-title">Feature</h2>
@@ -327,7 +328,7 @@
       <div id="feature-modal-body" class="modal-body">
         <div class="skeleton-card"></div>
       </div>
-    </div>
+    </aside>
   </div>
 
   <script src="/app.js"></script>

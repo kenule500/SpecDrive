@@ -844,10 +844,10 @@ async function renderFeatures() {
 }
 
 /* ============================================================
-   FEATURE DETAIL OVERLAY
-   Opened from the "View more" button on a feature card. Shows the
-   full task breakdown (pending / completed) for every version of
-   the feature, grouped by phase.
+   FEATURE DETAIL SHEET
+   Opened from the "View more" button on a feature card. Slides in
+   from the right and shows the full task breakdown (pending /
+   completed) for every version of the feature, grouped by phase.
    ============================================================ */
 let featureModalOpen = false;
 
