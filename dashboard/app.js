@@ -915,6 +915,7 @@ async function openFeatureDetail(featureName) {
   renderDetailSummary();
   renderDetailBody();
   renderDetailReports();
+  renderDetailSpecs();
 }
 
 /* ============================================================
@@ -1002,6 +1003,259 @@ function reportStatusClass(status) {
   if (s === "PASS" || s === "PASSED" || s === "CLEAN" || s === "IMPROVED") return "green";
   if (s === "FAIL" || s === "FAILED" || s === "REGRESSED") return "red";
   return "slate";
+}
+
+/* ============================================================
+   FEATURE DETAIL — SPEC FILES PANEL
+   Reads the raw spec/plan/tasks/traceability markdown straight
+   from .sdrive/specs/<stage>/<feature>/<version>/ so the spec
+   can be reviewed in the dashboard instead of the repo.
+   ============================================================ */
+let specFilesData = null;
+let activeSpecDoc = null;
+
+async function renderDetailSpecs() {
+  const container = document.getElementById("detail-specs");
+  if (!container || !detailFeature) return;
+
+  const version = detailFeature.currentVersion;
+  const data = await fetchJson(`/api/spec-files/${detailFeature.name}/${version}`);
+  specFilesData = data;
+
+  if (!data || !Array.isArray(data.docs) || !data.docs.length) {
+    setDetailTabCount("specs", 0);
+    container.innerHTML = `<div class="panel-loading">No spec files found for this feature.</div>`;
+    return;
+  }
+
+  setDetailTabCount("specs", data.docs.length);
+
+  // Default to the specification, falling back to the first available doc.
+  const initial =
+    data.docs.find((d) => d.id === "spec") || data.docs[0];
+  activeSpecDoc = initial.id;
+
+  const stageChip = data.stage
+    ? `<span class="chip slate" title="Spec stage">${escapeHtml(data.stage)}</span>`
+    : "";
+
+  container.innerHTML = `
+    <div class="spec-files">
+      <aside class="spec-files-nav">
+        <div class="spec-files-nav-head">
+          <span class="spec-files-nav-label">Documents</span>
+          ${stageChip}
+        </div>
+        <ul class="spec-doc-list">
+          ${data.docs
+            .map(
+              (d) => `
+            <li>
+              <button
+                class="spec-doc-btn${d.id === activeSpecDoc ? " active" : ""}"
+                type="button"
+                data-spec-doc="${escapeHtml(d.id)}"
+              >
+                <span class="spec-doc-name">${escapeHtml(d.label)}</span>
+                <span class="spec-doc-meta">${d.lines} lines</span>
+              </button>
+            </li>
+          `
+            )
+            .join("")}
+        </ul>
+      </aside>
+      <div class="spec-files-view">
+        <div class="spec-files-view-head">
+          <code class="spec-files-path" id="spec-files-path">${escapeHtml(initial.path)}</code>
+          <button class="spec-copy-btn" id="spec-copy-btn" type="button">Copy</button>
+        </div>
+        <article class="spec-markdown" id="spec-markdown">
+          ${renderMarkdown(initial.content)}
+        </article>
+      </div>
+    </div>
+  `;
+
+  container.querySelectorAll("[data-spec-doc]").forEach((btn) => {
+    btn.addEventListener("click", () => selectSpecDoc(btn.dataset.specDoc));
+  });
+
+  const copyBtn = document.getElementById("spec-copy-btn");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", () => {
+      const doc = currentSpecDoc();
+      if (!doc || !navigator.clipboard) return;
+      navigator.clipboard.writeText(doc.content).then(() => {
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => (copyBtn.textContent = "Copy"), 900);
+      });
+    });
+  }
+}
+
+function currentSpecDoc() {
+  if (!specFilesData || !Array.isArray(specFilesData.docs)) return null;
+  return specFilesData.docs.find((d) => d.id === activeSpecDoc) || null;
+}
+
+function selectSpecDoc(id) {
+  const doc = specFilesData && specFilesData.docs.find((d) => d.id === id);
+  if (!doc) return;
+  activeSpecDoc = id;
+
+  document.querySelectorAll("[data-spec-doc]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.specDoc === id);
+  });
+
+  const pathEl = document.getElementById("spec-files-path");
+  if (pathEl) pathEl.textContent = doc.path;
+
+  const md = document.getElementById("spec-markdown");
+  if (md) md.innerHTML = renderMarkdown(doc.content);
+}
+
+/* Minimal, dependency-free Markdown renderer. It covers the subset the spec
+   documents actually use: headings, lists, tables, fenced code, blockquotes,
+   horizontal rules, and inline bold/italic/code/links. Everything is escaped
+   before any markup is added, so raw HTML in a spec file cannot inject. */
+function renderMarkdown(src) {
+  if (!src) return `<p class="spec-empty">This document is empty.</p>`;
+
+  const lines = src.replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let i = 0;
+
+  const inline = (text) =>
+    escapeHtml(text)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    if (/^```/.test(line)) {
+      const lang = line.slice(3).trim();
+      const buf = [];
+      i++;
+      while (i < lines.length && !/^```/.test(lines[i])) {
+        buf.push(lines[i]);
+        i++;
+      }
+      i++; // closing fence
+      out.push(
+        `<pre class="spec-code"><code${lang ? ` data-lang="${escapeHtml(lang)}"` : ""}>${escapeHtml(
+          buf.join("\n")
+        )}</code></pre>`
+      );
+      continue;
+    }
+
+    // Heading
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      const level = heading[1].length;
+      out.push(`<h${level} class="spec-h spec-h${level}">${inline(heading[2])}</h${level}>`);
+      i++;
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^\s*([-*_])\1{2,}\s*$/.test(line)) {
+      out.push('<hr class="spec-hr" />');
+      i++;
+      continue;
+    }
+
+    // Table (header row followed by a separator row)
+    if (
+      /\|/.test(line) &&
+      i + 1 < lines.length &&
+      /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])
+    ) {
+      const parseRow = (row) =>
+        row
+          .replace(/^\s*\|/, "")
+          .replace(/\|\s*$/, "")
+          .split("|")
+          .map((c) => c.trim());
+      const headers = parseRow(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && /\|/.test(lines[i]) && lines[i].trim()) {
+        rows.push(parseRow(lines[i]));
+        i++;
+      }
+      out.push(`
+        <div class="spec-table-wrap">
+          <table class="spec-table">
+            <thead><tr>${headers.map((h) => `<th>${inline(h)}</th>`).join("")}</tr></thead>
+            <tbody>${rows
+              .map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`)
+              .join("")}</tbody>
+          </table>
+        </div>
+      `);
+      continue;
+    }
+
+    // Blockquote
+    if (/^\s*>\s?/.test(line)) {
+      const buf = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+        buf.push(lines[i].replace(/^\s*>\s?/, ""));
+        i++;
+      }
+      out.push(`<blockquote class="spec-quote">${inline(buf.join(" "))}</blockquote>`);
+      continue;
+    }
+
+    // Unordered list
+    if (/^\s*[-*+]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*[-*+]\s+/, ""));
+        i++;
+      }
+      out.push(`<ul class="spec-ul">${items.map((t) => `<li>${inline(t)}</li>`).join("")}</ul>`);
+      continue;
+    }
+
+    // Ordered list
+    if (/^\s*\d+[.)]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*\d+[.)]\s+/, ""));
+        i++;
+      }
+      out.push(`<ol class="spec-ol">${items.map((t) => `<li>${inline(t)}</li>`).join("")}</ol>`);
+      continue;
+    }
+
+    // Blank line
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
+
+    // Paragraph (gather consecutive plain lines)
+    const buf = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !/^(#{1,6}\s|```|\s*[-*+]\s|\s*\d+[.)]\s|\s*>)/.test(lines[i]) &&
+      !/^\s*([-*_])\1{2,}\s*$/.test(lines[i])
+    ) {
+      buf.push(lines[i]);
+      i++;
+    }
+    out.push(`<p class="spec-p">${inline(buf.join(" "))}</p>`);
+  }
+
+  return out.join("\n");
 }
 
 function populateDetailFilters(versionData) {
@@ -1210,11 +1464,11 @@ function setupFeatureDetail() {
   });
 }
 
-/* Switch between the Tasks and Reports panels on the feature detail page.
-   Reports used to sit below the task list, which meant scrolling past every
-   task to reach them. */
+/* Switch between the Tasks, Reports, and Spec Files panels on the feature
+   detail page. Reports used to sit below the task list, which meant scrolling
+   past every task to reach them. */
 function showDetailTab(name) {
-  const target = name === "reports" ? "reports" : "tasks";
+  const target = ["reports", "specs"].includes(name) ? name : "tasks";
 
   document.querySelectorAll("[data-detail-tab]").forEach((tab) => {
     const active = tab.dataset.detailTab === target;

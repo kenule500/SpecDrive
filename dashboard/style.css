@@ -3467,6 +3467,300 @@ body.drawer-open {
   margin-bottom: 8px;
 }
 
+/* ---- Spec Files panel: document nav + rendered markdown ---- */
+.detail-specs {
+  margin-bottom: 8px;
+}
+
+.spec-files {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.spec-files-nav {
+  position: sticky;
+  top: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px;
+}
+
+.spec-files-nav-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.spec-files-nav-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.spec-doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.spec-doc-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.spec-doc-btn:hover {
+  background: rgba(79, 70, 229, 0.07);
+  color: var(--text);
+}
+
+.spec-doc-btn.active {
+  background: rgba(79, 70, 229, 0.12);
+  border-color: rgba(79, 70, 229, 0.28);
+  color: var(--accent);
+}
+
+.spec-doc-meta {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.spec-files-view {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.spec-files-view-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.spec-files-path {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-3);
+  word-break: break-all;
+}
+
+.spec-copy-btn {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--accent);
+  background: rgba(79, 70, 229, 0.08);
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.spec-copy-btn:hover {
+  background: rgba(79, 70, 229, 0.16);
+}
+
+.spec-markdown {
+  padding: 20px 24px 28px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-2);
+  overflow-x: auto;
+}
+
+.spec-markdown .spec-h {
+  color: var(--text);
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 22px 0 10px;
+}
+
+.spec-markdown .spec-h:first-child {
+  margin-top: 0;
+}
+
+.spec-markdown .spec-h1 {
+  font-size: 21px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.spec-markdown .spec-h2 {
+  font-size: 17px;
+}
+
+.spec-markdown .spec-h3 {
+  font-size: 14.5px;
+}
+
+.spec-markdown .spec-h4,
+.spec-markdown .spec-h5,
+.spec-markdown .spec-h6 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+
+.spec-markdown .spec-p {
+  margin: 0 0 12px;
+}
+
+.spec-markdown .spec-ul,
+.spec-markdown .spec-ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+
+.spec-markdown .spec-ul li,
+.spec-markdown .spec-ol li {
+  margin-bottom: 5px;
+}
+
+.spec-markdown code {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+  background: rgba(79, 70, 229, 0.09);
+  border: 1px solid rgba(79, 70, 229, 0.16);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+.spec-markdown .spec-code {
+  margin: 0 0 14px;
+  padding: 13px 15px;
+  background: rgba(15, 23, 42, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow-x: auto;
+}
+
+.spec-markdown .spec-code code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.spec-markdown .spec-quote {
+  margin: 0 0 14px;
+  padding: 8px 14px;
+  border-left: 3px solid var(--accent);
+  background: rgba(79, 70, 229, 0.05);
+  color: var(--text-2);
+  border-radius: 0 8px 8px 0;
+}
+
+.spec-markdown .spec-hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+
+.spec-markdown a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.spec-markdown a:hover {
+  text-decoration: underline;
+}
+
+.spec-table-wrap {
+  margin: 0 0 16px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.spec-table th,
+.spec-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.spec-table th {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  background: rgba(148, 163, 184, 0.08);
+  white-space: nowrap;
+}
+
+.spec-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.spec-empty {
+  color: var(--text-3);
+  font-style: italic;
+}
+
+@media (max-width: 860px) {
+  .spec-files {
+    grid-template-columns: 1fr;
+  }
+
+  .spec-files-nav {
+    position: static;
+  }
+
+  .spec-doc-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .spec-doc-btn {
+    width: auto;
+  }
+}
+
 .report-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));

@@ -648,6 +648,61 @@ function parseFeatureVersion(url) {
   };
 }
 
+// Spec documents live under .sdrive/specs/<stage>/<feature>/<version>/.
+// A feature moves from backlog -> ongoing -> completed, so we search every
+// stage and return the first folder that actually holds the version. This lets
+// the dashboard read the raw spec/plan/tasks/traceability markdown without the
+// user having to open the repo.
+const SPEC_STAGES = ["ongoing", "completed", "backlog"];
+const SPEC_DOCS = [
+  { id: "spec", label: "Specification", file: "spec.md" },
+  { id: "plan", label: "Plan", file: "plan.md" },
+  { id: "tasks", label: "Tasks", file: "tasks.md" },
+  { id: "traceability", label: "Traceability", file: "traceability.md" },
+  { id: "review", label: "Review", file: "review.md" }
+];
+
+function resolveSpecDir(feature, version) {
+  for (const stage of SPEC_STAGES) {
+    const dir = path.join(sdriveRoot, "specs", stage, feature, version);
+    if (fs.existsSync(dir)) return { stage, dir };
+  }
+  return { stage: null, dir: null };
+}
+
+// Returns the raw markdown for every spec document that exists for a feature
+// version, plus which stage (ongoing/completed/backlog) it was found in.
+function apiSpecFiles(feature, version) {
+  const { stage, dir } = resolveSpecDir(feature, version);
+
+  if (!dir) {
+    return { feature, version, stage: null, docs: [] };
+  }
+
+  const docs = [];
+  for (const doc of SPEC_DOCS) {
+    const full = path.join(dir, doc.file);
+    if (!fs.existsSync(full)) continue;
+    let content = "";
+    try {
+      content = fs.readFileSync(full, "utf8");
+    } catch (error) {
+      content = "";
+    }
+    docs.push({
+      id: doc.id,
+      label: doc.label,
+      file: doc.file,
+      path: `.sdrive/specs/${stage}/${feature}/${version}/${doc.file}`,
+      bytes: Buffer.byteLength(content, "utf8"),
+      lines: content ? content.split(/\r?\n/).length : 0,
+      content
+    });
+  }
+
+  return { feature, version, stage, docs };
+}
+
 function serveStatic(res, filePath, contentType) {
   if (!fs.existsSync(filePath)) {
     res.writeHead(404);
@@ -1356,6 +1411,11 @@ function handleRequest(req, res) {
     if (url.startsWith("/api/reports/")) {
       const { feature, version } = parseFeatureVersion(url);
       return res.end(JSON.stringify(apiReports(feature, version)));
+    }
+
+    if (url.startsWith("/api/spec-files/")) {
+      const { feature, version } = parseFeatureVersion(url);
+      return res.end(JSON.stringify(apiSpecFiles(feature, version)));
     }
 
     if (url === "/api/onboarding") {

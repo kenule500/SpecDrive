@@ -256,6 +256,18 @@
               Reports
               <span id="detail-tab-reports-count" class="detail-tab-count"></span>
             </button>
+            <button
+              id="detail-tab-specs"
+              class="detail-tab"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="detail-panel-specs"
+              data-detail-tab="specs"
+            >
+              Spec Files
+              <span id="detail-tab-specs-count" class="detail-tab-count"></span>
+            </button>
           </div>
 
           <div id="detail-panel-tasks" class="detail-panel active" role="tabpanel" aria-labelledby="detail-tab-tasks">
@@ -291,6 +303,16 @@
               <span class="section-hint">Artifacts written by the agents for this feature</span>
             </div>
             <div id="detail-reports" class="detail-reports">
+              <div class="skeleton-card"></div>
+            </div>
+          </div>
+
+          <div id="detail-panel-specs" class="detail-panel" role="tabpanel" aria-labelledby="detail-tab-specs">
+            <div class="detail-reports-head">
+              <h3>Spec Files</h3>
+              <span class="section-hint">The raw spec, plan, tasks, and traceability documents for this feature</span>
+            </div>
+            <div id="detail-specs" class="detail-specs">
               <div class="skeleton-card"></div>
             </div>
           </div>
