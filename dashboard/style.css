@@ -2192,8 +2192,14 @@ body {
 
 .workflow-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .workflow-cards {
+    grid-template-columns: 1fr;
+  }
 }
 
 .workflow-card {
@@ -2262,33 +2268,15 @@ body {
   counter-reset: step;
 }
 
-.workflow-lifecycle-label {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-3);
-  margin-bottom: -4px;
+/* The iteration steps continue the numbering from the setup steps above,
+   so the whole card reads as one ordered lifecycle. */
+.workflow-iteration-step {
+  margin-top: 2px;
 }
 
-.workflow-iteration {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--border);
-}
-
-.workflow-iteration-label {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-.workflow-iteration-steps {
-  counter-reset: step;
+.workflow-iteration-step::before {
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
 }
 
 .workflow-steps li {
@@ -2318,24 +2306,6 @@ body {
   font-family: var(--mono);
   font-size: 11.5px;
   color: var(--text);
-}
-
-.workflow-bestfor {
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  font-size: 12px;
-  color: var(--text-2);
-}
-
-.workflow-bestfor span {
-  display: block;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-3);
-  margin-bottom: 3px;
 }
 
 /* ---- Overview product-type badge ---- */
@@ -2924,10 +2894,62 @@ body {
   grid-column: 1 / -1;
   border-color: rgba(180, 83, 9, 0.28);
   background: linear-gradient(180deg, var(--amber-soft), var(--surface) 60%);
+  gap: 16px;
 }
 
-.optional-commands-card .workflow-icon {
+.optional-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.optional-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  font-size: 19px;
+  color: #fff;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35);
+}
+
+.optional-head-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.optional-title {
+  margin: 0 0 2px;
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.optional-summary {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.optional-tagline {
+  flex-shrink: 0;
+  align-self: flex-start;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--amber);
+  background: rgba(217, 119, 6, 0.12);
+  border: 1px solid rgba(180, 83, 9, 0.22);
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .optional-command-list {
@@ -2936,17 +2958,23 @@ body {
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
 .optional-command {
   display: flex;
   gap: 11px;
   align-items: flex-start;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.optional-command:hover {
+  border-color: rgba(180, 83, 9, 0.35);
+  box-shadow: var(--shadow-sm);
 }
 
 .optional-command-code {
@@ -2984,6 +3012,10 @@ body {
 @media (max-width: 640px) {
   .detail-summary {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .optional-head {
+    flex-wrap: wrap;
   }
 
   .optional-command {

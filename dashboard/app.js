@@ -1508,31 +1508,23 @@ function renderWorkflowCards() {
         </div>
       </div>
       <p class="workflow-summary">${escapeHtml(w.summary || "")}</p>
-      <div class="workflow-lifecycle-label">Work Lifecycle</div>
       <ol class="workflow-steps">
         ${(w.steps || [])
           .map((s) => `<li><code>${escapeHtml(s)}</code></li>`)
           .join("")}
+        ${(w.iteration || [])
+          .map(
+            (s) =>
+              `<li class="workflow-iteration-step"><code>${escapeHtml(s)}</code></li>`
+          )
+          .join("")}
       </ol>
-      ${
-        (w.iteration || []).length
-          ? `<div class="workflow-iteration">
-              <div class="workflow-iteration-label">Iteration</div>
-              <ol class="workflow-steps workflow-iteration-steps">
-                ${(w.iteration || [])
-                  .map((s) => `<li><code>${escapeHtml(s)}</code></li>`)
-                  .join("")}
-              </ol>
-            </div>`
-          : ""
-      }
-      <div class="workflow-bestfor"><span>Best for</span>${escapeHtml(w.bestFor || "")}</div>
     </article>
   `
     )
     .join("");
 
-  // Optional Commands card — a separate card below the workflow cards that
+  // Optional Commands card — a separate card below the lifecycle cards that
   // groups the on-demand commands (performance, docs, secure, test, archive).
   // It spans the full width of the grid row.
   const optional = commandData && commandData.optionalCommands;
@@ -1540,14 +1532,14 @@ function renderWorkflowCards() {
     const card = document.createElement("article");
     card.className = "workflow-card optional-commands-card";
     card.innerHTML = `
-      <div class="workflow-card-head">
-        <span class="workflow-icon">${escapeHtml(optional.icon || "✦")}</span>
-        <div>
-          <h3 class="workflow-name">${escapeHtml(optional.title || "Optional Commands")}</h3>
-          <span class="workflow-tagline">${escapeHtml(optional.tagline || "")}</span>
+      <div class="optional-head">
+        <span class="optional-icon">${escapeHtml(optional.icon || "✦")}</span>
+        <div class="optional-head-text">
+          <h3 class="optional-title">${escapeHtml(optional.title || "Optional Commands")}</h3>
+          <p class="optional-summary">${escapeHtml(optional.summary || "")}</p>
         </div>
+        <span class="optional-tagline">${escapeHtml(optional.tagline || "")}</span>
       </div>
-      <p class="workflow-summary">${escapeHtml(optional.summary || "")}</p>
       <ul class="optional-command-list">
         ${(optional.commands || [])
           .map(

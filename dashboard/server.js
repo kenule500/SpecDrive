@@ -887,7 +887,7 @@ const SLASH_DETAILS = {
   }
 };
 
-// The three product workflows SpecDrive supports. Rendered as cards at the
+// The three product lifecycles SpecDrive supports. Rendered as cards at the
 // bottom of the commands page so users can see which path applies to them.
 // Each card shows the setup steps for that path, followed by the shared
 // iteration lifecycle (propose -> apply -> review -> archive).
@@ -898,10 +898,9 @@ const PRODUCT_WORKFLOWS = [
     tagline: "Brand-new project",
     icon: "✦",
     summary:
-      "You are starting from nothing. SpecDrive guides you from an empty folder to governed, specified, tested code.",
+      "You are starting from nothing — an empty folder, or a repo that has only just been scaffolded and has no plan yet. SpecDrive guides you from that blank slate to governed, specified, tested code.",
     steps: ["/sdrive:constitution", "/sdrive:product-plan"],
-    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"],
-    bestFor: "New products, prototypes, and greenfield builds."
+    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"]
   },
   {
     id: "brownfield",
@@ -909,21 +908,19 @@ const PRODUCT_WORKFLOWS = [
     tagline: "Existing codebase",
     icon: "◈",
     summary:
-      "You already have code. SpecDrive inventories it, writes retroactive specs, and marks gaps as deferred — nothing breaks.",
+      "You already have a codebase that has been under development for a while — you have a plan and the work has progressed well beyond the start. SpecDrive inventories it, writes retroactive specs, and marks gaps as deferred so nothing breaks.",
     steps: ["/sdrive:onboard", "/sdrive:constitution"],
-    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"],
-    bestFor: "Adopting SpecDrive into a live or legacy project."
+    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"]
   },
   {
     id: "migration",
     name: "Migration",
-    tagline: "Coming from OpenSpec / Spec-Kit",
+    tagline: "Coming from another spec framework",
     icon: "⇄",
     summary:
-      "You use another spec tool. SpecDrive detects it and migrates your existing specs in, preserving the originals.",
+      "You are coming from another spec-driven framework such as Software Factory or OpenSpec. SpecDrive detects it and migrates your existing specs in, preserving the originals.",
     steps: ["/sdrive:onboard", "/sdrive:constitution", "/sdrive:sync"],
-    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"],
-    bestFor: "Teams moving from OpenSpec or Spec-Kit."
+    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"]
   }
 ];
 
