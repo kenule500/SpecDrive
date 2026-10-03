@@ -404,7 +404,7 @@ The dashboard also supports filters:
 | `/sdrive:docs` | Documentation | Generate docs |
 | `/sdrive:apply` | Implementation | Write production code; move feature from `backlog/` to `ongoing/` |
 | `/sdrive:test` | Test | Write tests, run them, report coverage |
-| `/sdrive:performance` | Performance | Benchmark and optimize for speed |
+| `/sdrive:performance` | Performance | Benchmark and optimize for speed and SEO |
 | `/sdrive:debug` | Debug | Reproduce, isolate, and fix defects — layout, APIs, runtime, glitches |
 | `/sdrive:review` | Review | Final audit — pass/fail verdict, no merge |
 | `/sdrive:archive` | Archive | Merge an approved feature to `main` and complete its lifecycle |

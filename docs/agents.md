@@ -234,18 +234,21 @@ SpecDrive uses 15 specialized agents. Each agent has one slash command.
 
 **Command:** `/sdrive:performance`
 
-**Purpose:** Benchmark and optimize for speed.
+**Purpose:** Benchmark and optimize for speed and search visibility (SEO).
 
 **What it does:**
 
 - Reads NFRs from spec.json in the current version
 - Measures baseline
 - Identifies bottlenecks
+- Runs an **SEO audit** for crawlability and discoverability issues (metadata, semantic structure, structured data, `robots.txt`/`sitemap.xml`, Core Web Vitals, `hreflang`)
 - Optimizes after approval
 - Writes report with version in filename
 - Updates traceability only for performance NFR rows in the current version
 
-**Scope:** Speed only. If the baseline already meets the NFRs, the agent stops — it does not over-optimize. Correctness defects (layout breakage, failing APIs, runtime errors, visual glitches) are **not** fixed here; they are recorded under "Defects Handed Off" and handed to `/sdrive:debug`.
+**Two measured concerns:** The agent owns both **speed** (slower than the NFRs allow) and **SEO** (not discoverable or not readable by crawlers). Both are measured against a number, which is why both belong here. An SEO finding is reported even when every speed NFR passes — the NFR gate never suppresses it. The two lists are always reported separately and approved separately.
+
+**Scope boundary:** A design judgement with no metric — "should this be a reusable component?", duplicated code, dead code — is **not** in scope. Those are noted under "Out of Scope Observations" and handed to `/sdrive:review`. Correctness defects (layout, API, runtime, glitches) are handed to `/sdrive:debug`.
 
 **Batch mode:** `/sdrive:performance --all` optimises every ongoing feature and writes an aggregate report to `.sdrive/reports/performance/performance-report-all-<date>.md`.
 

@@ -850,8 +850,8 @@ const SLASH_DETAILS = {
     when: "After the plan is approved. Use --all to implement every ongoing feature, one branch each."
   },
   "/sdrive:performance": {
-    what: "Benchmarks and optimises performance.",
-    why: "Ensures the feature is not just correct, but fast enough.",
+    what: "Benchmarks and optimises performance and search visibility (SEO).",
+    why: "Ensures the feature is not just correct, but fast enough and discoverable.",
     when: "After implementation, before review. Use --all to optimise every ongoing feature."
   },
   "/sdrive:debug": {
@@ -951,8 +951,8 @@ const OPTIONAL_COMMANDS = {
     },
     {
       command: "/sdrive:performance",
-      what: "Benchmarks and optimizes the code for speed and efficiency.",
-      when: "When performance matters — before a release or after a slowdown."
+      what: "Benchmarks and optimizes the code for speed, efficiency, and search visibility.",
+      when: "When performance or SEO matters — before a release or after a slowdown."
     },
     {
       command: "/sdrive:debug",

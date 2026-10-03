@@ -10,6 +10,7 @@
 | Constitution governance | ⚠️ basic | ⚠️ basic | ✅ advanced |
 | Security agent | ❌ | ❌ | ✅ |
 | Performance agent | ❌ | ❌ | ✅ |
+| SEO optimization (metadata, structured data, crawlability) | ❌ | ❌ | ✅ |
 | Debug agent (layout, API, runtime, glitches) | ❌ | ❌ | ✅ |
 | UI/UX prototype agent | ❌ | ❌ | ✅ |
 | Test agent | ❌ | ⚠️ partial | ✅ dedicated |

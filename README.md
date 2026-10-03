@@ -535,7 +535,7 @@ The command enumerates every feature in `specs/ongoing/`, processes them **seque
 | `/sdrive:update-propose` | Extend an existing feature spec | When adding requirements to a feature that already exists |
 | `/sdrive:design` | Build UI/UX prototype | When there is no existing prototype |
 | `/sdrive:secure` | Security audit and fixes | When security is a concern |
-| `/sdrive:performance` | Benchmark and optimize for speed | When performance NFRs are not met |
+| `/sdrive:performance` | Benchmark and optimize for speed and SEO | When performance NFRs are not met, or search visibility needs work |
 | `/sdrive:debug` | Reproduce, isolate, and fix defects | When something is visibly wrong — broken layout, failing API, console error, glitch |
 | `/sdrive:docs` | Generate documentation | When docs are outdated or missing |
 | `/sdrive:sync` | Sync spec → plan → tasks | After manually hand-editing a single file |
@@ -587,20 +587,24 @@ Performs deep security audit.
 
 Supports `--all` to optimise every ongoing feature.
 
-Benchmarks and optimizes performance.
+Benchmarks and optimizes performance and search visibility.
 
 **What it does:**
 
 - Measures baseline metrics
 - Identifies bottlenecks
+- Runs an SEO audit for crawlability and discoverability issues (metadata, semantic structure, structured data, `robots.txt`/`sitemap.xml`, Core Web Vitals, `hreflang`)
 - Applies optimizations with approval
 - Verifies improvements
 
-**Scope:** Speed only. If the baseline already meets the NFRs, the agent stops — it does not over-optimize. Correctness defects (layout breakage, failing APIs, runtime errors, visual glitches) are **not** fixed here; they are recorded under "Defects Handed Off" and handed to `/sdrive:debug`.
+**Two measured concerns:** speed (slower than the NFRs allow) and SEO (not discoverable or not readable by crawlers). Both are measured against a number, which is why both belong here. An SEO finding is reported even when every speed NFR passes — the NFR gate never suppresses it. The two lists are reported and approved separately.
+
+**Scope boundary:** A design judgement with no metric — "should this be a reusable component?", duplicated code, dead code — is **not** in scope. Those are noted under "Out of Scope Observations" and handed to `/sdrive:review`. Correctness defects (layout, API, runtime, glitches) are handed to `/sdrive:debug`.
 
 **When to use:**
 
 - When performance NFRs are not met
+- When search visibility needs work (missing metadata, poor crawlability, weak Core Web Vitals)
 - After major feature implementations
 
 ---
@@ -745,7 +749,7 @@ Audits and manages AI skills.
 | Discover-skills | `05-discover-skills.md` | Audit AI skills |
 | Documentation | `06-documentation.md` | Generate docs, detect drift |
 | Implementation | `07-implementation.md` | Write production code |
-| Performance | `08-performance.md` | Benchmark and optimize for speed |
+| Performance | `08-performance.md` | Benchmark and optimize for speed and SEO |
 | Review & Complete | `09-review-complete.md` | Final audit and merge |
 | Security | `10-security.md` | Security audit and fixes |
 | Test | `11-test.md` | Write tests, run them, report coverage |

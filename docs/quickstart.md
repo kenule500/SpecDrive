@@ -242,7 +242,7 @@ Concerned about security?
 /sdrive:secure
 ```
 
-Performance issues?
+Performance or SEO issues?
 
 ```text
 /sdrive:performance
