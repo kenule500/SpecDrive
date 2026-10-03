@@ -606,7 +606,9 @@ Blocks merge on failure.
 **Greenfield project:**
 
 ```bash
-npm install -g specdrive-cli@latest
+npm install -g specdrive-cli@latest   # or: pnpm add -g specdrive-cli@latest
+                                      # or: yarn global add specdrive-cli@latest
+                                      # or: bun add -g specdrive-cli@latest
 sdrive init
 /sdrive:constitution
 /sdrive:propose "..."
@@ -618,7 +620,9 @@ sdrive init
 **Brownfield project:**
 
 ```bash
-npm install -g specdrive-cli@latest
+npm install -g specdrive-cli@latest   # or: pnpm add -g specdrive-cli@latest
+                                      # or: yarn global add specdrive-cli@latest
+                                      # or: bun add -g specdrive-cli@latest
 ```
 
 Then in your AI tool:

@@ -534,11 +534,41 @@ Writes tests for every acceptance criterion, runs them, and reports coverage.
 - After `/sdrive:apply`
 - Before `/sdrive:review`
 
+**Batch mode:**
+
+```text
+/sdrive:test --all
+```
+
+Tests every ongoing feature, one after the other, and writes an aggregate report to `.sdrive/reports/tests/test-report-all-<date>.md`.
+
 **What it does NOT do:**
 
 - Write production code
 - Fix production code
 - Merge
+
+---
+
+## Batch Mode (`--all`)
+
+Six commands accept a `--all` flag that runs them across **every ongoing feature** instead of a single one. Features are processed sequentially and an aggregate report is written at the end.
+
+| Command | `--all` behaviour | Aggregate report |
+|---------|-------------------|------------------|
+| `/sdrive:apply --all` | Implements every ongoing feature, one branch each. Does **not** merge. | `.sdrive/reports/implementation-report-all-<date>.md` |
+| `/sdrive:test --all` | Tests every ongoing feature. | `.sdrive/reports/tests/test-report-all-<date>.md` |
+| `/sdrive:review --all` | Reviews every ongoing feature one after the other. Never merges a feature that fails review. | `.sdrive/reports/reviews/review-report-all-<date>.md` |
+| `/sdrive:secure --all` | Audits every ongoing feature. Approval gates still apply per feature. | `.sdrive/reports/security/security-audit-all-<date>.md` |
+| `/sdrive:performance --all` | Optimises every ongoing feature. | `.sdrive/reports/performance/performance-report-all-<date>.md` |
+| `/sdrive:docs --all` | Documents every ongoing feature. | `.sdrive/docs/coverage-report-all-<date>.md` |
+
+**Behaviour notes:**
+
+- **Gates are evaluated per feature.** In `--all` mode the router does not gate-check a single feature; each feature's gates are checked individually by the agent as it is processed.
+- **Failures do not stop the batch.** If one feature fails, the agent records the failure and continues with the next, then summarises everything in the aggregate report.
+- **`/sdrive:apply --all` never merges.** Each feature gets its own branch and its own approval gate.
+- **Commands that do not support `--all`** (e.g. `/sdrive:propose`, `/sdrive:constitution`, `/sdrive:design`) reject the flag with a clear error.
 
 ---
 

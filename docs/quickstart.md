@@ -6,8 +6,24 @@ This guide gets you from zero to your first governed feature in minutes.
 
 ## 1. Install SpecDrive
 
+Install globally so the `sdrive` command is available everywhere.
+
 ```bash
 npm install -g specdrive-cli@latest
+```
+
+Other package managers:
+
+```bash
+pnpm add -g specdrive-cli@latest
+yarn global add specdrive-cli@latest
+bun add -g specdrive-cli@latest
+```
+
+Or run it without installing (Deno):
+
+```bash
+deno run -A npm:specdrive-cli@latest --version
 ```
 
 ---

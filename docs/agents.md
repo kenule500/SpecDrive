@@ -203,6 +203,8 @@ SpecDrive uses 14 specialized agents. Each agent has one slash command.
 - Generates coverage report
 - Only writes to the current version folder if feature-scoped
 
+**Batch mode:** `/sdrive:docs --all` documents every ongoing feature and writes an aggregate report to `.sdrive/docs/coverage-report-all-<date>.md`.
+
 ---
 
 ## Implementation Agent
@@ -222,6 +224,8 @@ SpecDrive uses 14 specialized agents. Each agent has one slash command.
 - Records branch name in workflow state
 - Recommends `/sdrive:test` as the next step
 
+**Batch mode:** `/sdrive:apply --all` implements every ongoing feature, one branch each. It never merges in batch mode, and each feature still requires its own approval gate.
+
 ---
 
 ## Performance Agent
@@ -238,6 +242,8 @@ SpecDrive uses 14 specialized agents. Each agent has one slash command.
 - Optimizes after approval
 - Writes report with version in filename
 - Updates traceability only for performance NFR rows in the current version
+
+**Batch mode:** `/sdrive:performance --all` optimises every ongoing feature and writes an aggregate report to `.sdrive/reports/performance/performance-report-all-<date>.md`.
 
 ---
 
@@ -261,6 +267,8 @@ SpecDrive uses 14 specialized agents. Each agent has one slash command.
 
 **Lifecycle ownership:** `/sdrive:apply` owns `backlog/` → `ongoing/`; `/sdrive:review` owns `ongoing/` → `completed/`; `sdrive reopen` owns `completed/` → `ongoing/`.
 
+**Batch mode:** `/sdrive:review --all` reviews every ongoing feature one after the other and writes an aggregate report to `.sdrive/reports/reviews/review-report-all-<date>.md`. A feature that fails review is never merged.
+
 ---
 
 ## Security Agent
@@ -278,6 +286,8 @@ SpecDrive uses 14 specialized agents. Each agent has one slash command.
 - Fixes with approval
 - Writes report with version in filename
 - Updates traceability only for security NFR rows in the current version
+
+**Batch mode:** `/sdrive:secure --all` audits every ongoing feature and writes an aggregate report to `.sdrive/reports/security/security-audit-all-<date>.md`. Approval gates still apply per feature.
 
 ---
 
@@ -298,5 +308,7 @@ SpecDrive uses 14 specialized agents. Each agent has one slash command.
 - Updates `traceability.json` with test IDs and status in the current version
 - Generates a coverage report at `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md`
 - Writes all artifacts (reports, logs, captured output) under `.sdrive/` — never to the project root
+
+**Batch mode:** `/sdrive:test --all` tests every ongoing feature, one after the other, and writes an aggregate report to `.sdrive/reports/tests/test-report-all-<date>.md`.
 - Runs `sdrive verify <feature>` and the governance validator
 - Does NOT write production code
