@@ -887,10 +887,15 @@ const SLASH_DETAILS = {
   }
 };
 
-// The three product lifecycles SpecDrive supports. Rendered as cards at the
+// The two product lifecycles SpecDrive supports. Rendered as cards at the
 // bottom of the commands page so users can see which path applies to them.
 // Each card shows the setup steps for that path, followed by the shared
 // iteration lifecycle (propose -> apply -> review -> archive).
+//
+// Migration is NOT a separate lifecycle. Arriving from another spec framework
+// is just a Brownfield project with extra context, so it is surfaced as a
+// sub-card inside the Brownfield card (see `migrationNote`) rather than as a
+// peer card with its own command list.
 const PRODUCT_WORKFLOWS = [
   {
     id: "greenfield",
@@ -910,20 +915,12 @@ const PRODUCT_WORKFLOWS = [
     summary:
       "Your codebase is already well underway — a plan exists and development has moved far past the early stages. SpecDrive takes stock of what is there, writes specs after the fact, and flags the gaps as deferred so nothing breaks.",
     steps: ["/sdrive:onboard", "/sdrive:constitution"],
-    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"]
-  },
-  {
-    id: "migration",
-    name: "Migration",
-    tagline: "Brownfield + migration",
-    icon: "⇄",
-    badge: "Detected automatically",
-    summary:
-      "You are arriving from a different spec-driven framework, such as Software Factory or OpenSpec. SpecDrive recognizes it, brings your existing specs across, and leaves the originals untouched.",
-    steps: ["/sdrive:onboard", "/sdrive:constitution"],
     iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"],
-    afterNote:
-      "After migration, run /sdrive:sync to align spec, plan, tasks, and traceability."
+    migrationNote: {
+      title: "Coming from another spec framework?",
+      body:
+        "If SpecDrive detects OpenSpec, Software Factory, Spec Kit, or another spec-driven framework in your repo, onboarding brings your existing specs across and leaves the originals untouched. Nothing extra to run — the same Brownfield lifecycle applies."
+    }
   }
 ];
 
