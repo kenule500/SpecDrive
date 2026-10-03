@@ -1535,6 +1535,7 @@ function renderWorkflowCards() {
       <div class="optional-head">
         <span class="optional-icon">${escapeHtml(optional.icon || "✦")}</span>
         <div class="optional-head-text">
+          <div class="optional-eyebrow">On demand</div>
           <h3 class="optional-title">${escapeHtml(optional.title || "Optional Commands")}</h3>
           <p class="optional-summary">${escapeHtml(optional.summary || "")}</p>
         </div>
@@ -1545,10 +1546,15 @@ function renderWorkflowCards() {
           .map(
             (c) => `
           <li class="optional-command">
-            <code class="optional-command-code">${escapeHtml(c.command)}</code>
+            <div class="optional-command-top">
+              <code class="optional-command-code">${escapeHtml(c.command)}</code>
+            </div>
             <div class="optional-command-body">
               <div class="optional-command-what">${escapeHtml(c.what || "")}</div>
-              <div class="optional-command-when">${escapeHtml(c.when || "")}</div>
+              <div class="optional-command-when">
+                <span class="optional-when-label">When</span>
+                <span class="optional-when-text">${escapeHtml(c.when || "")}</span>
+              </div>
             </div>
           </li>
         `
