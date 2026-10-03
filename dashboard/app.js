@@ -818,6 +818,18 @@ async function renderFeatures() {
 
     if (versionRendered > 0) {
       card.appendChild(body);
+
+      // Footer with a "View more" affordance that opens the task-detail overlay.
+      const foot = document.createElement("div");
+      foot.className = "feature-card-foot";
+      const moreBtn = document.createElement("button");
+      moreBtn.type = "button";
+      moreBtn.className = "feature-more-btn";
+      moreBtn.innerHTML = `View more <span class="feature-more-arrow">→</span>`;
+      moreBtn.addEventListener("click", () => openFeatureModal(f, team));
+      foot.appendChild(moreBtn);
+      card.appendChild(foot);
+
       container.appendChild(card);
       rendered++;
     }
@@ -829,6 +841,193 @@ async function renderFeatures() {
     container.className = "panel-loading";
     container.textContent = "No features match the current filters.";
   }
+}
+
+/* ============================================================
+   FEATURE DETAIL OVERLAY
+   Opened from the "View more" button on a feature card. Shows the
+   full task breakdown (pending / completed) for every version of
+   the feature, grouped by phase.
+   ============================================================ */
+let featureModalOpen = false;
+
+function openFeatureModal(feature, team) {
+  const modal = document.getElementById("feature-modal");
+  const title = document.getElementById("feature-modal-title");
+  const subtitle = document.getElementById("feature-modal-subtitle");
+  const body = document.getElementById("feature-modal-body");
+  if (!modal || !body) return;
+
+  title.textContent = feature.name;
+  subtitle.textContent = `${feature.currentVersion} · ${feature.phase || ""} · ${feature.currentStep || ""}`;
+  body.innerHTML = `<div class="skeleton-card"></div>`;
+
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+  featureModalOpen = true;
+  document.body.classList.add("modal-open");
+
+  renderFeatureModalBody(feature, team, body);
+}
+
+function closeFeatureModal() {
+  const modal = document.getElementById("feature-modal");
+  if (!modal) return;
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+  featureModalOpen = false;
+  document.body.classList.remove("modal-open");
+}
+
+async function renderFeatureModalBody(feature, team, body) {
+  const versions = feature.versions || [];
+  const frag = document.createDocumentFragment();
+
+  // Summary strip: aggregate task counts across every version.
+  let grandTotal = 0;
+  let grandDone = 0;
+  const versionData = [];
+
+  for (const version of versions) {
+    const tasks = (await fetchJson(`/api/tasks/${feature.name}/${version.id}`)) || {
+      summary: { total: 0, completed: 0, pending: 0, percent: 0 },
+      phases: []
+    };
+    grandTotal += tasks.summary?.total || 0;
+    grandDone += tasks.summary?.completed || 0;
+    versionData.push({ version, tasks });
+  }
+
+  const grandPending = grandTotal - grandDone;
+  const grandPercent = grandTotal === 0 ? 0 : Math.round((grandDone / grandTotal) * 100);
+
+  const summary = document.createElement("div");
+  summary.className = "modal-summary";
+  summary.innerHTML = `
+    <div class="modal-stat">
+      <span class="modal-stat-value">${grandTotal}</span>
+      <span class="modal-stat-label">Total tasks</span>
+    </div>
+    <div class="modal-stat">
+      <span class="modal-stat-value green">${grandDone}</span>
+      <span class="modal-stat-label">Completed</span>
+    </div>
+    <div class="modal-stat">
+      <span class="modal-stat-value amber">${grandPending}</span>
+      <span class="modal-stat-label">Pending</span>
+    </div>
+    <div class="modal-stat">
+      <span class="modal-stat-value">${grandPercent}%</span>
+      <span class="modal-stat-label">Progress</span>
+    </div>
+  `;
+  frag.appendChild(summary);
+
+  // Assignee / members context.
+  const members = featureMembers(feature, team);
+  if (feature.assignee || members.length) {
+    const meta = document.createElement("div");
+    meta.className = "modal-meta";
+    const assigneeEl = featureAssigneeEl(feature, team);
+    if (assigneeEl) meta.appendChild(assigneeEl);
+    if (members.length) meta.appendChild(featureMembersEl(members));
+    frag.appendChild(meta);
+  }
+
+  for (const { version, tasks } of versionData) {
+    const isCurrent = version.id === feature.currentVersion;
+    const section = document.createElement("div");
+    section.className = "modal-version" + (isCurrent ? " current" : "");
+
+    const s = tasks.summary || { total: 0, completed: 0, pending: 0, percent: 0 };
+    const phases = tasks.phases || [];
+
+    section.innerHTML = `
+      <div class="modal-version-head">
+        <span class="version-id">
+          <span class="chip ${isCurrent ? "accent" : "slate"}">${isCurrent ? "current" : "past"}</span>
+          ${escapeHtml(version.id)}
+        </span>
+        <span class="modal-version-counts">
+          <span class="chip green">${s.completed} done</span>
+          <span class="chip amber">${s.pending} pending</span>
+          <span class="chip slate">${s.percent}%</span>
+        </span>
+      </div>
+      ${
+        phases.length
+          ? phases
+              .map(
+                (p) => `
+        <div class="modal-phase">
+          <div class="modal-phase-head">
+            <span class="modal-phase-id">${escapeHtml(p.phaseId)}</span>
+            <span class="modal-phase-name">${escapeHtml(p.name)}</span>
+            <span class="modal-phase-count">${p.completed}/${p.total}</span>
+          </div>
+          <ul class="modal-task-list">
+            ${(p.tasks || [])
+              .map(
+                (t) => `
+              <li class="modal-task ${t.completed ? "done" : "pending"}">
+                <span class="modal-task-check">${t.completed ? "✓" : "○"}</span>
+                <div class="modal-task-body">
+                  <div class="modal-task-title">
+                    <span class="modal-task-id">${escapeHtml(t.id)}</span>
+                    ${escapeHtml(t.title)}
+                  </div>
+                  ${
+                    t.description
+                      ? `<div class="modal-task-desc">${escapeHtml(t.description)}</div>`
+                      : ""
+                  }
+                  ${
+                    (t.linkedRequirements || []).length ||
+                    (t.linkedAcceptanceCriteria || []).length
+                      ? `<div class="modal-task-links">
+                          ${(t.linkedRequirements || [])
+                            .map((r) => `<span class="chip blue">${escapeHtml(r)}</span>`)
+                            .join("")}
+                          ${(t.linkedAcceptanceCriteria || [])
+                            .map((a) => `<span class="chip slate">${escapeHtml(a)}</span>`)
+                            .join("")}
+                        </div>`
+                      : ""
+                  }
+                </div>
+              </li>
+            `
+              )
+              .join("")}
+          </ul>
+        </div>
+      `
+              )
+              .join("")
+          : `<div class="modal-empty">No tasks recorded for this version.</div>`
+      }
+    `;
+    frag.appendChild(section);
+  }
+
+  body.innerHTML = "";
+  body.appendChild(frag);
+}
+
+function setupFeatureModal() {
+  const modal = document.getElementById("feature-modal");
+  if (!modal) return;
+
+  const closeBtn = document.getElementById("feature-modal-close");
+  if (closeBtn) closeBtn.addEventListener("click", closeFeatureModal);
+
+  modal.querySelectorAll("[data-modal-close]").forEach((el) => {
+    el.addEventListener("click", closeFeatureModal);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && featureModalOpen) closeFeatureModal();
+  });
 }
 
 /* ============================================================
@@ -1132,6 +1331,7 @@ function commandRowEl(item) {
   if (item.acceptsAll) meta.push(`<span class="chip green">--all</span>`);
   if (item.agent) meta.push(`<span class="chip slate">${escapeHtml(item.agent)}</span>`);
   (item.gates || []).forEach((g) => meta.push(`<span class="chip amber">gate: ${escapeHtml(g)}</span>`));
+  if (item.optional) meta.push(`<span class="chip optional-chip" title="${escapeHtml(item.optionalNote || "")}">optional</span>`);
 
   const hasDetail = Boolean(item.what || item.why || item.when || item.example);
   const summary = item.what || item.description;
@@ -1171,7 +1371,13 @@ function commandRowEl(item) {
     if (item.when) cells.push(detailCell("When to use it", item.when));
     if (item.example) cells.push(detailCell("Example", item.example, true));
 
-    detailRow.innerHTML = `<td colspan="3"><div class="command-detail">${cells.join("")}</div></td>`;
+    detailRow.innerHTML = `<td colspan="3"><div class="command-detail">${cells.join("")}${
+      item.optional && item.optionalNote
+        ? `<div class="command-detail-item command-detail-optional"><span class="command-detail-label">Optional</span><span>${escapeHtml(
+            item.optionalNote
+          )}</span></div>`
+        : ""
+    }</div></td>`;
 
     const toggle = tr.querySelector(".command-toggle");
     toggle.addEventListener("click", () => {
@@ -1220,8 +1426,22 @@ function renderWorkflowCards() {
       </div>
       <p class="workflow-summary">${escapeHtml(w.summary || "")}</p>
       <ol class="workflow-steps">
-        ${(w.steps || []).map((s) => `<li><code>${escapeHtml(s)}</code></li>`).join("")}
+        ${(w.steps || [])
+          .map((s) => {
+            const isOptional = (w.optional || []).includes(s);
+            return `<li class="${isOptional ? "optional" : ""}"><code>${escapeHtml(
+              s
+            )}</code>${isOptional ? `<span class="step-optional-badge">optional</span>` : ""}</li>`;
+          })
+          .join("")}
       </ol>
+      ${
+        (w.optional || []).length
+          ? `<div class="workflow-optional-note"><span class="workflow-optional-icon">✦</span>${escapeHtml(
+              w.optionalNote || ""
+            )}</div>`
+          : ""
+      }
       <div class="workflow-bestfor"><span>Best for</span>${escapeHtml(w.bestFor || "")}</div>
     </article>
   `
@@ -1391,6 +1611,7 @@ async function main() {
 
   setupNav();
   setupSidebarDrawer();
+  setupFeatureModal();
 
   await renderFeatures();
   await renderSkills();

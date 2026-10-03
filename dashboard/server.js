@@ -431,6 +431,55 @@ function apiTraceability(feature, version) {
   return loadJson(governanceFile(feature, version, "traceability.json"), { rows: [] });
 }
 
+// Execution tasks for a feature version. Tasks are grouped into phases, and
+// each task links back to the requirements it satisfies. The dashboard uses
+// this to show pending/completed counts and the full task breakdown.
+function apiTasks(feature, version) {
+  const data = loadJson(governanceFile(feature, version, "tasks.json"), {
+    feature,
+    version: Number(version) || 1,
+    phases: []
+  });
+
+  const phases = Array.isArray(data.phases) ? data.phases : [];
+  let total = 0;
+  let completed = 0;
+
+  const shaped = phases.map((phase) => {
+    const tasks = Array.isArray(phase.tasks) ? phase.tasks : [];
+    const done = tasks.filter((t) => t.completed === true).length;
+    total += tasks.length;
+    completed += done;
+    return {
+      phaseId: phase.phaseId || "",
+      name: phase.name || "",
+      dependencies: phase.dependencies || [],
+      total: tasks.length,
+      completed: done,
+      tasks: tasks.map((t) => ({
+        id: t.id || "",
+        title: t.title || "",
+        description: t.description || "",
+        linkedRequirements: t.linkedRequirements || [],
+        linkedAcceptanceCriteria: t.linkedAcceptanceCriteria || [],
+        completed: t.completed === true
+      }))
+    };
+  });
+
+  return {
+    feature: data.feature || feature,
+    version: data.version || Number(version) || 1,
+    summary: {
+      total,
+      completed,
+      pending: total - completed,
+      percent: total === 0 ? 0 : Math.round((completed / total) * 100)
+    },
+    phases: shaped
+  };
+}
+
 function apiVerification(feature, version) {
   return loadJson(governanceFile(feature, version, "verification.json"), {
     status: "not_run",
@@ -808,7 +857,10 @@ const SLASH_DETAILS = {
   "/sdrive:review": {
     what: "Runs the final audit, then merges and archives the feature.",
     why: "The last quality gate before work is considered done.",
-    when: "When the feature is complete. Use --all to review every ongoing feature one after the other."
+    when: "When the feature is complete. Use --all to review every ongoing feature one after the other.",
+    optional: true,
+    optionalNote:
+      "Optional — run when development is done (end of a sprint or once an MVP is complete), not on every change."
   },
   "/sdrive:secure": {
     what: "Performs a security audit, threat modelling, and fixes.",
@@ -818,7 +870,10 @@ const SLASH_DETAILS = {
   "/sdrive:test": {
     what: "Writes tests for the acceptance criteria and reports coverage.",
     why: "Proves the feature actually does what was promised.",
-    when: "After implementation. Use --all to test every ongoing feature."
+    when: "After implementation. Use --all to test every ongoing feature.",
+    optional: true,
+    optionalNote:
+      "Optional — run when development is done (end of a sprint or once an MVP is complete), not on every change."
   },
   "/sdrive:onboard": {
     what: "Adopts an existing project into SpecDrive.",
@@ -845,6 +900,9 @@ const PRODUCT_WORKFLOWS = [
       "/sdrive:test",
       "/sdrive:review"
     ],
+    optional: ["/sdrive:test", "/sdrive:review"],
+    optionalNote:
+      "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
     bestFor: "New products, prototypes, and greenfield builds."
   },
   {
@@ -862,6 +920,9 @@ const PRODUCT_WORKFLOWS = [
       "/sdrive:test",
       "/sdrive:review"
     ],
+    optional: ["/sdrive:test", "/sdrive:review"],
+    optionalNote:
+      "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
     bestFor: "Adopting SpecDrive into a live or legacy project."
   },
   {
@@ -878,6 +939,9 @@ const PRODUCT_WORKFLOWS = [
       "/sdrive:apply",
       "/sdrive:review"
     ],
+    optional: ["/sdrive:review"],
+    optionalNote:
+      "Run this when development is done — at the end of a sprint or once an MVP is complete. It is not needed on every change.",
     bestFor: "Teams moving from OpenSpec or Spec-Kit."
   },
   {
@@ -894,6 +958,9 @@ const PRODUCT_WORKFLOWS = [
       "/sdrive:test",
       "/sdrive:review"
     ],
+    optional: ["/sdrive:test", "/sdrive:review"],
+    optionalNote:
+      "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
     bestFor: "Ongoing development on an established product."
   }
 ];
@@ -913,7 +980,9 @@ function apiCommands() {
       gates: c.gates || [],
       what: detail.what || "",
       why: detail.why || "",
-      when: detail.when || ""
+      when: detail.when || "",
+      optional: Boolean(detail.optional),
+      optionalNote: detail.optionalNote || ""
     };
   });
 
@@ -955,6 +1024,11 @@ function handleRequest(req, res) {
     if (url.startsWith("/api/traceability/")) {
       const { feature, version } = parseFeatureVersion(url);
       return res.end(JSON.stringify(apiTraceability(feature, version)));
+    }
+
+    if (url.startsWith("/api/tasks/")) {
+      const { feature, version } = parseFeatureVersion(url);
+      return res.end(JSON.stringify(apiTasks(feature, version)));
     }
 
     if (url.startsWith("/api/verification/")) {
