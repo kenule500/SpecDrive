@@ -2211,17 +2211,17 @@ body {
   padding: 3px 10px 3px 8px;
   border-radius: 999px;
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--accent);
-  background: rgba(79, 70, 229, 0.1);
-  border: 1px solid rgba(79, 70, 229, 0.22);
+  background: rgba(79, 70, 229, 0.07);
+  border: 1px solid rgba(79, 70, 229, 0.16);
   cursor: help;
 }
 
 .ov-type-badge[data-type="brownfield"] {
-  color: #b45309;
-  background: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.28);
+  color: #c2761f;
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.2);
 }
 
 .ov-type-badge[data-type="unknown"] {
@@ -2232,17 +2232,18 @@ body {
 
 .ov-type-icon {
   font-size: 12px;
+  opacity: 0.85;
 }
 
 .ov-type-tagline {
-  font-weight: 500;
-  opacity: 0.75;
+  font-weight: 400;
+  opacity: 0.6;
 }
 
 .ov-type-tagline::before {
   content: "·";
   margin-right: 5px;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 @media (max-width: 640px) {
