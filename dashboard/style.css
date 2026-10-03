@@ -2262,6 +2262,35 @@ body {
   counter-reset: step;
 }
 
+.workflow-lifecycle-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: -4px;
+}
+
+.workflow-iteration {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.workflow-iteration-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.workflow-iteration-steps {
+  counter-reset: step;
+}
+
 .workflow-steps li {
   display: flex;
   align-items: center;
@@ -2852,25 +2881,6 @@ body {
   border-radius: 999px;
 }
 
-.workflow-optional-note {
-  display: flex;
-  gap: 7px;
-  align-items: flex-start;
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--amber);
-  background: var(--amber-soft);
-  border: 1px solid rgba(180, 83, 9, 0.18);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-}
-
-.workflow-optional-icon {
-  flex-shrink: 0;
-  font-size: 11px;
-  line-height: 1.5;
-}
-
 .command-detail-optional span:last-child {
   color: var(--amber);
 }
@@ -2911,6 +2921,7 @@ body {
 
 /* ---- Optional Commands card (commands page) ---- */
 .optional-commands-card {
+  grid-column: 1 / -1;
   border-color: rgba(180, 83, 9, 0.28);
   background: linear-gradient(180deg, var(--amber-soft), var(--surface) 60%);
 }
@@ -2923,8 +2934,8 @@ body {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 8px;
 }
 

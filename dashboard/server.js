@@ -887,8 +887,10 @@ const SLASH_DETAILS = {
   }
 };
 
-// The four product workflows SpecDrive supports. Rendered as cards at the
+// The three product workflows SpecDrive supports. Rendered as cards at the
 // bottom of the commands page so users can see which path applies to them.
+// Each card shows the setup steps for that path, followed by the shared
+// iteration lifecycle (propose -> apply -> review -> archive).
 const PRODUCT_WORKFLOWS = [
   {
     id: "greenfield",
@@ -897,18 +899,8 @@ const PRODUCT_WORKFLOWS = [
     icon: "✦",
     summary:
       "You are starting from nothing. SpecDrive guides you from an empty folder to governed, specified, tested code.",
-    steps: [
-      "/sdrive:constitution",
-      "/sdrive:product-plan",
-      "/sdrive:propose",
-      "/sdrive:apply",
-      "/sdrive:test",
-      "/sdrive:review",
-      "/sdrive:archive"
-    ],
-    optional: ["/sdrive:test"],
-    optionalNote:
-      "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
+    steps: ["/sdrive:constitution", "/sdrive:product-plan"],
+    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"],
     bestFor: "New products, prototypes, and greenfield builds."
   },
   {
@@ -918,18 +910,8 @@ const PRODUCT_WORKFLOWS = [
     icon: "◈",
     summary:
       "You already have code. SpecDrive inventories it, writes retroactive specs, and marks gaps as deferred — nothing breaks.",
-    steps: [
-      "/sdrive:onboard",
-      "/sdrive:constitution",
-      "/sdrive:propose",
-      "/sdrive:apply",
-      "/sdrive:test",
-      "/sdrive:review",
-      "/sdrive:archive"
-    ],
-    optional: ["/sdrive:test"],
-    optionalNote:
-      "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
+    steps: ["/sdrive:onboard", "/sdrive:constitution"],
+    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"],
     bestFor: "Adopting SpecDrive into a live or legacy project."
   },
   {
@@ -939,38 +921,9 @@ const PRODUCT_WORKFLOWS = [
     icon: "⇄",
     summary:
       "You use another spec tool. SpecDrive detects it and migrates your existing specs in, preserving the originals.",
-    steps: [
-      "/sdrive:onboard",
-      "/sdrive:constitution",
-      "/sdrive:sync",
-      "/sdrive:apply",
-      "/sdrive:review",
-      "/sdrive:archive"
-    ],
-    optional: [],
-    optionalNote:
-      "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
+    steps: ["/sdrive:onboard", "/sdrive:constitution", "/sdrive:sync"],
+    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"],
     bestFor: "Teams moving from OpenSpec or Spec-Kit."
-  },
-  {
-    id: "feature",
-    name: "Feature Iteration",
-    tagline: "Adding to a shipped product",
-    icon: "↻",
-    summary:
-      "The product is live and you are adding or changing features. Each change runs through the same gates as the first release.",
-    steps: [
-      "/sdrive:propose",
-      "/sdrive:design",
-      "/sdrive:apply",
-      "/sdrive:test",
-      "/sdrive:review",
-      "/sdrive:archive"
-    ],
-    optional: ["/sdrive:test"],
-    optionalNote:
-      "Run these when development is done — at the end of a sprint or once an MVP is complete. They are not needed on every change.",
-    bestFor: "Ongoing development on an established product."
   }
 ];
 

@@ -1508,21 +1508,22 @@ function renderWorkflowCards() {
         </div>
       </div>
       <p class="workflow-summary">${escapeHtml(w.summary || "")}</p>
+      <div class="workflow-lifecycle-label">Work Lifecycle</div>
       <ol class="workflow-steps">
         ${(w.steps || [])
-          .map((s) => {
-            const isOptional = (w.optional || []).includes(s);
-            return `<li class="${isOptional ? "optional" : ""}"><code>${escapeHtml(
-              s
-            )}</code>${isOptional ? `<span class="step-optional-badge">optional</span>` : ""}</li>`;
-          })
+          .map((s) => `<li><code>${escapeHtml(s)}</code></li>`)
           .join("")}
       </ol>
       ${
-        (w.optional || []).length
-          ? `<div class="workflow-optional-note"><span class="workflow-optional-icon">✦</span>${escapeHtml(
-              w.optionalNote || ""
-            )}</div>`
+        (w.iteration || []).length
+          ? `<div class="workflow-iteration">
+              <div class="workflow-iteration-label">Iteration</div>
+              <ol class="workflow-steps workflow-iteration-steps">
+                ${(w.iteration || [])
+                  .map((s) => `<li><code>${escapeHtml(s)}</code></li>`)
+                  .join("")}
+              </ol>
+            </div>`
           : ""
       }
       <div class="workflow-bestfor"><span>Best for</span>${escapeHtml(w.bestFor || "")}</div>
@@ -1533,6 +1534,7 @@ function renderWorkflowCards() {
 
   // Optional Commands card — a separate card below the workflow cards that
   // groups the on-demand commands (performance, docs, secure, test, archive).
+  // It spans the full width of the grid row.
   const optional = commandData && commandData.optionalCommands;
   if (optional && (optional.commands || []).length) {
     const card = document.createElement("article");
