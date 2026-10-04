@@ -5,7 +5,7 @@ argument-hint: Describe the symptom (e.g., "cards overlap on the services page",
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
+tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7']
 agents: []
 ---
 
@@ -51,12 +51,6 @@ You operate within the current version folder only.
 - **`--all` Mode Rule:** If the user invokes this command with `--all` (e.g. `/sdrive:debug --all`), you MUST sweep EVERY feature currently in `ongoing/`, one after the other, in a single run. See the `<all-mode>` section for the exact procedure. In `--all` mode, the per-feature rules above still apply to each feature individually — you simply repeat the full workflow for each one.
 </rules>
 
-<vision>
-- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
-- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
-- A screenshot is evidence, not proof. Prefer a programmatic check (bounding boxes, HTTP status, console output) whenever one is available, and state clearly when a finding is visual-only.
-</vision>
-
 <capabilities>
 - **Layout Debugging**: Element overlap, horizontal/vertical overflow, clipping, z-index collisions, container escape, and breakpoint integrity — verified programmatically via headless-browser bounding-box comparison where possible.
 - **API Debugging**: Failing endpoints, wrong status codes, malformed payloads, schema mismatches, auth failures, timeouts, and N+1-induced latency spikes.
@@ -94,7 +88,7 @@ Place generated reports and artifacts in the following standard locations:
    - Use `execute` to run the app, the test suite, or a targeted script. Capture output directly from the tool result.
    - **No Shell Redirection Rule:** NEVER create `*-help.log`, `debug.log`, or any incrementing log files in the project root. To read a command's usage text, run it and read the tool result — do NOT redirect `--help` output to a file. If raw output must be persisted, write it under `.sdrive/reports/debug/evidence/`.
    - Bisect the change history (`git log`, `git bisect`) when the defect is a regression and the introduction point is unclear.
-   - For layout defects, prefer programmatic verification: use a headless browser (Playwright/Puppeteer) and compare `getBoundingClientRect()` values between siblings to detect overlap, overflow, and container escape deterministically. If a headless browser is unavailable, use the `vision-bridge` MCP tools to inspect a screenshot, and state clearly that the check was visual rather than programmatic.
+   - For layout defects, prefer programmatic verification: use a headless browser (Playwright/Puppeteer) and compare `getBoundingClientRect()` values between siblings to detect overlap, overflow, and container escape deterministically. If a headless browser is unavailable, inspect a screenshot and state clearly that the check was visual rather than programmatic.
    - For API defects, capture the raw request and response — status code, headers, and body — before changing anything.
    - For runtime defects, capture the full console output and stack trace.
 
@@ -134,7 +128,7 @@ Place generated reports and artifacts in the following standard locations:
 Use these classes to label every finding. The label determines the detection method.
 
 - **LAYOUT** — the page renders incorrectly. Overlap, overflow, clipping, z-index collision, container escape, breakpoint breakage.
-  - *Detect:* headless-browser bounding-box comparison; fall back to `vision-bridge` screenshot inspection.
+  - *Detect:* headless-browser bounding-box comparison; fall back to screenshot inspection.
 - **API** — a request or response is wrong. Failing endpoint, wrong status code, malformed payload, schema mismatch, auth failure, timeout.
   - *Detect:* issue the request and capture status, headers, and body; compare against the documented contract.
 - **RUNTIME** — the app throws or misbehaves. Uncaught exception, console error, hydration mismatch, unhandled rejection, state bug.
@@ -183,7 +177,7 @@ Use this exact structure for the versioned debug report:
 - **Reproduced:** [Yes / No — if No, stop here and state what is missing]
 
 ## 3. Evidence (Before)
-- **Detection method:** [Programmatic (headless browser rect comparison) / Request capture / Console capture / Visual (vision-bridge screenshot)]
+- **Detection method:** [Programmatic (headless browser rect comparison) / Request capture / Console capture / Visual (screenshot)]
 - **Observed:** [Raw evidence — measurements, status codes, stack traces, screenshot reference]
 
 ## 4. Root Cause

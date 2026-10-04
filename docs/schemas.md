@@ -153,6 +153,33 @@ Validates feature lifecycle state.
 - `rejected`
 - `in_progress` (implementation only)
 
+### History Entries
+
+Each version records a `history` array. Every entry has:
+
+| Field | Description |
+|-------|-------------|
+| `event` | What happened (e.g. `specification_approved`, `feature_reopened`) |
+| `timestamp` | ISO-8601 timestamp |
+| `actor` | The Git user (`git config user.name`) who performed the action. Older entries written before actor capture may omit this field. |
+
+---
+
+## 6. audit-log.json
+
+The audit trail at `.sdrive/audit-log.json` records explicit governance events. Each event has:
+
+| Field | Description |
+|-------|-------------|
+| `event` | Event name (e.g. `gate_approved`) |
+| `timestamp` | ISO-8601 timestamp |
+| `actor` | The acting user, resolved from `git config user.name` with an OS-username fallback |
+| `feature` | Related feature name (optional) |
+| `version` | Related version id (optional) |
+| `details` | Free-form extra context (optional) |
+
+The dashboard Activity page merges this file with `workflow-state.json` history and displays the `actor` for each entry. Events recorded before actor capture show as `unknown`.
+
 ---
 
 ## Validation

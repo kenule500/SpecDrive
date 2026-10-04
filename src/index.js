@@ -190,6 +190,20 @@ function audit(event, details = {}) {
   }
 }
 
+// Resolves the acting user for workflow-state history entries so the dashboard
+// can attribute each action. Mirrors the Git-identity lookup used by
+// check-permission.js, with an OS-username fallback.
+function currentActor() {
+  try {
+    const name = execSync("git config user.name", { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+    if (name) return name;
+  } catch (error) {
+    // Not a git repo, or git is unavailable — fall through to the OS user.
+  }
+
+  return process.env.USERNAME || process.env.USER || "unknown";
+}
+
 function loadConfig() {
   const configPath = path.join(process.cwd(), ".sdrive", "config.json");
   const schemaPath = path.join(process.cwd(), ".sdrive", "schemas", "config.schema.json");
@@ -279,60 +293,6 @@ const TOOL_TO_MCP_CLIENTS = {
   cline: ["Cline"],
   "claude-code": ["Claude Desktop"]
 };
-
-// vision-bridge-mcp is a stdio MCP proxy that lets text-only models (DeepSeek,
-// etc.) "see" images by delegating to a vision model. SpecDrive installs it on
-// `init` so every agent can read screenshots/mockups even without native vision.
-// It is launched via npx so no global install is required.
-const VISION_BRIDGE_PACKAGE = "vision-bridge-mcp@latest";
-
-// Env vars are read from the user's shell at runtime. We never write secrets to
-// disk — only placeholders that the user fills in (or exports in their shell).
-const VISION_BRIDGE_ENV = {
-  VISION_BRIDGE_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  VISION_BRIDGE_API_KEY: "process.env.VISION_BRIDGE_API_KEY",
-  VISION_BRIDGE_MODELS: "qwen-vl-max,qwen2.5-vl-72b-instruct",
-  VISION_BRIDGE_CACHE: "1"
-};
-
-// Same client shapes as MCP_CLIENTS, but the entry launches vision-bridge-mcp.
-const VISION_BRIDGE_CLIENTS = {
-  "Claude Desktop": {
-    key: "mcpServers",
-    entry: () => ({
-      command: "npx",
-      args: ["-y", VISION_BRIDGE_PACKAGE],
-      env: VISION_BRIDGE_ENV
-    })
-  },
-  Cursor: {
-    key: "mcpServers",
-    entry: () => ({
-      command: "npx",
-      args: ["-y", VISION_BRIDGE_PACKAGE],
-      env: VISION_BRIDGE_ENV
-    })
-  },
-  Cline: {
-    key: "mcpServers",
-    entry: () => ({
-      command: "npx",
-      args: ["-y", VISION_BRIDGE_PACKAGE],
-      env: VISION_BRIDGE_ENV
-    })
-  },
-  "GitHub Copilot (VS Code)": {
-    key: "servers",
-    entry: () => ({
-      type: "stdio",
-      command: "npx",
-      args: ["-y", VISION_BRIDGE_PACKAGE],
-      env: VISION_BRIDGE_ENV
-    })
-  }
-};
-
-const VISION_BRIDGE_SERVER_NAME = "vision-bridge";
 
 function mcpConfigContent(clientName) {
   const client = MCP_CLIENTS[clientName] || MCP_CLIENTS["Claude Desktop"];
@@ -425,67 +385,6 @@ function autoWireMcp(selectedTools) {
   targets.forEach((p) => {
     safeMergeMcpConfig(p.path, p.name);
   });
-}
-
-function visionBridgeConfigContent(clientName) {
-  const client = VISION_BRIDGE_CLIENTS[clientName] || VISION_BRIDGE_CLIENTS["Claude Desktop"];
-  return JSON.stringify({ [client.key]: { [VISION_BRIDGE_SERVER_NAME]: client.entry() } }, null, 2);
-}
-
-// Merges the vision-bridge server into an existing MCP config without clobbering
-// other servers. Skips silently if vision-bridge is already present.
-function safeMergeVisionBridge(configPath, clientName) {
-  const client = VISION_BRIDGE_CLIENTS[clientName] || VISION_BRIDGE_CLIENTS["Claude Desktop"];
-
-  if (!fs.existsSync(configPath)) {
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(configPath, visionBridgeConfigContent(clientName));
-    console.log(`✅ Created: ${configPath} (vision-bridge)`);
-    return;
-  }
-
-  try {
-    const existing = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    existing[client.key] = existing[client.key] || {};
-
-    if (existing[client.key][VISION_BRIDGE_SERVER_NAME]) {
-      console.log(`⚠️  vision-bridge already configured in ${configPath}`);
-      return;
-    }
-
-    existing[client.key][VISION_BRIDGE_SERVER_NAME] = client.entry();
-
-    fs.writeFileSync(configPath, JSON.stringify(existing, null, 2));
-    console.log(`✅ Merged vision-bridge into: ${configPath}`);
-  } catch (error) {
-    console.error(`⚠️  Could not merge vision-bridge into ${configPath}`);
-  }
-}
-
-// Installs vision-bridge-mcp for every MCP client implied by the selected tools.
-// This gives text-only models image-reading capability across all 15 agents.
-function autoWireVisionBridge(selectedTools) {
-  const clientNames = new Set();
-
-  selectedTools.forEach((tool) => {
-    (TOOL_TO_MCP_CLIENTS[tool.name] || []).forEach((client) => clientNames.add(client));
-  });
-
-  if (clientNames.size === 0) return;
-
-  const available = getMcpConfigPaths();
-  const targets = available.filter((p) => clientNames.has(p.name));
-
-  if (targets.length === 0) return;
-
-  console.log("\n👁️  Vision Bridge (image reading for text-only models)\n");
-
-  targets.forEach((p) => {
-    safeMergeVisionBridge(p.path, p.name);
-  });
-
-  console.log("   Set VISION_BRIDGE_API_KEY in your shell to enable it.");
-  console.log("   Tools: describe_image · extract_text · compare_images · vision_status · vision_rules");
 }
 
 // Detects whether the console can render Unicode block characters. Windows
@@ -675,27 +574,6 @@ program
       console.log("  Created: .sdrive/mcp/mcp.json");
     }
 
-    const visionBridgePath = path.join(sdriveRoot, "mcp", "vision-bridge.json");
-    if (!fs.existsSync(visionBridgePath)) {
-      fs.writeFileSync(
-        visionBridgePath,
-        JSON.stringify(
-          {
-            name: VISION_BRIDGE_SERVER_NAME,
-            package: VISION_BRIDGE_PACKAGE,
-            description:
-              "Vision proxy MCP — lets text-only models read images (screenshots, mockups, diagrams).",
-            tools: ["describe_image", "extract_text", "compare_images", "vision_status", "vision_rules"],
-            env: VISION_BRIDGE_ENV,
-            note: "Set VISION_BRIDGE_API_KEY in your shell. Never commit real keys."
-          },
-          null,
-          2
-        )
-      );
-      console.log("  Created: .sdrive/mcp/vision-bridge.json");
-    }
-
     const toolsPath = path.join(sdriveRoot, "commands", "tools.json");
 
     if (!fs.existsSync(toolsPath)) {
@@ -726,7 +604,6 @@ program
       });
 
       autoWireMcp(selectedTools);
-      autoWireVisionBridge(selectedTools);
 
       console.log("\n✅ SpecDrive initialized successfully.");
     };
@@ -897,54 +774,6 @@ program
       console.log(summary);
       console.log("   Your specs, governance, and constitution were left untouched.\n");
     }
-  });
-
-// ---------- VISION COMMAND ----------
-program
-  .command("vision")
-  .description("Wire the vision-bridge MCP so text-only models can read images (screenshots, mockups)")
-  .option("--tools <list>", "Comma-separated tool names to wire (defaults to all MCP-capable tools)")
-  .action((options) => {
-    const projectRoot = process.cwd();
-    const sdriveRoot = path.join(projectRoot, ".sdrive");
-
-    if (!fs.existsSync(sdriveRoot)) {
-      console.error("❌ No .sdrive folder found. Run `sdrive init` first.");
-      process.exit(1);
-    }
-
-    const toolsPath = path.join(sdriveRoot, "commands", "tools.json");
-    let tools = [];
-
-    if (fs.existsSync(toolsPath)) {
-      try {
-        tools = JSON.parse(fs.readFileSync(toolsPath, "utf8")).tools || [];
-      } catch (error) {
-        tools = [];
-      }
-    }
-
-    // Default to every tool that maps to an MCP client.
-    let selectedTools = tools.filter((tool) => TOOL_TO_MCP_CLIENTS[tool.name]);
-
-    if (options.tools !== undefined) {
-      const requested = options.tools
-        .trim()
-        .toLowerCase()
-        .split(",")
-        .map((name) => name.trim())
-        .filter(Boolean);
-
-      selectedTools = tools.filter((tool) => requested.includes(tool.name.toLowerCase()));
-    }
-
-    if (selectedTools.length === 0) {
-      console.log("\n⚠️  No MCP-capable tools found. Nothing to wire.\n");
-      return;
-    }
-
-    autoWireVisionBridge(selectedTools);
-    console.log("");
   });
 
 // ---------- TEMPLATE COMMANDS ----------
@@ -1284,6 +1113,7 @@ program
     version.history = version.history || [];
     version.history.push({
       event: `${gate}_approved`,
+      actor: currentActor(),
       timestamp: new Date().toISOString()
     });
 
@@ -1569,6 +1399,7 @@ program
       currentVersion.history = currentVersion.history || [];
       currentVersion.history.push({
         event: "feature_reopened",
+        actor: currentActor(),
         timestamp: new Date().toISOString()
       });
     }

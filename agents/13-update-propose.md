@@ -5,7 +5,7 @@ argument-hint: Specify the feature to update and what to add (e.g., "signup-page
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'vscode/memory', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
+tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'vscode/memory', 'exa:search', 'exa:fetch', 'context7']
 agents: []
 ---
 
@@ -72,11 +72,6 @@ You ensure all documents remain aligned and every new requirement is traceable.
 - ALWAYS read relevant files in `.sdrive/skills/` before updating specifications to ensure compliance with project-specific standards.
 - You are tool-agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool.
 </rules>
-
-<vision>
-- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
-- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
-</vision>
 
 <capabilities>
 - **Existing Spec Extension**: Append requirements, stories, and ACs to an existing spec.md.

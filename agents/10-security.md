@@ -5,7 +5,7 @@ argument-hint: Specify the scope (e.g., "Audit the auth module", "Scan entire pr
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
+tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7']
 agents: []
 ---
 
@@ -56,11 +56,6 @@ You operate within the current version folder when auditing a specific feature.
 - ALWAYS read relevant files in `.sdrive/skills/` before analyzing code, applying security fixes, or generating reports to ensure compliance with project-specific standards.
 - **`--all` Mode Rule:** If the user invokes this command with `--all` (e.g. `/sdrive:secure --all`), you MUST audit EVERY feature currently in `ongoing/`, one after the other, in a single run. See the `<all-mode>` section for the exact procedure. In `--all` mode, the per-feature rules above still apply to each feature individually — you simply repeat the full workflow for each one.
 </rules>
-
-<vision>
-- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
-- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
-</vision>
 
 <capabilities>
 - **Threat Modeling**: Identifying assets, actors, and trust boundaries (STRIDE).

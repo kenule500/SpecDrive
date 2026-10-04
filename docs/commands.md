@@ -13,7 +13,6 @@ SpecDrive has two types of commands:
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive structure and adapters |
 | `sdrive update` | Refresh framework files (dashboard, mcp, scripts, schemas) without touching your specs or governance |
-| `sdrive vision` | Wire the vision-bridge MCP so text-only models can read images |
 | `sdrive onboard` | Scan an existing project (usually run automatically by `/sdrive:onboard`) |
 | `sdrive validate` | Validate all governance files |
 | `sdrive config:validate` | Validate `.sdrive/config.json` |
@@ -573,7 +572,7 @@ Reproduces, isolates, and fixes defects — layout breakage, API failures, runti
 
 | Class | Examples | Detection |
 |-------|----------|-----------|
-| **LAYOUT** | Overlap, overflow, clipping, z-index collision, container escape, breakpoint breakage | Headless-browser bounding-box comparison; `vision-bridge` screenshot fallback |
+| **LAYOUT** | Overlap, overflow, clipping, z-index collision, container escape, breakpoint breakage | Headless-browser bounding-box comparison |
 | **API** | Failing endpoint, wrong status code, malformed payload, schema mismatch, auth failure, timeout | Issue the request, capture status/headers/body, compare to contract |
 | **RUNTIME** | Uncaught exception, console error, hydration mismatch, unhandled rejection, state bug | Capture console output and stack trace |
 | **GLITCH** | Flicker, shift on interaction, broken transition, misaligned icon, inconsistent spacing | Interaction trace plus before/after screenshots |

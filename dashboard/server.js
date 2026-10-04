@@ -229,6 +229,7 @@ function apiActivity() {
     events.push({
       event: e.event || "event",
       timestamp: e.timestamp || null,
+      actor: e.actor || "",
       feature: e.feature || "",
       version: e.version || "",
       details: e.details || {},
@@ -243,6 +244,7 @@ function apiActivity() {
         events.push({
           event: h.event || "event",
           timestamp: h.timestamp || null,
+          actor: h.actor || "",
           feature: feature.name || "",
           version: version.id || "",
           details: {},

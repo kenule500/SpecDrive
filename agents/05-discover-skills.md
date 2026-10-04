@@ -5,7 +5,7 @@ argument-hint: Run to audit, discover, and update project skills
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
+tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7']
 agents: []
 ---
 
@@ -33,11 +33,6 @@ You use both SpecDrive spec files and the repository itself to understand the pr
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use the available shell command capability to run validators if relevant.
 - ALWAYS read relevant files in `.sdrive/skills/` before writing code or generating documentation to ensure compliance with project-specific standards.
 </rules>
-
-<vision>
-- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
-- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
-</vision>
 
 <capabilities>
 - **Context Analysis**: Reading project files and SpecDrive specs to identify the exact tech stack and workflows.

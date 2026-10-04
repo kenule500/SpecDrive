@@ -1981,13 +1981,25 @@ async function renderAudit() {
 
     const scope = [e.feature, e.version].filter(Boolean).join(" Â· ");
 
+    // Actor attribution: older events predate actor capture, so fall back to a
+    // muted "unknown" chip rather than hiding the row entirely.
+    const actor = e.actor ? String(e.actor) : "";
+    const actorChip = actor
+      ? `<span class="timeline-actor" title="Performed by ${escapeHtml(actor)}">${escapeHtml(actor)}</span>`
+      : `<span class="timeline-actor unknown" title="Actor not recorded for this event">unknown</span>`;
+
+    const sourceLabel = e.source === "audit-log" ? "audit log" : "workflow";
+
     item.innerHTML = `
       <span class="timeline-dot ${auditTone(e.event)}"></span>
       <div class="timeline-body">
         <div class="timeline-event">${escapeHtml(String(e.event).replace(/[_-]/g, " "))}</div>
-        <div class="timeline-meta">${escapeHtml(formatDateTime(e.timestamp))}${
-          scope ? ` Â· ${escapeHtml(scope)}` : ""
-        }</div>
+        <div class="timeline-meta">
+          ${actorChip}
+          <span class="timeline-time">${escapeHtml(formatDateTime(e.timestamp))}</span>
+          ${scope ? `<span class="timeline-scope">${escapeHtml(scope)}</span>` : ""}
+          <span class="timeline-source">${escapeHtml(sourceLabel)}</span>
+        </div>
         ${detailParts ? `<div class="timeline-details">${escapeHtml(detailParts)}</div>` : ""}
       </div>
     `;

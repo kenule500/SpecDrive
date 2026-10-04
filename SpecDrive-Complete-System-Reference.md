@@ -207,7 +207,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | 2 | `validate-config.js` | Validates only `config.json` |
 | 3 | `verify.js` | Compares code against plan (spec-to-code diff) |
 | 4 | `anti-redundancy.js` | Prevents duplicate work |
-| 5 | `audit-log.js` | Records every action |
+| 5 | `audit-log.js` | Records every action, attributed to the acting user (Git identity) |
 | 6 | `team.js` | Team role management helpers |
 | 7 | `generate-adapters.js` | Creates tool adapters |
 | 8 | `load-plugins.js` | Loads plugins |
@@ -285,7 +285,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | `.sdrive/config.json` | Default template + settings |
 | `.sdrive/team.json` | Team roles and rules |
 | `.sdrive/workflow-state.json` | Feature lifecycle + onboarding + versioning + migration state |
-| `.sdrive/audit-log.json` | Full audit trail |
+| `.sdrive/audit-log.json` | Full audit trail — each event records `event`, `timestamp`, and `actor` (the Git user who performed it) |
 
 **Why:** These files give agents deterministic context so they don't guess.
 

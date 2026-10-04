@@ -5,7 +5,7 @@ argument-hint: Specify the feature to implement (e.g., "Implement user-login"), 
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'edit', 'create', 'search', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
+tools: ['read', 'edit', 'create', 'search', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7']
 agents: []
 ---
 
@@ -73,11 +73,6 @@ You operate within the current version folder only.
 - **`--all` Mode Rule:** If the user invokes this command with `--all` (e.g. `/sdrive:apply --all`), you MUST implement EVERY feature currently in `ongoing/`, one after the other, in a single run. See the `<all-mode>` section for the exact procedure. In `--all` mode, the per-feature rules above still apply to each feature individually — you simply repeat the full workflow for each one. Each feature still gets its OWN branch and its OWN approval gates.
 </rules>
 
-<vision>
-- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
-- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
-</vision>
-
 <capabilities>
 - **Code Implementation**: Writing clean, modular production code.
 - **Git Workflow Management**: Creating feature branches, committing, and pushing to GitHub.
@@ -104,9 +99,19 @@ You operate within the current version folder only.
 
      Options:
 
-     1. `main`
-     2. `develop`
-     3. Another branch — ask for name
+     1. `<current-branch>` (current) — the branch you are on right now. Detect it with `git branch --show-current` and list it FIRST. This is the common case when extending work that is already in progress.
+     2. `main`
+     3. `develop`
+     4. Another branch — ask for name
+
+   - **Dirty-Tree Precondition (MANDATORY)** — before switching branches, run:
+
+     ```bash
+     git status --porcelain
+     ```
+
+     - If the output is **non-empty**, the working tree has uncommitted changes. **STOP.** Do NOT run `git checkout` or `git checkout -b`. Tell the user which files are dirty and ask them to commit or stash first. Switching branches with a dirty tree silently carries another feature's work onto the new branch, which corrupts history and violates the one-branch-per-feature rule.
+     - Only proceed once `git status --porcelain` returns empty.
 
    - After the user selects the base branch:
 

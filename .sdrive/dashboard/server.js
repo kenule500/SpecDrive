@@ -74,6 +74,51 @@ function apiGitInfo() {
   };
 }
 
+// List every local branch with its tip commit, author, and merge status so the
+// Team & Branch page can show the full branch landscape alongside members.
+function apiBranches() {
+  const current = git(["rev-parse", "--abbrev-ref", "HEAD"]);
+  const raw = git([
+    "for-each-ref",
+    "--sort=-committerdate",
+    "--format=%(refname:short)%09%(objectname:short)%09%(committerdate:iso-strict)%09%(authorname)%09%(subject)",
+    "refs/heads"
+  ]);
+
+  if (!raw) {
+    return { available: false, current: current || null, branches: [] };
+  }
+
+  // Branches already merged into the default branch (main/master).
+  const defaultBranch = (git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) || "")
+    .replace(/^origin\//, "") || "main";
+  const mergedRaw = git(["branch", "--merged", defaultBranch, "--format=%(refname:short)"]);
+  const mergedSet = new Set(
+    mergedRaw.split("\n").map((b) => b.trim()).filter(Boolean)
+  );
+
+  const branches = raw
+    .split("\n")
+    .map((line) => line.split("\t"))
+    .filter((parts) => parts.length >= 5 && parts[0])
+    .map(([name, commit, committedAt, author, subject]) => ({
+      name,
+      commit,
+      committedAt,
+      author,
+      subject,
+      current: name === current,
+      merged: mergedSet.has(name)
+    }));
+
+  return {
+    available: true,
+    current: current || null,
+    defaultBranch,
+    branches
+  };
+}
+
 function loadJson(filePath, fallback = null) {
   if (!fs.existsSync(filePath)) return fallback;
   try {
@@ -89,6 +134,78 @@ function loadJson(filePath, fallback = null) {
 function apiProjectInfo() {
   const name = path.basename(projectRoot) || "project";
   return { name, root: projectRoot };
+}
+
+// Classify the project so the dashboard can tell the user which workflow they
+// are on. Greenfield = built from scratch with SpecDrive; brownfield = an
+// existing codebase adopted via onboarding. We prefer the explicit onboarding
+// record, then fall back to heuristics (existing source + no onboarding record
+// means it was almost certainly adopted).
+function apiProductType() {
+  const state = loadJson(path.join(sdriveRoot, "workflow-state.json"), {});
+  const onboarding = state.onboarding || null;
+
+  const hasConstitution = fs.existsSync(path.join(sdriveRoot, "constitution.md"));
+  const hasProductPlan = fs.existsSync(path.join(sdriveRoot, "product", "overview.md"));
+  const featureCount = Array.isArray(state.features) ? state.features.length : 0;
+
+  // Heuristic: a project with source code but no onboarding record predates
+  // SpecDrive, i.e. it was adopted (brownfield).
+  const sourceDirs = ["app", "src", "components", "lib", "pages", "server"];
+  const hasSource = sourceDirs.some((dir) => fs.existsSync(path.join(projectRoot, dir)));
+
+  let type = "unknown";
+  let source = "heuristic";
+
+  if (onboarding && onboarding.mode) {
+    type = onboarding.mode;
+    source = "onboarding record";
+  } else if (hasSource) {
+    type = "brownfield";
+  } else {
+    type = "greenfield";
+  }
+
+  const meta = {
+    greenfield: {
+      label: "Greenfield",
+      tagline: "Built from scratch",
+      description:
+        "A brand-new project started inside SpecDrive. Every feature is specified before it is built, so the spec and the code stay in lockstep from day one.",
+      icon: "✦"
+    },
+    brownfield: {
+      label: "Brownfield",
+      tagline: "Adopted existing code",
+      description:
+        "An existing codebase brought under SpecDrive governance. Existing work is inventoried, retroactive specs are generated, and gaps are marked as deferred instead of breaking anything.",
+      icon: "◈"
+    },
+    unknown: {
+      label: "Unclassified",
+      tagline: "Not yet determined",
+      description:
+        "SpecDrive has not recorded how this project started. Run onboarding or the constitution step to classify it.",
+      icon: "○"
+    }
+  }[type];
+
+  return {
+    type,
+    source,
+    label: meta.label,
+    tagline: meta.tagline,
+    description: meta.description,
+    icon: meta.icon,
+    signals: {
+      onboarding: Boolean(onboarding),
+      onboardingDate: onboarding?.date || null,
+      constitution: hasConstitution,
+      productPlan: hasProductPlan,
+      features: featureCount,
+      existingSource: hasSource
+    }
+  };
 }
 
 function apiWorkflowState() {
@@ -112,6 +229,7 @@ function apiActivity() {
     events.push({
       event: e.event || "event",
       timestamp: e.timestamp || null,
+      actor: e.actor || "",
       feature: e.feature || "",
       version: e.version || "",
       details: e.details || {},
@@ -126,6 +244,7 @@ function apiActivity() {
         events.push({
           event: h.event || "event",
           timestamp: h.timestamp || null,
+          actor: h.actor || "",
           feature: feature.name || "",
           version: version.id || "",
           details: {},
@@ -210,6 +329,11 @@ function apiSkills() {
       /* ignore */
     }
 
+    // A skill may ship its own logo. We look for a conventional filename in the
+    // skill folder (and an optional assets/ subfolder) so the dashboard can show
+    // the real brand mark instead of the generic gradient icon.
+    const logo = findSkillLogo(path.join(skillsDir, entry.name));
+
     skills.push({
       name: meta.name || entry.name,
       folder: entry.name,
@@ -220,6 +344,7 @@ function apiSkills() {
       source: meta.source || "",
       license: meta.license || "",
       installed: meta.installed || "",
+      logo: logo ? `/api/skill-logo/${encodeURIComponent(entry.name)}` : "",
       lines,
       extraFiles
     });
@@ -227,6 +352,64 @@ function apiSkills() {
 
   skills.sort((a, b) => a.name.localeCompare(b.name));
   return { exists: true, skills };
+}
+
+// Conventional logo filenames, checked in order. The first match wins.
+const SKILL_LOGO_NAMES = [
+  "logo.svg",
+  "logo.png",
+  "logo.webp",
+  "logo.jpg",
+  "logo.jpeg",
+  "icon.svg",
+  "icon.png",
+  "icon.webp",
+  "icon.jpg",
+  "icon.jpeg"
+];
+
+const SKILL_LOGO_TYPES = {
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg"
+};
+
+// Returns the absolute path to a skill's logo, or null if none is present.
+// Looks in the skill root and an optional assets/ subfolder.
+function findSkillLogo(skillDir) {
+  const searchDirs = [skillDir, path.join(skillDir, "assets")];
+  for (const dir of searchDirs) {
+    for (const name of SKILL_LOGO_NAMES) {
+      const candidate = path.join(dir, name);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+// Serves a skill's logo by folder name. The folder is validated against the
+// skills directory listing so a crafted path cannot escape the skills root.
+function serveSkillLogo(res, folder) {
+  const skillsDir = path.join(sdriveRoot, "skills");
+  const skillDir = path.join(skillsDir, folder);
+
+  // Guard against path traversal: the resolved dir must sit directly under skills/.
+  const resolved = path.resolve(skillDir);
+  if (path.dirname(resolved) !== path.resolve(skillsDir)) {
+    res.writeHead(400);
+    return res.end("Bad request");
+  }
+
+  const logoPath = findSkillLogo(resolved);
+  if (!logoPath) {
+    res.writeHead(404);
+    return res.end("Not found");
+  }
+
+  const type = SKILL_LOGO_TYPES[path.extname(logoPath).toLowerCase()] || "application/octet-stream";
+  return serveStatic(res, logoPath, type);
 }
 
 function apiTeam() {
@@ -248,6 +431,55 @@ function governanceFile(feature, version, fileName) {
 
 function apiTraceability(feature, version) {
   return loadJson(governanceFile(feature, version, "traceability.json"), { rows: [] });
+}
+
+// Execution tasks for a feature version. Tasks are grouped into phases, and
+// each task links back to the requirements it satisfies. The dashboard uses
+// this to show pending/completed counts and the full task breakdown.
+function apiTasks(feature, version) {
+  const data = loadJson(governanceFile(feature, version, "tasks.json"), {
+    feature,
+    version: Number(version) || 1,
+    phases: []
+  });
+
+  const phases = Array.isArray(data.phases) ? data.phases : [];
+  let total = 0;
+  let completed = 0;
+
+  const shaped = phases.map((phase) => {
+    const tasks = Array.isArray(phase.tasks) ? phase.tasks : [];
+    const done = tasks.filter((t) => t.completed === true).length;
+    total += tasks.length;
+    completed += done;
+    return {
+      phaseId: phase.phaseId || "",
+      name: phase.name || "",
+      dependencies: phase.dependencies || [],
+      total: tasks.length,
+      completed: done,
+      tasks: tasks.map((t) => ({
+        id: t.id || "",
+        title: t.title || "",
+        description: t.description || "",
+        linkedRequirements: t.linkedRequirements || [],
+        linkedAcceptanceCriteria: t.linkedAcceptanceCriteria || [],
+        completed: t.completed === true
+      }))
+    };
+  });
+
+  return {
+    feature: data.feature || feature,
+    version: data.version || Number(version) || 1,
+    summary: {
+      total,
+      completed,
+      pending: total - completed,
+      percent: total === 0 ? 0 : Math.round((completed / total) * 100)
+    },
+    phases: shaped
+  };
 }
 
 function apiVerification(feature, version) {
@@ -298,12 +530,179 @@ function apiTestReport(feature, version) {
   };
 }
 
+// Report types produced by the agents. Each agent writes to
+// .sdrive/reports/<dir>/ using the filename pattern
+// <prefix>-report-<feature>-<version>-<date>.md (or -all-<date>.md).
+// The dashboard surfaces whichever of these exist for a feature.
+const REPORT_TYPES = [
+  { id: "tests", dir: "tests", prefix: "test", label: "Tests" },
+  { id: "performance", dir: "performance", prefix: "performance", label: "Performance" },
+  { id: "security", dir: "security", prefix: "security", label: "Security" },
+  { id: "reviews", dir: "reviews", prefix: "review", label: "Review" },
+  { id: "docs", dir: "docs", prefix: "coverage", label: "Documentation" },
+  { id: "debug", dir: "debug", prefix: "debug", label: "Debug" }
+];
+
+// Read the first markdown heading of a report so the UI can show a title
+// without shipping the whole file. Falls back to null when absent.
+function readReportTitle(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, "utf8");
+    const match = content.match(/^#\s+(.+)$/m);
+    return match ? match[1].trim() : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Extract a "Status: PASS" / "**Status:** PASS" style verdict if present.
+function readReportStatus(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, "utf8");
+    const match = content.match(/\*{0,2}Status:?\*{0,2}\s*:?\s*\*{0,2}\s*(PASS|FAIL|PASSED|FAILED|CLEAN|IMPROVED|REGRESSED)/i);
+    return match ? match[1].toUpperCase() : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Collect every report for a feature across all report types.
+// Feature-scoped reports are matched by "<prefix>-report-<feature>-<version>-".
+// Global reports (e.g. debug-report-all-<date>.md) are matched separately and
+// flagged so the UI can distinguish them.
+function apiReports(feature, version) {
+  const reportsRoot = path.join(sdriveRoot, "reports");
+  const types = [];
+
+  for (const type of REPORT_TYPES) {
+    const dir = path.join(reportsRoot, type.dir);
+    if (!fs.existsSync(dir)) {
+      types.push({ id: type.id, label: type.label, status: "missing", reports: [] });
+      continue;
+    }
+
+    let files = [];
+    try {
+      files = fs.readdirSync(dir).filter((f) => f.endsWith(".md"));
+    } catch (error) {
+      files = [];
+    }
+
+    const scoped = files
+      .filter((f) => f.startsWith(`${type.prefix}-report-${feature}-${version}-`))
+      .sort()
+      .reverse();
+
+    const global = files
+      .filter((f) => f.startsWith(`${type.prefix}-report-all-`))
+      .sort()
+      .reverse();
+
+    const reports = [];
+
+    if (scoped.length) {
+      const latest = scoped[0];
+      const full = path.join(dir, latest);
+      reports.push({
+        file: latest,
+        scope: "feature",
+        date: latest.replace(/\.md$/, "").split("-").slice(-3).join("-"),
+        title: readReportTitle(full),
+        status: readReportStatus(full),
+        history: scoped.length
+      });
+    }
+
+    if (global.length) {
+      const latest = global[0];
+      const full = path.join(dir, latest);
+      reports.push({
+        file: latest,
+        scope: "all",
+        date: latest.replace(/\.md$/, "").split("-").slice(-3).join("-"),
+        title: readReportTitle(full),
+        status: readReportStatus(full),
+        history: global.length
+      });
+    }
+
+    types.push({
+      id: type.id,
+      label: type.label,
+      status: reports.length ? "present" : "missing",
+      reports
+    });
+  }
+
+  return { feature, version, types };
+}
+
 function parseFeatureVersion(url) {
-  const parts = url.split("/").filter(Boolean);
+  // Strip the query string, then drop the leading "/api/<resource>" segments so
+  // only the feature/version tail remains. Without this, "/api/reports/foo"
+  // would yield feature="reports", version="foo".
+  const clean = url.split("?")[0];
+  const parts = clean.split("/").filter(Boolean);
+  const tail = parts.slice(2);
   return {
-    feature: parts[parts.length - 2],
-    version: parts[parts.length - 1]
+    feature: tail.length >= 2 ? tail[tail.length - 2] : tail[0],
+    version: tail.length >= 2 ? tail[tail.length - 1] : null
   };
+}
+
+// Spec documents live under .sdrive/specs/<stage>/<feature>/<version>/.
+// A feature moves from backlog -> ongoing -> completed, so we search every
+// stage and return the first folder that actually holds the version. This lets
+// the dashboard read the raw spec/plan/tasks/traceability markdown without the
+// user having to open the repo.
+const SPEC_STAGES = ["ongoing", "completed", "backlog"];
+const SPEC_DOCS = [
+  { id: "spec", label: "Specification", file: "spec.md" },
+  { id: "plan", label: "Plan", file: "plan.md" },
+  { id: "tasks", label: "Tasks", file: "tasks.md" },
+  { id: "traceability", label: "Traceability", file: "traceability.md" },
+  { id: "review", label: "Review", file: "review.md" }
+];
+
+function resolveSpecDir(feature, version) {
+  for (const stage of SPEC_STAGES) {
+    const dir = path.join(sdriveRoot, "specs", stage, feature, version);
+    if (fs.existsSync(dir)) return { stage, dir };
+  }
+  return { stage: null, dir: null };
+}
+
+// Returns the raw markdown for every spec document that exists for a feature
+// version, plus which stage (ongoing/completed/backlog) it was found in.
+function apiSpecFiles(feature, version) {
+  const { stage, dir } = resolveSpecDir(feature, version);
+
+  if (!dir) {
+    return { feature, version, stage: null, docs: [] };
+  }
+
+  const docs = [];
+  for (const doc of SPEC_DOCS) {
+    const full = path.join(dir, doc.file);
+    if (!fs.existsSync(full)) continue;
+    let content = "";
+    try {
+      content = fs.readFileSync(full, "utf8");
+    } catch (error) {
+      content = "";
+    }
+    docs.push({
+      id: doc.id,
+      label: doc.label,
+      file: doc.file,
+      path: `.sdrive/specs/${stage}/${feature}/${version}/${doc.file}`,
+      bytes: Buffer.byteLength(content, "utf8"),
+      lines: content ? content.split(/\r?\n/).length : 0,
+      content
+    });
+  }
+
+  return { feature, version, stage, docs };
 }
 
 function serveStatic(res, filePath, contentType) {
@@ -447,53 +846,527 @@ function parseProductOverview(markdown) {
 }
 
 // Static CLI command reference. Kept in sync with src/index.js.
+// Each entry carries plain-language fields so a non-technical reader can
+// understand what the command does, why it exists, and when to reach for it.
 const CLI_COMMANDS = [
-  { command: "sdrive init", description: "Initialize SpecDrive structure, tool adapters, and MCP wiring", group: "Setup" },
-  { command: "sdrive update", description: "Refresh framework files (dashboard, mcp, scripts, schemas) without touching specs or governance", group: "Setup" },
-  { command: "sdrive onboard", description: "Scan an existing project for onboarding (usually run by /sdrive:onboard)", group: "Setup" },
-  { command: "sdrive config:validate", description: "Validate .sdrive/config.json", group: "Setup" },
-  { command: "sdrive template:list", description: "List available templates", group: "Setup" },
-  { command: "sdrive template:set <name>", description: "Set the default template", group: "Setup" },
-  { command: "sdrive hooks:install", description: "Install the SpecDrive pre-commit hook", group: "Setup" },
+  { command: "sdrive init", description: "Initialize SpecDrive structure, tool adapters, and MCP wiring", group: "Setup",
+    what: "Sets up SpecDrive inside your project for the first time.",
+    why: "Creates the folders, config, and AI-tool connections SpecDrive needs to work.",
+    when: "Once, at the very start of a new project.",
+    example: "sdrive init" },
+  { command: "sdrive update", description: "Refresh framework files (dashboard, mcp, scripts, schemas) without touching specs or governance", group: "Setup",
+    what: "Updates SpecDrive's own files to the latest version.",
+    why: "You get new dashboard and tooling improvements without losing your specs or approvals.",
+    when: "After upgrading the SpecDrive package.",
+    example: "sdrive update" },
+  { command: "sdrive onboard", description: "Scan an existing project for onboarding (usually run by /sdrive:onboard)", group: "Setup",
+    what: "Reads an existing codebase and builds an inventory of what is already there.",
+    why: "Lets you adopt SpecDrive into a project that already has code, without starting over.",
+    when: "When bringing an existing project under SpecDrive.",
+    example: "sdrive onboard" },
+  { command: "sdrive config:validate", description: "Validate .sdrive/config.json", group: "Setup",
+    what: "Checks that your SpecDrive configuration file is correct.",
+    why: "Catches typos or missing settings before they cause confusing failures.",
+    when: "After editing .sdrive/config.json.",
+    example: "sdrive config:validate" },
+  { command: "sdrive template:list", description: "List available templates", group: "Setup",
+    what: "Shows the document templates SpecDrive can use.",
+    why: "Helps you pick the right starting point for your specs.",
+    when: "When choosing how specs should be formatted.",
+    example: "sdrive template:list" },
+  { command: "sdrive template:set <name>", description: "Set the default template", group: "Setup",
+    what: "Chooses which template SpecDrive uses by default.",
+    why: "Keeps every new spec consistent with your team's preferred format.",
+    when: "Once, when configuring your project.",
+    example: "sdrive template:set standard" },
+  { command: "sdrive hooks:install", description: "Install the SpecDrive pre-commit hook", group: "Setup",
+    what: "Adds an automatic check that runs before each Git commit.",
+    why: "Stops invalid or unapproved changes from being committed by accident.",
+    when: "Once, after initializing SpecDrive.",
+    example: "sdrive hooks:install" },
 
-  { command: "sdrive create <feature>", description: "Create a new feature scaffold (internal)", group: "Features" },
-  { command: "sdrive status", description: "Show feature lifecycle state", group: "Features" },
-  { command: "sdrive version:new <feature>", description: "Create a new version of a feature", group: "Features" },
-  { command: "sdrive reopen <feature>", description: "Reopen a completed feature", group: "Features" },
-  { command: "sdrive diff:version <feature> <a> <b>", description: "Compare two versions of a feature", group: "Features" },
+  { command: "sdrive create <feature>", description: "Create a new feature scaffold (internal)", group: "Features",
+    what: "Creates the empty folder structure for a new feature.",
+    why: "Gives every feature the same organised home for its spec, plan, and tasks.",
+    when: "Usually run for you by /sdrive:propose.",
+    example: "sdrive create user-login" },
+  { command: "sdrive status", description: "Show feature lifecycle state", group: "Features",
+    what: "Prints where each feature currently stands.",
+    why: "A quick way to see what is in progress, blocked, or done.",
+    when: "Any time you want a status check.",
+    example: "sdrive status" },
+  { command: "sdrive version:new <feature>", description: "Create a new version of a feature", group: "Features",
+    what: "Starts a fresh version of an existing feature.",
+    why: "Lets you evolve a shipped feature without erasing its history.",
+    when: "When adding significant new scope to a completed feature.",
+    example: "sdrive version:new user-login" },
+  { command: "sdrive reopen <feature>", description: "Reopen a completed feature", group: "Features",
+    what: "Moves a finished feature back into active work.",
+    why: "Handles the reality that 'done' features sometimes need more work.",
+    when: "When a completed feature needs changes.",
+    example: "sdrive reopen user-login" },
+  { command: "sdrive diff:version <feature> <a> <b>", description: "Compare two versions of a feature", group: "Features",
+    what: "Shows what changed between two versions of a feature.",
+    why: "Makes it easy to review scope changes over time.",
+    when: "Before approving a new version.",
+    example: "sdrive diff:version user-login v1 v2" },
 
-  { command: "sdrive validate", description: "Validate SpecDrive governance files", group: "Governance" },
-  { command: "sdrive verify <feature>", description: "Verify code matches the plan (spec-to-code diff)", group: "Governance" },
-  { command: "sdrive approve <gate>", description: "Approve a workflow gate (specification, planning, implementation, review)", group: "Governance" },
-  { command: "sdrive diff <oldFile> <newFile>", description: "Show differences between two spec files", group: "Governance" },
-  { command: "sdrive openapi:generate <feature>", description: "Generate an OpenAPI spec from plan.json API contracts", group: "Governance" },
+  { command: "sdrive validate", description: "Validate SpecDrive governance files", group: "Governance",
+    what: "Checks that all your spec and governance files are well-formed.",
+    why: "Catches broken or incomplete documents before they block the workflow.",
+    when: "Before approving a gate or merging.",
+    example: "sdrive validate" },
+  { command: "sdrive verify <feature>", description: "Verify code matches the plan (spec-to-code diff)", group: "Governance",
+    what: "Compares what was specified against what was actually built.",
+    why: "Proves the code matches the approved plan — no missing or surprise work.",
+    when: "Before the review gate.",
+    example: "sdrive verify user-login" },
+  { command: "sdrive approve <gate>", description: "Approve a workflow gate (specification, planning, implementation, review)", group: "Governance",
+    what: "Signs off on one of the four approval checkpoints.",
+    why: "Gates are how a human confirms each stage is genuinely ready to advance.",
+    when: "After reviewing a stage's output.",
+    example: "sdrive approve specification" },
+  { command: "sdrive diff <oldFile> <newFile>", description: "Show differences between two spec files", group: "Governance",
+    what: "Highlights what changed between two documents.",
+    why: "Speeds up review by focusing attention on the differences.",
+    when: "When comparing spec revisions.",
+    example: "sdrive diff old.json new.json" },
+  { command: "sdrive openapi:generate <feature>", description: "Generate an OpenAPI spec from plan.json API contracts", group: "Governance",
+    what: "Turns your planned API contracts into a standard OpenAPI document.",
+    why: "Keeps API documentation in sync with the plan automatically.",
+    when: "After the plan defines API endpoints.",
+    example: "sdrive openapi:generate user-login" },
 
-  { command: "sdrive team:add <username> <role>", description: "Add a new team member", group: "Team" },
-  { command: "sdrive team:remove <username>", description: "Remove a team member", group: "Team" },
-  { command: "sdrive team:list", description: "List all team members", group: "Team" },
-  { command: "sdrive team:update <username> <role>", description: "Update a team member's role", group: "Team" },
-  { command: "sdrive team:sync", description: "Sync team members from GitHub collaborators", group: "Team" },
+  { command: "sdrive team:add <username> <role>", description: "Add a new team member", group: "Team",
+    what: "Registers a person and their role on the project.",
+    why: "Tracks who is accountable for what.",
+    when: "When someone joins the project.",
+    example: "sdrive team:add jane developer" },
+  { command: "sdrive team:remove <username>", description: "Remove a team member", group: "Team",
+    what: "Removes a person from the project roster.",
+    why: "Keeps the team list accurate as people move on.",
+    when: "When someone leaves the project.",
+    example: "sdrive team:remove jane" },
+  { command: "sdrive team:list", description: "List all team members", group: "Team",
+    what: "Shows everyone on the project and their roles.",
+    why: "A single source of truth for who is involved.",
+    when: "Any time you need the roster.",
+    example: "sdrive team:list" },
+  { command: "sdrive team:update <username> <role>", description: "Update a team member's role", group: "Team",
+    what: "Changes a person's role.",
+    why: "Keeps responsibilities current as people grow.",
+    when: "When someone's role changes.",
+    example: "sdrive team:update jane lead" },
+  { command: "sdrive team:sync", description: "Sync team members from GitHub collaborators", group: "Team",
+    what: "Pulls the contributor list straight from GitHub.",
+    why: "Avoids manually re-typing who is on the project.",
+    when: "After adding collaborators on GitHub.",
+    example: "sdrive team:sync" },
 
-  { command: "sdrive dashboard", description: "Start the SpecDrive web dashboard", group: "Dashboard" }
+  { command: "sdrive dashboard", description: "Start the SpecDrive web dashboard", group: "Dashboard",
+    what: "Opens the visual dashboard in your browser.",
+    why: "Gives you a friendly view of features, gates, and progress.",
+    when: "Whenever you want to see the big picture.",
+    example: "sdrive dashboard" }
 ];
+
+// Plain-language descriptions for the slash commands, keyed by command name.
+// The manifest holds the terse machine description; these are the human ones.
+const SLASH_DETAILS = {
+  "/sdrive:constitution": {
+    what: "Establishes the project's ground rules and context.",
+    why: "Every later decision is checked against this shared foundation.",
+    when: "First, before any feature work.",
+    does: [
+      "Interviews you about the product, stack, and constraints",
+      "Merges the answers into a single constitution document",
+      "Assigns stable IDs to every principle so later work can cite them"
+    ],
+    produces: [
+      ".sdrive/constitution.md",
+      ".sdrive/context/ (product, stack, constraints)"
+    ],
+    reads: ["Your answers", "Existing repo files (brownfield)"],
+    handsOff: "/sdrive:product-plan"
+  },
+  "/sdrive:product-plan": {
+    what: "Creates the product overview, mockup, roadmap, and feature backlog.",
+    why: "Gives the whole team a shared picture of what is being built and why.",
+    when: "Early, once the constitution exists.",
+    does: [
+      "Drafts the product overview and positioning",
+      "Produces a UI mockup and roadmap",
+      "Breaks the roadmap into a prioritised feature backlog"
+    ],
+    produces: [
+      ".sdrive/product/overview.md",
+      ".sdrive/product/mockup.html",
+      ".sdrive/product/roadmap.md",
+      ".sdrive/product/backlog.md"
+    ],
+    reads: [".sdrive/constitution.md"],
+    handsOff: "/sdrive:propose"
+  },
+  "/sdrive:propose": {
+    what: "Turns an idea into a full specification, plan, and task list.",
+    why: "Nothing gets built until it is clearly specified and approved.",
+    when: "When starting a new feature.",
+    does: [
+      "Writes the feature specification with numbered requirements",
+      "Derives acceptance criteria and a traceability matrix",
+      "Produces a technical plan and an ordered task list",
+      "Opens a feature branch for the work"
+    ],
+    produces: [
+      ".sdrive/specs/ongoing/<feature>/<version>/spec.md",
+      ".sdrive/specs/ongoing/<feature>/<version>/plan.md",
+      ".sdrive/specs/ongoing/<feature>/<version>/tasks.md",
+      ".sdrive/specs/ongoing/<feature>/<version>/traceability.md",
+      ".sdrive/governance/<feature>/<version>/*.json"
+    ],
+    reads: [".sdrive/constitution.md", ".sdrive/product/backlog.md"],
+    handsOff: "/sdrive:apply"
+  },
+  "/sdrive:update-propose": {
+    what: "Extends an existing specification with new requirements.",
+    why: "Lets features grow without rewriting their history.",
+    when: "When scope changes on an existing feature.",
+    does: [
+      "Adds new requirements without renumbering existing ones",
+      "Updates the plan and task list to cover the additions",
+      "Refreshes the traceability matrix"
+    ],
+    produces: [
+      "Updated spec.md, plan.md, tasks.md, traceability.md",
+      "Updated governance JSON for the version"
+    ],
+    reads: ["The existing feature spec and governance"],
+    handsOff: "/sdrive:apply"
+  },
+  "/sdrive:design": {
+    what: "Builds the UI/UX prototype and design system.",
+    why: "Agrees on the look and feel before code is written.",
+    when: "After the spec, before implementation.",
+    does: [
+      "Produces an interactive HTML/CSS/JS prototype",
+      "Defines the design tokens and component inventory",
+      "Maps every screen back to its requirements"
+    ],
+    produces: [
+      ".sdrive/design/<feature>/prototype.html",
+      ".sdrive/design/<feature>/design-system.md"
+    ],
+    reads: ["The feature spec and acceptance criteria"],
+    handsOff: "/sdrive:apply"
+  },
+  "/sdrive:sync": {
+    what: "Keeps the spec, plan, tasks, and traceability in agreement.",
+    why: "Prevents documents from drifting out of sync as things change.",
+    when: "After any change to the spec or plan.",
+    does: [
+      "Diffs the spec against the plan, tasks, and traceability",
+      "Repairs mismatched IDs and orphaned references",
+      "Reports anything it could not reconcile"
+    ],
+    produces: ["Updated spec, plan, tasks, and traceability files"],
+    reads: ["Every document in the feature's version folder"],
+    handsOff: "/sdrive:apply"
+  },
+  "/sdrive:skills": {
+    what: "Audits and manages the AI skills available to the project.",
+    why: "Keeps the AI's capabilities current and trustworthy.",
+    when: "Periodically, or when adding new tooling.",
+    does: [
+      "Inventories the skills currently available",
+      "Verifies each skill against its source",
+      "Discovers and proposes new skills from GitHub"
+    ],
+    produces: [".sdrive/skills/ (skill workspace and audit notes)"],
+    reads: ["The project's skill configuration"],
+    handsOff: "Nothing — this is a maintenance command"
+  },
+  "/sdrive:docs": {
+    what: "Generates documentation and flags drift from the code.",
+    why: "Keeps docs honest and up to date automatically.",
+    when: "After implementation, or on a schedule. Use --all to document every ongoing feature.",
+    does: [
+      "Writes inline comments and API documentation",
+      "Generates or refreshes the project README",
+      "Flags places where the docs no longer match the code"
+    ],
+    produces: [
+      ".sdrive/reports/docs/coverage-report-<feature>-<version>-<date>.md",
+      "Updated README and inline docs"
+    ],
+    reads: ["The implementation", "The feature spec"],
+    handsOff: "/sdrive:review"
+  },
+  "/sdrive:apply": {
+    what: "Writes the production code from the approved tasks.",
+    why: "This is where the plan becomes real, working software.",
+    when: "After the plan is approved. Use --all to implement every ongoing feature, one branch each.",
+    does: [
+      "Works through the task list in order",
+      "Commits to the feature branch as tasks complete",
+      "Updates the governance task state as it goes"
+    ],
+    produces: [
+      "Production source code",
+      "Updated .sdrive/governance/<feature>/<version>/tasks.json",
+      "Git commits on the feature branch"
+    ],
+    reads: ["tasks.md", "plan.md", "spec.md"],
+    handsOff: "/sdrive:test"
+  },
+  "/sdrive:performance": {
+    what: "Benchmarks and optimises performance and search visibility (SEO).",
+    why: "Ensures the feature is not just correct, but fast enough and discoverable.",
+    when: "After implementation, before review. Use --all to optimise every ongoing feature.",
+    does: [
+      "Benchmarks against the feature's speed NFRs",
+      "Audits metadata, semantic HTML, structured data, and crawlability",
+      "Applies approved speed and SEO fixes",
+      "Re-measures to prove the fix landed"
+    ],
+    produces: [
+      ".sdrive/reports/performance/performance-report-<feature>-<version>-<date>.md"
+    ],
+    reads: ["The implementation", "The feature's NFRs"],
+    handsOff: "/sdrive:review"
+  },
+  "/sdrive:debug": {
+    what: "Reproduces, isolates, and fixes defects — layout, APIs, runtime, and glitches.",
+    why: "Turns a vague \"something is broken\" into a reproduced defect, a root cause, and a verified fix.",
+    when: "When something is visibly wrong. Use --all to sweep every ongoing feature for defects.",
+    does: [
+      "Reproduces the symptom and captures evidence",
+      "Isolates the smallest failing case",
+      "Identifies the root cause before touching code",
+      "Applies a minimal fix and re-verifies"
+    ],
+    produces: [
+      ".sdrive/reports/debug/debug-report-<feature>-<version>-<date>.md",
+      ".sdrive/reports/debug/repro/ (reproduction steps)",
+      ".sdrive/reports/debug/evidence/ (before/after captures)"
+    ],
+    reads: ["The implementation", "Runtime logs and console output"],
+    handsOff: "/sdrive:review"
+  },
+  "/sdrive:review": {
+    what: "Runs the final audit and produces a pass/fail verdict.",
+    why: "The last quality gate before work is considered done. It does not merge or archive.",
+    when: "When the feature is complete. Use --all to review every ongoing feature one after the other.",
+    does: [
+      "Audits the code against the spec and acceptance criteria",
+      "Checks quality, security, and governance compliance",
+      "Issues a pass/fail verdict with findings"
+    ],
+    produces: [
+      ".sdrive/reports/reviews/review-report-<feature>-<version>-<date>.md"
+    ],
+    reads: ["The implementation", "The spec", "Every prior report"],
+    handsOff: "/sdrive:archive"
+  },
+  "/sdrive:archive": {
+    what: "Merges an approved feature to main and completes its lifecycle.",
+    why: "Turns a passing review into shipped, archived work — specs move to completed/ and the branch is cleaned up.",
+    when: "Only after /sdrive:review has passed. Use --all to archive every ongoing feature that passed review.",
+    does: [
+      "Merges the feature branch into main",
+      "Moves the spec from ongoing/ to completed/",
+      "Deletes the merged feature branch",
+      "Marks the feature complete in the workflow state"
+    ],
+    produces: [
+      ".sdrive/specs/completed/<feature>/<version>/",
+      "A merge commit on main"
+    ],
+    reads: ["The passing review report"],
+    handsOff: "Nothing — the feature lifecycle ends here",
+    optional: true,
+    optionalNote:
+      "Optional — run after a passing review, when you are ready to ship and close out the feature."
+  },
+  "/sdrive:secure": {
+    what: "Performs a security audit, threat modelling, and fixes.",
+    why: "Catches vulnerabilities before they reach users.",
+    when: "Before the review gate. Use --all to audit every ongoing feature.",
+    does: [
+      "Threat-models the feature's attack surface",
+      "Scans for OWASP-class vulnerabilities",
+      "Applies approved fixes and re-tests"
+    ],
+    produces: [
+      ".sdrive/reports/security/security-report-<feature>-<version>-<date>.md"
+    ],
+    reads: ["The implementation", "The feature spec"],
+    handsOff: "/sdrive:review"
+  },
+  "/sdrive:test": {
+    what: "Writes tests for the acceptance criteria and reports coverage.",
+    why: "Proves the feature actually does what was promised.",
+    when: "After implementation. Use --all to test every ongoing feature.",
+    does: [
+      "Writes tests covering each acceptance criterion",
+      "Runs the suite and records the results",
+      "Reports coverage and any unmet criteria"
+    ],
+    produces: [
+      ".sdrive/reports/tests/test-report-<feature>-<version>-<date>.md",
+      "Test files in the project's test directory"
+    ],
+    reads: ["The acceptance criteria", "The implementation"],
+    handsOff: "/sdrive:review",
+    optional: true,
+    optionalNote:
+      "Optional — run when development is done (end of a sprint or once an MVP is complete), not on every change."
+  },
+  "/sdrive:onboard": {
+    what: "Adopts an existing project into SpecDrive.",
+    why: "Brings legacy code under governance without breaking it.",
+    when: "Only for existing projects, at the very start.",
+    does: [
+      "Reads the existing repository structure and conventions",
+      "Detects other spec frameworks (OpenSpec, Spec Kit, Software Factory)",
+      "Brings existing specs across without touching the originals",
+      "Writes the project context files"
+    ],
+    produces: [
+      ".sdrive/context/ (product, stack, constraints)",
+      ".sdrive/onboarding-report.md"
+    ],
+    reads: ["The existing repository", "Any existing spec documents"],
+    handsOff: "/sdrive:constitution"
+  }
+};
+
+// The two product lifecycles SpecDrive supports. Rendered as cards at the
+// bottom of the commands page so users can see which path applies to them.
+// Each card shows the setup steps for that path, followed by the shared
+// iteration lifecycle (propose -> apply -> review -> archive).
+//
+// Migration is NOT a separate lifecycle. Arriving from another spec framework
+// is just a Brownfield project with extra context, so it is surfaced as a
+// sub-card inside the Brownfield card (see `migrationNote`) rather than as a
+// peer card with its own command list.
+const PRODUCT_WORKFLOWS = [
+  {
+    id: "greenfield",
+    name: "Greenfield",
+    tagline: "Brand-new project",
+    icon: "✦",
+    summary:
+      "You are beginning with a clean slate — either an empty folder or a freshly scaffolded repo that has no plan in place yet. SpecDrive walks you from that starting point all the way to governed, specified, and tested code.",
+    steps: ["/sdrive:constitution", "/sdrive:product-plan"],
+    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"]
+  },
+  {
+    id: "brownfield",
+    name: "Brownfield",
+    tagline: "Existing codebase",
+    icon: "◈",
+    summary:
+      "Your codebase is already well underway — a plan exists and development has moved far past the early stages. SpecDrive takes stock of what is there, writes specs after the fact, and flags the gaps as deferred so nothing breaks.",
+    steps: ["/sdrive:onboard", "/sdrive:constitution"],
+    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"],
+    migrationNote: {
+      title: "Coming from another spec framework?",
+      body:
+        "If SpecDrive detects OpenSpec, Software Factory, Spec Kit, or another spec-driven framework in your repo, onboarding brings your existing specs across and leaves the originals untouched. Nothing extra to run — the same Brownfield lifecycle applies."
+    }
+  }
+];
+
+// Optional commands are not part of the core workflow. They are run on demand —
+// for example when a feature is totally done and ready to ship. They are shown
+// in their own card on the Commands page, separate from the workflow cards.
+const OPTIONAL_COMMANDS = {
+  title: "Optional Commands",
+  tagline: "Run on demand",
+  icon: "✦",
+  summary:
+    "These commands are not part of the core workflow. Run them when you need them — for example when a feature is totally done and ready to ship.",
+  commands: [
+    {
+      command: "/sdrive:update-propose",
+      what: "Revises an existing proposal after feedback, without starting over.",
+      when: "When a proposal needs changes before it is approved."
+    },
+    {
+      command: "/sdrive:sync",
+      what: "Re-aligns spec, plan, tasks, and traceability after a change.",
+      when: "After a migration, or whenever the spec and the code drift apart."
+    },
+    {
+      command: "/sdrive:performance",
+      what: "Benchmarks and optimizes the code for speed, efficiency, and search visibility.",
+      when: "When performance or SEO matters — before a release or after a slowdown."
+    },
+    {
+      command: "/sdrive:debug",
+      what: "Reproduces, isolates, and fixes defects — layout, APIs, runtime, and glitches.",
+      when: "When something is visibly wrong — a broken layout, a failing endpoint, a console error."
+    },
+    {
+      command: "/sdrive:docs",
+      what: "Generates inline comments, API docs, and project READMEs.",
+      when: "When you want documentation that matches the code."
+    },
+    {
+      command: "/sdrive:secure",
+      what: "Runs a deep security audit and fixes vulnerabilities.",
+      when: "Before shipping anything that touches auth, data, or payments."
+    },
+    {
+      command: "/sdrive:test",
+      what: "Writes and runs the test suite for the feature.",
+      when: "When development is done and you want coverage before review."
+    },
+    {
+      command: "/sdrive:archive",
+      what: "Merges an approved feature to main and completes its lifecycle.",
+      when: "When the feature is totally done and /sdrive:review has passed."
+    }
+  ]
+};
 
 function apiCommands() {
   const manifestPath = path.join(sdriveRoot, "commands", "manifest.json");
   const manifest = loadJson(manifestPath, { commands: [] });
 
-  const slash = (manifest.commands || []).map((c) => ({
-    command: c.command,
-    description: c.description || "",
-    agent: c.agent || "",
-    acceptsFeature: Boolean(c.acceptsFeature),
-    gates: c.gates || []
-  }));
+  const slash = (manifest.commands || []).map((c) => {
+    const detail = SLASH_DETAILS[c.command] || {};
+    return {
+      command: c.command,
+      description: c.description || "",
+      agent: c.agent || "",
+      acceptsFeature: Boolean(c.acceptsFeature),
+      acceptsAll: Boolean(c.acceptsAll),
+      gates: c.gates || [],
+      what: detail.what || "",
+      why: detail.why || "",
+      when: detail.when || "",
+      does: detail.does || [],
+      produces: detail.produces || [],
+      reads: detail.reads || [],
+      handsOff: detail.handsOff || "",
+      optional: Boolean(detail.optional),
+      optionalNote: detail.optionalNote || ""
+    };
+  });
 
-  return { slash, cli: CLI_COMMANDS };
+  return { slash, cli: CLI_COMMANDS, workflows: PRODUCT_WORKFLOWS, optionalCommands: OPTIONAL_COMMANDS };
 }
 
 function handleRequest(req, res) {
   const url = req.url;
+
+  // Skill logos are binary assets, so they are served before the JSON API block
+  // (which sets a JSON content-type header for everything under /api/).
+  if (url.startsWith("/api/skill-logo/")) {
+    const folder = decodeURIComponent(url.slice("/api/skill-logo/".length).split("?")[0]);
+    return serveSkillLogo(res, folder);
+  }
 
   if (url.startsWith("/api/")) {
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -513,7 +1386,6 @@ function handleRequest(req, res) {
     if (url === "/api/skills") {
       return res.end(JSON.stringify(apiSkills()));
     }
-
     if (url === "/api/team") {
       return res.end(JSON.stringify(apiTeam()));
     }
@@ -521,6 +1393,11 @@ function handleRequest(req, res) {
     if (url.startsWith("/api/traceability/")) {
       const { feature, version } = parseFeatureVersion(url);
       return res.end(JSON.stringify(apiTraceability(feature, version)));
+    }
+
+    if (url.startsWith("/api/tasks/")) {
+      const { feature, version } = parseFeatureVersion(url);
+      return res.end(JSON.stringify(apiTasks(feature, version)));
     }
 
     if (url.startsWith("/api/verification/")) {
@@ -531,6 +1408,16 @@ function handleRequest(req, res) {
     if (url.startsWith("/api/tests/")) {
       const { feature, version } = parseFeatureVersion(url);
       return res.end(JSON.stringify(apiTestReport(feature, version)));
+    }
+
+    if (url.startsWith("/api/reports/")) {
+      const { feature, version } = parseFeatureVersion(url);
+      return res.end(JSON.stringify(apiReports(feature, version)));
+    }
+
+    if (url.startsWith("/api/spec-files/")) {
+      const { feature, version } = parseFeatureVersion(url);
+      return res.end(JSON.stringify(apiSpecFiles(feature, version)));
     }
 
     if (url === "/api/onboarding") {
@@ -545,8 +1432,16 @@ function handleRequest(req, res) {
       return res.end(JSON.stringify(apiGitInfo()));
     }
 
+    if (url === "/api/branches") {
+      return res.end(JSON.stringify(apiBranches()));
+    }
+
     if (url === "/api/project-info") {
       return res.end(JSON.stringify(apiProjectInfo()));
+    }
+
+    if (url === "/api/product-type") {
+      return res.end(JSON.stringify(apiProductType()));
     }
 
     if (url === "/api/commands") {
@@ -566,6 +1461,12 @@ function handleRequest(req, res) {
   // the client router in app.js decides which section to display.
   const PAGE_ROUTES = ["/overview", "/product-plan", "/features", "/team", "/activity", "/commands", "/skills"];
   if (PAGE_ROUTES.includes(url)) {
+    return serveStatic(res, path.join(__dirname, "index.html"), "text/html");
+  }
+
+  // Dynamic feature detail route: /features/<name>. Serves the same shell;
+  // the client router renders the detail page for the named feature.
+  if (/^\/features\/[^/]+\/?$/.test(url)) {
     return serveStatic(res, path.join(__dirname, "index.html"), "text/html");
   }
 

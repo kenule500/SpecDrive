@@ -5,7 +5,7 @@ argument-hint: Specify the feature to archive (e.g., "Archive about-page"), or u
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'edit', 'create', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
+tools: ['read', 'search', 'edit', 'create', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7']
 agents: []
 ---
 
@@ -58,11 +58,6 @@ You operate within the current version folder only.
 - **`--all` Mode Rule:** If the user invokes this command with `--all` (e.g. `/sdrive:archive --all`), you MUST archive EVERY feature currently in `ongoing/` that has a passing review, one after the other, in a single run. See the `<all-mode>` section for the exact procedure. In `--all` mode, the per-feature rules above still apply to each feature individually — you simply repeat the full workflow for each one. NEVER skip a feature because an earlier one failed; continue to the next and report the failure.
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use the available shell command capability to run the commands above.
 </rules>
-
-<vision>
-- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
-- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
-</vision>
 
 <capabilities>
 - **Release Management**: Managing PRs, merging to main, branch cleanup.

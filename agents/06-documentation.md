@@ -5,7 +5,7 @@ argument-hint: Specify the scope (e.g., "Document the API routes", "Update the R
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'edit', 'create', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
+tools: ['read', 'search', 'edit', 'create', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7']
 agents: []
 ---
 
@@ -51,11 +51,6 @@ You operate within the current version folder only.
 - ALWAYS read relevant files in `.sdrive/skills/` before generating documentation or analyzing code to ensure compliance with project-specific standards.
 - **`--all` Mode Rule:** If the user invokes this command with `--all` (e.g. `/sdrive:docs --all`), you MUST document EVERY feature currently in `ongoing/`, one after the other, in a single run. See the `<all-mode>` section for the exact procedure. In `--all` mode, the per-feature rules above still apply to each feature individually — you simply repeat the full workflow for each one.
 </rules>
-
-<vision>
-- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
-- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
-</vision>
 
 <capabilities>
 - **Inline Documentation**: Generating JSDoc, Python docstrings, Go doc comments with traceability IDs.

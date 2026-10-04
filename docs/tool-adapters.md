@@ -89,7 +89,6 @@ No slash commands needed.
 ```text
 .sdrive/mcp/server.js
 .sdrive/mcp/mcp.json
-.sdrive/mcp/vision-bridge.json
 ```
 
 MCP clients are wired **automatically** based on the tools you select — there is
@@ -105,39 +104,6 @@ no separate prompt. Each client uses its own config schema:
 
 > **Note:** VS Code uses `servers` with an explicit `type`, while other clients
 > use `mcpServers`. SpecDrive writes the correct shape per client.
-
----
-
-## Vision Bridge (image reading for text-only models)
-
-Text-only models (DeepSeek, etc.) cannot see images. SpecDrive wires
-[`vision-bridge-mcp`](https://www.npmjs.com/package/vision-bridge-mcp) alongside
-its own MCP server so **all 16 agents** can read screenshots, mockups, and
-diagrams by delegating to a vision model.
-
-It is added automatically on `sdrive init` for every MCP-capable tool, and can be
-re-wired at any time:
-
-```bash
-sdrive vision                 # wire all MCP-capable tools
-sdrive vision --tools cursor  # wire a specific tool
-```
-
-Tools exposed to agents:
-
-| Tool | Purpose |
-|------|---------|
-| `describe_image` | Markdown description of an image |
-| `extract_text` | OCR text out of a screenshot |
-| `compare_images` | Diff a reference against a rendered result |
-| `vision_status` | Confirm the bridge is configured |
-| `vision_rules` | Return the agent usage rules |
-
-**Configuration:** set `VISION_BRIDGE_API_KEY` in your shell (never commit it).
-SpecDrive writes only a placeholder (`process.env.VISION_BRIDGE_API_KEY`) to the
-MCP config. Defaults to an OpenAI-compatible endpoint (Aliyun DashScope) with
-`qwen-vl-max`; override `VISION_BRIDGE_BASE_URL` / `VISION_BRIDGE_MODELS` for
-another provider (e.g. local Ollama `llava`).
 
 ---
 

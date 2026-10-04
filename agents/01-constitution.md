@@ -5,7 +5,7 @@ argument-hint: Run to initialize or update the project constitution. You may opt
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'vscode/askQuestions', 'todo', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
+tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'vscode/askQuestions', 'todo', 'exa:search', 'exa:fetch', 'context7']
 agents: []
 ---
 
@@ -42,11 +42,6 @@ You extract prescriptive rules, standards, and constraints from the discovered c
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool. Use your environment's native approval mechanism (e.g., `vscode/askQuestions`) when user approval is required.
 - ALWAYS read relevant files in `.sdrive/skills/` before generating the constitution or context files to ensure compliance with project-specific governance standards.
 </rules>
-
-<vision>
-- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
-- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
-</vision>
 
 <figma-integration-rules>
 - If the user provides a `figma.com` link in the prompt, or you find a Figma link in the repository (e.g., README, docs), you MUST NOT ignore it.

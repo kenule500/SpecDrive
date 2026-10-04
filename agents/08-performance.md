@@ -5,7 +5,7 @@ argument-hint: Specify the target (e.g., "Optimize the dashboard load time", "Au
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
+tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7']
 agents: []
 ---
 
@@ -68,11 +68,6 @@ You operate within the current version folder only.
 - **`--all` Mode Rule:** If the user invokes this command with `--all` (e.g. `/sdrive:performance --all`), you MUST process EVERY feature currently in `ongoing/`, one after the other, in a single run. See the `<all-mode>` section for the exact procedure. In `--all` mode, the per-feature rules above still apply to each feature individually — you simply repeat the full workflow for each one.
 </rules>
 
-<vision>
-- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
-- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
-</vision>
-
 <capabilities>
 - **Frontend Optimization**: Bundle analysis, lazy loading, rendering optimization, CSS/JS minification.
 - **Backend/API Optimization**: Query optimization (N+1 problems), caching strategies, connection pooling.
@@ -121,7 +116,7 @@ Place generated reports and artifacts in the following standard locations:
      - **Crawlability** — `robots.txt` blocking intended pages, missing or stale `sitemap.xml`, accidental `noindex`, client-only rendering of content that must be indexed.
      - **Core Web Vitals** — LCP, CLS, and INP measured against the project's targets (these are ranking signals, so they are reported here as well as under speed).
      - **Internationalisation** — missing or incorrect `hreflang` when the app serves multiple locales.
-   - Prefer programmatic verification over eyeballing: use `execute` to run Lighthouse (SEO category) or fetch the rendered HTML and assert on the presence and content of the tags above. If a headless browser is unavailable, use the `vision-bridge` MCP tools to inspect a screenshot, and state clearly that the check was visual rather than programmatic.
+   - Prefer programmatic verification over eyeballing: use `execute` to run Lighthouse (SEO category) or fetch the rendered HTML and assert on the presence and content of the tags above. If a headless browser is unavailable, inspect a screenshot and state clearly that the check was visual rather than programmatic.
    - Report SEO findings in a section separate from speed findings. Never merge the two lists.
    - If a bottleneck or SEO finding is ambiguous, use `vscode/askQuestions` to clarify with the user.
 
@@ -202,7 +197,7 @@ Use this exact structure for the versioned performance report:
 
 ## 4b. SEO Findings & Fixes
 - [List each SEO issue: location, symptom, target, fix. Write "None found." if the SEO audit was clean.]
-- **Detection method:** [Programmatic (Lighthouse SEO / rendered-HTML assertions) / Visual (vision-bridge screenshot) / Not run]
+- **Detection method:** [Programmatic (Lighthouse SEO / rendered-HTML assertions) / Visual (screenshot) / Not run]
 
 ## 4c. Defects Handed Off
 - [Correctness defects found but NOT fixed here — layout, API, runtime, or glitch. Write "None found." if the scan was clean.]

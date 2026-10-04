@@ -21,6 +21,135 @@ function gateClass(status) {
   return "gate pending";
 }
 
+/* ============================================================
+   PAGINATION
+   A tiny shared pager. Each paginated view keeps its own page
+   number in `pagerState` and re-renders only its own list, so
+   switching pages never refetches from the server.
+
+   Usage:
+     const slice = paginate(items, "skills", 9);
+     ...render slice.items...
+     container.appendChild(renderPager(items.length, "skills", 9, renderSkills));
+   ============================================================ */
+const pagerState = {};
+
+// Clamp the stored page for `key` and return the visible slice.
+function paginate(items, key, perPage) {
+  const total = items.length;
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  let page = pagerState[key] || 1;
+  if (page > pages) page = pages;
+  if (page < 1) page = 1;
+  pagerState[key] = page;
+
+  const start = (page - 1) * perPage;
+  return {
+    items: items.slice(start, start + perPage),
+    page,
+    pages,
+    total,
+    start,
+    end: Math.min(start + perPage, total)
+  };
+}
+
+// Build the page-number buttons, collapsing long runs with an ellipsis.
+// Always shows first, last, current, and one neighbour on each side.
+function pageNumbers(page, pages) {
+  if (pages <= 7) {
+    return Array.from({ length: pages }, (_, i) => i + 1);
+  }
+  const out = [1];
+  const from = Math.max(2, page - 1);
+  const to = Math.min(pages - 1, page + 1);
+  if (from > 2) out.push("…");
+  for (let i = from; i <= to; i++) out.push(i);
+  if (to < pages - 1) out.push("…");
+  out.push(pages);
+  return out;
+}
+
+// Render the pager bar. Returns null when everything fits on one page so
+// callers can append unconditionally.
+function renderPager(total, key, perPage, onNavigate) {
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  if (pages <= 1) return null;
+
+  const page = Math.min(pagerState[key] || 1, pages);
+  const start = (page - 1) * perPage + 1;
+  const end = Math.min(page * perPage, total);
+
+  const wrap = document.createElement("div");
+  wrap.className = "pager";
+
+  const summary = document.createElement("div");
+  summary.className = "pager-summary";
+  summary.innerHTML = `Showing <strong>${start}–${end}</strong> of <strong>${total}</strong>`;
+  wrap.appendChild(summary);
+
+  const controls = document.createElement("div");
+  controls.className = "pager-controls";
+
+  const goTo = (next) => {
+    if (next < 1 || next > pages || next === page) return;
+    pagerState[key] = next;
+    onNavigate();
+  };
+
+  const makeBtn = (label, target, opts = {}) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pager-btn" + (opts.active ? " is-active" : "");
+    btn.textContent = label;
+    if (opts.title) btn.title = opts.title;
+    if (opts.ariaLabel) btn.setAttribute("aria-label", opts.ariaLabel);
+    if (opts.active) btn.setAttribute("aria-current", "page");
+    btn.disabled = !!opts.disabled;
+    if (!opts.disabled && !opts.active) {
+      btn.addEventListener("click", () => goTo(target));
+    }
+    return btn;
+  };
+
+  controls.appendChild(
+    makeBtn("‹", page - 1, { disabled: page === 1, ariaLabel: "Previous page", title: "Previous page" })
+  );
+
+  pageNumbers(page, pages).forEach((n) => {
+    if (n === "…") {
+      const gap = document.createElement("span");
+      gap.className = "pager-ellipsis";
+      gap.textContent = "…";
+      controls.appendChild(gap);
+    } else {
+      controls.appendChild(makeBtn(String(n), n, { active: n === page, ariaLabel: `Page ${n}` }));
+    }
+  });
+
+  controls.appendChild(
+    makeBtn("›", page + 1, { disabled: page === pages, ariaLabel: "Next page", title: "Next page" })
+  );
+
+  wrap.appendChild(controls);
+  return wrap;
+}
+
+// Human-readable gate metadata. Gates are approval checkpoints a feature must
+// clear before it can advance; without a label users mistake them for metrics.
+const GATE_DEFS = [
+  { key: "specification", label: "Spec", hint: "Specification approved" },
+  { key: "planning", label: "Plan", hint: "Plan approved" },
+  { key: "implementation", label: "Impl", hint: "Implementation approved" },
+  { key: "review", label: "Review", hint: "Review approved" }
+];
+
+function gateStatusMeta(status) {
+  if (status === "approved") return { icon: "âœ“", text: "approved" };
+  if (status === "in_progress") return { icon: "â—", text: "in progress" };
+  return { icon: "â—‹", text: "pending" };
+}
+
 function phaseTone(phase) {
   if (phase === "completed") return "green";
   if (phase === "ongoing") return "blue";
@@ -165,14 +294,14 @@ function renderGitInfo(git) {
 /* ============================================================
    OVERVIEW
    ============================================================ */
-function renderOverview(onboarding, git, product) {
+function renderOverview(onboarding, git, product, productType) {
   const wrap = document.createElement("div");
   wrap.className = "overview-page";
 
   const summary = product?.summary || null;
 
   wrap.innerHTML = `
-    ${renderOverviewHero(summary, git)}
+    ${renderOverviewHero(summary, git, productType)}
     ${renderOverviewKpis(onboarding, git, summary)}
     ${renderOverviewPanels(onboarding, git, summary)}
   `;
@@ -181,11 +310,21 @@ function renderOverview(onboarding, git, product) {
 }
 
 /* Hero banner — the product's identity at a glance. */
-function renderOverviewHero(summary, git) {
+function renderOverviewHero(summary, git, productType) {
   const title = summary?.title || "Project Overview";
   const vision = summary?.vision || "";
   const status = summary?.status || "";
   const branch = git?.branch || "—";
+
+  const pt = productType || null;
+  const typeBadge = pt
+    ? `
+        <span class="ov-type-badge" data-type="${escapeHtml(pt.type)}" title="${escapeHtml(pt.description || "")}">
+          <span class="ov-type-icon">${escapeHtml(pt.icon || "◆")}</span>
+          <span class="ov-type-label">${escapeHtml(pt.label)}</span>
+          <span class="ov-type-tagline">${escapeHtml(pt.tagline || "")}</span>
+        </span>`
+    : "";
 
   return `
     <div class="ov-hero">
@@ -195,6 +334,7 @@ function renderOverviewHero(summary, git) {
           <span class="ov-hero-dot"></span>
           <span>Product Overview</span>
           ${status ? `<span class="ov-hero-status">${escapeHtml(status)}</span>` : ""}
+          ${typeBadge}
         </div>
         <h2 class="ov-hero-title">${escapeHtml(title)}</h2>
         ${vision ? `<p class="ov-hero-vision">${escapeHtml(vision)}</p>` : ""}
@@ -288,7 +428,7 @@ function renderOverviewPanels(onboarding, git, summary) {
   if (summary) sidePanels.push(renderOpenQuestionsPanel(summary));
   if (onboarding) sidePanels.push(renderOnboardingPanel(onboarding));
 
-  const mainPanel = summary ? renderBlueprintPanel(summary) : "";
+  const mainPanel = summary ? renderProductPlanPanel(summary) : "";
 
   return `
     <div class="ov-panels">
@@ -298,7 +438,7 @@ function renderOverviewPanels(onboarding, git, summary) {
   `;
 }
 
-function renderBlueprintPanel(summary) {
+function renderProductPlanPanel(summary) {
   const goals = summary.goals || [];
   const nonGoals = summary.nonGoals || [];
   const users = summary.targetUsers || [];
@@ -484,15 +624,15 @@ function renderProduct(product) {
   const pending = backlog.filter((item) => /pending|backlog/i.test(item.status)).length;
   const deferred = backlog.filter((item) => /deferred/i.test(item.status)).length;
 
-  const backlogRows = backlog.length
-    ? backlog
-        .map((item) => {
-          const tone = /deferred/i.test(item.status)
-            ? "slate"
-            : /pending|backlog/i.test(item.status)
-            ? "amber"
-            : "green";
-          return `
+  const BACKLOG_PER_PAGE = 10;
+
+  const backlogRow = (item) => {
+    const tone = /deferred/i.test(item.status)
+      ? "slate"
+      : /pending|backlog/i.test(item.status)
+      ? "amber"
+      : "green";
+    return `
         <tr>
           <td class="backlog-id">${escapeHtml(item.id)}</td>
           <td>${escapeHtml(item.feature)}</td>
@@ -500,12 +640,15 @@ function renderProduct(product) {
           <td>${item.priority ? escapeHtml(item.priority) : "—"}</td>
           <td><span class="chip ${tone}">${escapeHtml(item.status)}</span></td>
         </tr>`;
-        })
-        .join("")
+  };
+
+  const backlogSlice = paginate(backlog, "product-backlog", BACKLOG_PER_PAGE);
+  const backlogRows = backlog.length
+    ? backlogSlice.items.map(backlogRow).join("")
     : `<tr><td colspan="5" class="product-empty">No backlog items yet.</td></tr>`;
 
   div.innerHTML = `
-    <div class="blueprint-wrap">
+    <div class="product-plan-wrap">
       <div class="stat-card tone-accent">
         <span class="stat-icon">â–¤</span>
         <span class="stat-label">Backlog Items</span>
@@ -526,9 +669,9 @@ function renderProduct(product) {
       </div>
     </div>
 
-    <div class="blueprint-panel">
+    <div class="product-plan-panel">
       <div class="detail-block-label">Artifacts</div>
-      <div class="blueprint-artifacts">
+      <div class="product-plan-artifacts">
         ${product.overview ? `<span class="artifact-chip">ðŸ“„ overview.md</span>` : ""}
         ${product.mockup ? `<span class="artifact-chip">ðŸ—ºï¸ mockup.md</span>` : ""}
         ${product.designSystem ? `<span class="artifact-chip">ðŸŽ¨ design-system.md</span>` : ""}
@@ -540,15 +683,30 @@ function renderProduct(product) {
           <thead>
             <tr><th>ID</th><th>Feature</th><th>Milestone</th><th>Priority</th><th>Status</th></tr>
           </thead>
-          <tbody>${backlogRows}</tbody>
+          <tbody id="backlog-body">${backlogRows}</tbody>
         </table>
       </div>
+
+      <div id="backlog-pager"></div>
 
       <div class="product-note">
         Backlog items are product-level candidates. Promote one with <code>/sdrive:propose</code> to start detailed planning.
       </div>
     </div>
   `;
+
+  // Re-render only the table body + pager when the page changes, so the
+  // stat cards and artifact chips are never rebuilt.
+  const pagerHost = div.querySelector("#backlog-pager");
+  const bodyHost = div.querySelector("#backlog-body");
+  const repaint = () => {
+    const slice = paginate(backlog, "product-backlog", BACKLOG_PER_PAGE);
+    bodyHost.innerHTML = slice.items.map(backlogRow).join("");
+    pagerHost.innerHTML = "";
+    const pager = renderPager(backlog.length, "product-backlog", BACKLOG_PER_PAGE, repaint);
+    if (pager) pagerHost.appendChild(pager);
+  };
+  repaint();
 
   return div;
 }
@@ -593,11 +751,22 @@ function renderVersionBlock(feature, version, isCurrent, traceability, verificat
       <span class="version-phase">${escapeHtml(version.phase)} Â· ${escapeHtml(version.currentStep)}</span>
     </div>
 
-    <div class="gate-row">
-      <span class="${gateClass(version.gates?.specification)}">spec</span>
-      <span class="${gateClass(version.gates?.planning)}">plan</span>
-      <span class="${gateClass(version.gates?.implementation)}">impl</span>
-      <span class="${gateClass(version.gates?.review)}">review</span>
+    <div class="gate-section">
+      <div class="gate-section-head">
+        <span class="gate-section-label">Gates</span>
+        <span class="gate-section-hint" title="Approval checkpoints a feature must clear before it can advance">approval checkpoints</span>
+      </div>
+      <div class="gate-row">
+        ${GATE_DEFS.map((g) => {
+          const status = version.gates?.[g.key];
+          const meta = gateStatusMeta(status);
+          return `<span class="${gateClass(status)}" title="${escapeHtml(
+            g.hint
+          )}"><span class="gate-icon">${meta.icon}</span>${escapeHtml(
+            g.label
+          )}<span class="gate-status">${meta.text}</span></span>`;
+        }).join("")}
+      </div>
     </div>
 
     <div class="metric-row">
@@ -706,26 +875,36 @@ function featureMembersEl(members) {
 // token; any render that finds the token has moved on aborts before mutating the DOM.
 let featureRenderToken = 0;
 
+// Feature cards are tall (each carries its version blocks and metrics), so a
+// smaller page keeps the grid scannable and the KPI explainer within reach.
+const FEATURES_PER_PAGE = 12;
+
 async function renderFeatures() {
   const token = ++featureRenderToken;
 
   const state = await fetchJson("/api/workflow-state");
   const team = (await fetchJson("/api/team")) || { members: [] };
   const container = document.getElementById("feature-list");
+  const pagerHost = document.getElementById("feature-pager");
 
   if (token !== featureRenderToken) return;
 
   if (!state || !state.features || state.features.length === 0) {
     container.className = "panel-loading";
     container.textContent = "No features yet.";
+    if (pagerHost) pagerHost.innerHTML = "";
     return;
   }
 
   const filters = getFilterValues();
   container.className = "feature-grid";
   container.innerHTML = "";
+  if (pagerHost) pagerHost.innerHTML = "";
 
-  let rendered = 0;
+  // Build every matching card first, then paginate. Filtering depends on
+  // per-version data fetched inside the loop, so we cannot slice the feature
+  // list up front — we must know how many cards actually match.
+  const cards = [];
 
   for (const f of state.features) {
     const card = document.createElement("div");
@@ -781,21 +960,881 @@ async function renderFeatures() {
 
     if (versionRendered > 0) {
       card.appendChild(body);
-      container.appendChild(card);
-      rendered++;
+
+      // Footer with a "View more" affordance that navigates to the
+      // feature's own detail page (/features/<name>).
+      const foot = document.createElement("div");
+      foot.className = "feature-card-foot";
+      const moreBtn = document.createElement("button");
+      moreBtn.type = "button";
+      moreBtn.className = "feature-more-btn";
+      moreBtn.innerHTML = `View more <span class="feature-more-arrow">→</span>`;
+      moreBtn.addEventListener("click", () => {
+        const path = `/features/${encodeURIComponent(f.name)}`;
+        window.history.pushState({ route: "feature-detail", feature: f.name }, "", path);
+        showRoute("feature-detail");
+        openFeatureDetail(f.name);
+      });
+      foot.appendChild(moreBtn);
+      card.appendChild(foot);
+
+      cards.push(card);
     }
   }
 
   if (token !== featureRenderToken) return;
 
-  if (rendered === 0) {
+  if (cards.length === 0) {
     container.className = "panel-loading";
     container.textContent = "No features match the current filters.";
+    return;
   }
+
+  // Paint the current page of already-built cards. Re-running this on a page
+  // change only moves nodes around — no refetching, no rebuilding.
+  const repaint = () => {
+    const slice = paginate(cards, "features", FEATURES_PER_PAGE);
+    container.innerHTML = "";
+    slice.items.forEach((card) => container.appendChild(card));
+
+    if (!pagerHost) return;
+    pagerHost.innerHTML = "";
+    const pager = renderPager(cards.length, "features", FEATURES_PER_PAGE, repaint);
+    if (pager) pagerHost.appendChild(pager);
+  };
+
+  repaint();
 }
 
 /* ============================================================
-   TEAM
+   FEATURE DETAIL PAGE
+   Reached from the "View more" button on a feature card. Instead
+   of an overlay, this is its own routed page (/features/<name>)
+   with filters for task status (pending / completed), version,
+   phase, and a free-text search.
+   ============================================================ */
+let detailFeature = null;
+let detailTeam = { members: [] };
+let detailData = null;
+let detailRenderToken = 0;
+
+function detailFilters() {
+  return {
+    query: (document.getElementById("detail-search")?.value || "").trim().toLowerCase(),
+    status: document.getElementById("detail-status")?.value || "",
+    version: document.getElementById("detail-version")?.value || "",
+    phase: document.getElementById("detail-phase")?.value || ""
+  };
+}
+
+async function openFeatureDetail(featureName) {
+  const state = await fetchJson("/api/workflow-state");
+  const team = (await fetchJson("/api/team")) || { members: [] };
+  const feature = (state?.features || []).find((f) => f.name === featureName);
+
+  if (!feature) {
+    detailFeature = null;
+    detailData = null;
+    const body = document.getElementById("detail-body");
+    if (body) {
+      body.innerHTML = `<div class="panel-loading">Feature “${escapeHtml(
+        featureName
+      )}” was not found.</div>`;
+    }
+    return;
+  }
+
+  detailFeature = feature;
+  detailTeam = team;
+
+  const title = document.getElementById("detail-title");
+  const subtitle = document.getElementById("detail-subtitle");
+  if (title) title.textContent = feature.name;
+  if (subtitle) {
+    subtitle.textContent = `${feature.currentVersion} · ${feature.phase || ""} · ${
+      feature.currentStep || ""
+    }`;
+  }
+
+  // Load every version's task breakdown once, then filter client-side.
+  const versions = feature.versions || [];
+  const versionData = [];
+  for (const version of versions) {
+    const tasks = (await fetchJson(`/api/tasks/${feature.name}/${version.id}`)) || {
+      summary: { total: 0, completed: 0, pending: 0, percent: 0 },
+      phases: []
+    };
+    versionData.push({ version, tasks });
+  }
+  detailData = { versions: versionData };
+
+  populateDetailFilters(versionData);
+  renderDetailSummary();
+  renderDetailBody();
+  renderDetailReports();
+  renderDetailSpecs();
+}
+
+/* ============================================================
+   FEATURE DETAIL — REPORTS PANEL
+   Surfaces the artifacts each agent writes to .sdrive/reports/.
+   Only reports/tests/ was previously wired up; this covers every
+   report type (tests, performance, security, reviews, docs, debug)
+   through the generic /api/reports/<feature>/<version> endpoint.
+   ============================================================ */
+async function renderDetailReports() {
+  const container = document.getElementById("detail-reports");
+  if (!container || !detailFeature) return;
+
+  const version = detailFeature.currentVersion;
+  const data = await fetchJson(`/api/reports/${detailFeature.name}/${version}`);
+
+  if (!data || !Array.isArray(data.types)) {
+    container.innerHTML = `<div class="panel-loading">No reports available.</div>`;
+    return;
+  }
+
+  const present = data.types.filter((t) => t.status === "present");
+  const missing = data.types.filter((t) => t.status !== "present");
+
+  setDetailTabCount("reports", present.length);
+
+  const cards = present
+    .map((type) => {
+      const rows = type.reports
+        .map((r) => {
+          const statusChip = r.status
+            ? `<span class="chip ${reportStatusClass(r.status)}">${escapeHtml(r.status)}</span>`
+            : "";
+          const scopeChip =
+            r.scope === "all"
+              ? `<span class="chip slate" title="Covers every ongoing feature">all features</span>`
+              : "";
+          const historyChip =
+            r.history > 1
+              ? `<span class="chip slate" title="${r.history} reports on file">${r.history} on file</span>`
+              : "";
+          return `
+            <li class="report-row">
+              <div class="report-row-main">
+                <span class="report-file">${escapeHtml(r.file)}</span>
+                ${r.title ? `<span class="report-title">${escapeHtml(r.title)}</span>` : ""}
+              </div>
+              <div class="report-row-meta">
+                ${statusChip}
+                ${scopeChip}
+                ${historyChip}
+                <span class="report-date">${escapeHtml(r.date)}</span>
+              </div>
+            </li>
+          `;
+        })
+        .join("");
+
+      return `
+        <div class="report-card">
+          <div class="report-card-head">
+            <span class="report-card-label">${escapeHtml(type.label)}</span>
+            <span class="chip green">${type.reports.length}</span>
+          </div>
+          <ul class="report-list">${rows}</ul>
+        </div>
+      `;
+    })
+    .join("");
+
+  const missingNote = missing.length
+    ? `<div class="report-missing">
+         <span class="report-missing-label">Not yet produced:</span>
+         ${missing.map((t) => `<span class="chip slate">${escapeHtml(t.label)}</span>`).join("")}
+       </div>`
+    : "";
+
+  container.innerHTML = present.length
+    ? `<div class="report-grid">${cards}</div>${missingNote}`
+    : `<div class="panel-loading">No reports have been produced for this feature yet.</div>${missingNote}`;
+}
+
+function reportStatusClass(status) {
+  const s = (status || "").toUpperCase();
+  if (s === "PASS" || s === "PASSED" || s === "CLEAN" || s === "IMPROVED") return "green";
+  if (s === "FAIL" || s === "FAILED" || s === "REGRESSED") return "red";
+  return "slate";
+}
+
+/* ============================================================
+   FEATURE DETAIL — SPEC FILES PANEL
+   Reads the raw spec/plan/tasks/traceability markdown straight
+   from .sdrive/specs/<stage>/<feature>/<version>/ so the spec
+   can be reviewed in the dashboard instead of the repo.
+   ============================================================ */
+let specFilesData = null;
+let activeSpecDoc = null;
+
+async function renderDetailSpecs() {
+  const container = document.getElementById("detail-specs");
+  if (!container || !detailFeature) return;
+
+  const version = detailFeature.currentVersion;
+  const data = await fetchJson(`/api/spec-files/${detailFeature.name}/${version}`);
+  specFilesData = data;
+
+  if (!data || !Array.isArray(data.docs) || !data.docs.length) {
+    setDetailTabCount("specs", 0);
+    container.innerHTML = `<div class="panel-loading">No spec files found for this feature.</div>`;
+    return;
+  }
+
+  setDetailTabCount("specs", data.docs.length);
+
+  // Default to the specification, falling back to the first available doc.
+  const initial =
+    data.docs.find((d) => d.id === "spec") || data.docs[0];
+  activeSpecDoc = initial.id;
+
+  const stageChip = data.stage
+    ? `<span class="chip slate" title="Spec stage">${escapeHtml(data.stage)}</span>`
+    : "";
+
+  container.innerHTML = `
+    <div class="spec-files">
+      <aside class="spec-files-nav">
+        <div class="spec-files-nav-head">
+          <span class="spec-files-nav-label">Documents</span>
+          ${stageChip}
+        </div>
+        <ul class="spec-doc-list">
+          ${data.docs
+            .map(
+              (d) => `
+            <li>
+              <button
+                class="spec-doc-btn${d.id === activeSpecDoc ? " active" : ""}"
+                type="button"
+                data-spec-doc="${escapeHtml(d.id)}"
+              >
+                <span class="spec-doc-name">${escapeHtml(d.label)}</span>
+                <span class="spec-doc-meta">${d.lines} lines</span>
+              </button>
+            </li>
+          `
+            )
+            .join("")}
+        </ul>
+      </aside>
+      <div class="spec-files-view">
+        <div class="spec-files-view-head">
+          <code class="spec-files-path" id="spec-files-path">${escapeHtml(initial.path)}</code>
+          <button class="spec-copy-btn" id="spec-copy-btn" type="button">Copy</button>
+        </div>
+        <div class="spec-search" id="spec-search">
+          <div class="spec-search-field">
+            <svg class="spec-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              id="spec-search-input"
+              class="spec-search-input"
+              placeholder="Search in document"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Search in document"
+            />
+            <span class="spec-search-count" id="spec-search-count"></span>
+            <button class="spec-search-nav" id="spec-search-prev" type="button" title="Previous match" aria-label="Previous match" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"></polyline></svg>
+            </button>
+            <button class="spec-search-nav" id="spec-search-next" type="button" title="Next match" aria-label="Next match" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <button class="spec-search-close" id="spec-search-close" type="button" title="Clear search" aria-label="Clear search" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+        </div>
+        <article class="spec-markdown" id="spec-markdown">
+          ${renderMarkdown(initial.content)}
+        </article>
+      </div>
+    </div>
+  `;
+
+  container.querySelectorAll("[data-spec-doc]").forEach((btn) => {
+    btn.addEventListener("click", () => selectSpecDoc(btn.dataset.specDoc));
+  });
+
+  const copyBtn = document.getElementById("spec-copy-btn");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", () => {
+      const doc = currentSpecDoc();
+      if (!doc || !navigator.clipboard) return;
+      navigator.clipboard.writeText(doc.content).then(() => {
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => (copyBtn.textContent = "Copy"), 900);
+      });
+    });
+  }
+
+  setupSpecSearch();
+}
+
+function currentSpecDoc() {
+  if (!specFilesData || !Array.isArray(specFilesData.docs)) return null;
+  return specFilesData.docs.find((d) => d.id === activeSpecDoc) || null;
+}
+
+function selectSpecDoc(id) {
+  const doc = specFilesData && specFilesData.docs.find((d) => d.id === id);
+  if (!doc) return;
+  activeSpecDoc = id;
+
+  document.querySelectorAll("[data-spec-doc]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.specDoc === id);
+  });
+
+  const pathEl = document.getElementById("spec-files-path");
+  if (pathEl) pathEl.textContent = doc.path;
+
+  const md = document.getElementById("spec-markdown");
+  if (md) md.innerHTML = renderMarkdown(doc.content);
+
+  // Re-apply the active search to the newly rendered document.
+  runSpecSearch();
+}
+
+/* ============================================================
+   SPEC FILES — IN-DOCUMENT SEARCH
+   A VS Code-style find bar: type a query, every occurrence is
+   highlighted, and the up/down arrows step through the matches.
+   ============================================================ */
+let specSearchMatches = [];
+let specSearchIndex = -1;
+
+function setupSpecSearch() {
+  const input = document.getElementById("spec-search-input");
+  const prev = document.getElementById("spec-search-prev");
+  const next = document.getElementById("spec-search-next");
+  const close = document.getElementById("spec-search-close");
+  if (!input) return;
+
+  input.addEventListener("input", () => {
+    runSpecSearch();
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      stepSpecSearch(e.shiftKey ? -1 : 1);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      clearSpecSearch();
+    }
+  });
+
+  if (prev) prev.addEventListener("click", () => stepSpecSearch(-1));
+  if (next) next.addEventListener("click", () => stepSpecSearch(1));
+  if (close) close.addEventListener("click", clearSpecSearch);
+}
+
+function clearSpecSearch() {
+  const input = document.getElementById("spec-search-input");
+  if (input) input.value = "";
+  runSpecSearch();
+  if (input) input.focus();
+}
+
+/* Walks the rendered markdown, wraps every case-insensitive occurrence of the
+   query in a <mark>, and records the marks so the arrows can step through them.
+   Text nodes are visited in document order, so match order matches reading
+   order. Existing highlights are unwrapped first so re-running is idempotent. */
+function runSpecSearch() {
+  const input = document.getElementById("spec-search-input");
+  const countEl = document.getElementById("spec-search-count");
+  const prev = document.getElementById("spec-search-prev");
+  const next = document.getElementById("spec-search-next");
+  const close = document.getElementById("spec-search-close");
+  const md = document.getElementById("spec-markdown");
+  if (!input || !md) return;
+
+  // Remove any previous highlights and restore the original text.
+  md.querySelectorAll("mark.spec-hit").forEach((mark) => {
+    const parent = mark.parentNode;
+    if (!parent) return;
+    parent.replaceChild(document.createTextNode(mark.textContent), mark);
+    parent.normalize();
+  });
+
+  specSearchMatches = [];
+  specSearchIndex = -1;
+
+  const query = input.value.trim();
+  if (close) close.hidden = !query;
+
+  if (!query) {
+    if (countEl) countEl.textContent = "";
+    if (prev) prev.disabled = true;
+    if (next) next.disabled = true;
+    return;
+  }
+
+  const needle = query.toLowerCase();
+
+  // Collect text nodes first — mutating the DOM while walking it is unsafe.
+  const walker = document.createTreeWalker(md, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      const tag = node.parentNode && node.parentNode.nodeName;
+      if (tag === "SCRIPT" || tag === "STYLE") return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  const textNodes = [];
+  let node;
+  while ((node = walker.nextNode())) textNodes.push(node);
+
+  textNodes.forEach((textNode) => {
+    const text = textNode.nodeValue;
+    const lower = text.toLowerCase();
+    let from = 0;
+    let idx = lower.indexOf(needle, from);
+    if (idx === -1) return;
+
+    const frag = document.createDocumentFragment();
+    let cursor = 0;
+    while (idx !== -1) {
+      if (idx > cursor) {
+        frag.appendChild(document.createTextNode(text.slice(cursor, idx)));
+      }
+      const mark = document.createElement("mark");
+      mark.className = "spec-hit";
+      mark.textContent = text.slice(idx, idx + query.length);
+      frag.appendChild(mark);
+      specSearchMatches.push(mark);
+      cursor = idx + query.length;
+      from = cursor;
+      idx = lower.indexOf(needle, from);
+    }
+    if (cursor < text.length) {
+      frag.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+    textNode.parentNode.replaceChild(frag, textNode);
+  });
+
+  const total = specSearchMatches.length;
+  if (countEl) {
+    countEl.textContent = total ? `1 of ${total}` : "No results";
+    countEl.classList.toggle("empty", total === 0);
+  }
+  if (prev) prev.disabled = total === 0;
+  if (next) next.disabled = total === 0;
+
+  if (total) {
+    specSearchIndex = 0;
+    focusSpecMatch();
+  }
+}
+
+/* Moves the active highlight by `delta` (wrapping around) and scrolls it into
+   view. The active mark gets a distinct class so it stands out from the rest. */
+function stepSpecSearch(delta) {
+  if (!specSearchMatches.length) return;
+  specSearchIndex =
+    (specSearchIndex + delta + specSearchMatches.length) % specSearchMatches.length;
+  focusSpecMatch();
+}
+
+function focusSpecMatch() {
+  const countEl = document.getElementById("spec-search-count");
+  specSearchMatches.forEach((mark, i) => {
+    mark.classList.toggle("active", i === specSearchIndex);
+  });
+  const active = specSearchMatches[specSearchIndex];
+  if (active) {
+    active.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+  if (countEl && specSearchMatches.length) {
+    countEl.textContent = `${specSearchIndex + 1} of ${specSearchMatches.length}`;
+  }
+}
+
+/* Minimal, dependency-free Markdown renderer. It covers the subset the spec
+   documents actually use: headings, lists, tables, fenced code, blockquotes,
+   horizontal rules, and inline bold/italic/code/links. Everything is escaped
+   before any markup is added, so raw HTML in a spec file cannot inject. */
+function renderMarkdown(src) {
+  if (!src) return `<p class="spec-empty">This document is empty.</p>`;
+
+  const lines = src.replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let i = 0;
+
+  const inline = (text) =>
+    escapeHtml(text)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    if (/^```/.test(line)) {
+      const lang = line.slice(3).trim();
+      const buf = [];
+      i++;
+      while (i < lines.length && !/^```/.test(lines[i])) {
+        buf.push(lines[i]);
+        i++;
+      }
+      i++; // closing fence
+      out.push(
+        `<pre class="spec-code"><code${lang ? ` data-lang="${escapeHtml(lang)}"` : ""}>${escapeHtml(
+          buf.join("\n")
+        )}</code></pre>`
+      );
+      continue;
+    }
+
+    // Heading
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      const level = heading[1].length;
+      out.push(`<h${level} class="spec-h spec-h${level}">${inline(heading[2])}</h${level}>`);
+      i++;
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^\s*([-*_])\1{2,}\s*$/.test(line)) {
+      out.push('<hr class="spec-hr" />');
+      i++;
+      continue;
+    }
+
+    // Table (header row followed by a separator row)
+    if (
+      /\|/.test(line) &&
+      i + 1 < lines.length &&
+      /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])
+    ) {
+      const parseRow = (row) =>
+        row
+          .replace(/^\s*\|/, "")
+          .replace(/\|\s*$/, "")
+          .split("|")
+          .map((c) => c.trim());
+      const headers = parseRow(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && /\|/.test(lines[i]) && lines[i].trim()) {
+        rows.push(parseRow(lines[i]));
+        i++;
+      }
+      out.push(`
+        <div class="spec-table-wrap">
+          <table class="spec-table">
+            <thead><tr>${headers.map((h) => `<th>${inline(h)}</th>`).join("")}</tr></thead>
+            <tbody>${rows
+              .map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`)
+              .join("")}</tbody>
+          </table>
+        </div>
+      `);
+      continue;
+    }
+
+    // Blockquote
+    if (/^\s*>\s?/.test(line)) {
+      const buf = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+        buf.push(lines[i].replace(/^\s*>\s?/, ""));
+        i++;
+      }
+      out.push(`<blockquote class="spec-quote">${inline(buf.join(" "))}</blockquote>`);
+      continue;
+    }
+
+    // Unordered list
+    if (/^\s*[-*+]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*[-*+]\s+/, ""));
+        i++;
+      }
+      out.push(`<ul class="spec-ul">${items.map((t) => `<li>${inline(t)}</li>`).join("")}</ul>`);
+      continue;
+    }
+
+    // Ordered list
+    if (/^\s*\d+[.)]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*\d+[.)]\s+/, ""));
+        i++;
+      }
+      out.push(`<ol class="spec-ol">${items.map((t) => `<li>${inline(t)}</li>`).join("")}</ol>`);
+      continue;
+    }
+
+    // Blank line
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
+
+    // Paragraph (gather consecutive plain lines)
+    const buf = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !/^(#{1,6}\s|```|\s*[-*+]\s|\s*\d+[.)]\s|\s*>)/.test(lines[i]) &&
+      !/^\s*([-*_])\1{2,}\s*$/.test(lines[i])
+    ) {
+      buf.push(lines[i]);
+      i++;
+    }
+    out.push(`<p class="spec-p">${inline(buf.join(" "))}</p>`);
+  }
+
+  return out.join("\n");
+}
+
+function populateDetailFilters(versionData) {
+  const versionSelect = document.getElementById("detail-version");
+  const phaseSelect = document.getElementById("detail-phase");
+  if (!versionSelect || !phaseSelect) return;
+
+  const prevVersion = versionSelect.value;
+  const prevPhase = phaseSelect.value;
+
+  versionSelect.innerHTML =
+    `<option value="">All versions</option>` +
+    versionData
+      .map(({ version }) => `<option value="${escapeHtml(version.id)}">${escapeHtml(version.id)}</option>`)
+      .join("");
+
+  const phaseIds = new Set();
+  versionData.forEach(({ tasks }) => {
+    (tasks.phases || []).forEach((p) => phaseIds.add(p.phaseId));
+  });
+  phaseSelect.innerHTML =
+    `<option value="">All phases</option>` +
+    Array.from(phaseIds)
+      .map((id) => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`)
+      .join("");
+
+  if (Array.from(versionSelect.options).some((o) => o.value === prevVersion)) {
+    versionSelect.value = prevVersion;
+  }
+  if (Array.from(phaseSelect.options).some((o) => o.value === prevPhase)) {
+    phaseSelect.value = prevPhase;
+  }
+}
+
+function renderDetailSummary() {
+  const container = document.getElementById("detail-summary");
+  if (!container || !detailData) return;
+
+  let total = 0;
+  let done = 0;
+  detailData.versions.forEach(({ tasks }) => {
+    total += tasks.summary?.total || 0;
+    done += tasks.summary?.completed || 0;
+  });
+  const pending = total - done;
+  const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+
+  container.innerHTML = `
+    <div class="modal-stat">
+      <span class="modal-stat-value">${total}</span>
+      <span class="modal-stat-label">Total tasks</span>
+    </div>
+    <div class="modal-stat">
+      <span class="modal-stat-value green">${done}</span>
+      <span class="modal-stat-label">Completed</span>
+    </div>
+    <div class="modal-stat">
+      <span class="modal-stat-value amber">${pending}</span>
+      <span class="modal-stat-label">Pending</span>
+    </div>
+    <div class="modal-stat">
+      <span class="modal-stat-value">${percent}%</span>
+      <span class="modal-stat-label">Progress</span>
+    </div>
+  `;
+}
+
+function detailTaskMatches(task, filters) {
+  if (filters.status === "pending" && task.completed) return false;
+  if (filters.status === "completed" && !task.completed) return false;
+  if (filters.query) {
+    const haystack = `${task.id || ""} ${task.title || ""} ${task.description || ""}`.toLowerCase();
+    if (!haystack.includes(filters.query)) return false;
+  }
+  return true;
+}
+
+function renderDetailBody() {
+  const container = document.getElementById("detail-body");
+  if (!container || !detailData) return;
+
+  const filters = detailFilters();
+  const frag = document.createDocumentFragment();
+  let renderedVersions = 0;
+  let totalVisible = 0;
+
+  for (const { version, tasks } of detailData.versions) {
+    if (filters.version && version.id !== filters.version) continue;
+
+    const isCurrent = detailFeature && version.id === detailFeature.currentVersion;
+    const s = tasks.summary || { total: 0, completed: 0, pending: 0, percent: 0 };
+
+    const phaseBlocks = [];
+    let versionTaskCount = 0;
+
+    for (const p of tasks.phases || []) {
+      if (filters.phase && p.phaseId !== filters.phase) continue;
+
+      const visible = (p.tasks || []).filter((t) => detailTaskMatches(t, filters));
+      if (!visible.length) continue;
+
+      versionTaskCount += visible.length;
+      const doneCount = visible.filter((t) => t.completed).length;
+
+      phaseBlocks.push(`
+        <div class="detail-phase">
+          <div class="detail-phase-head">
+            <span class="detail-phase-id">${escapeHtml(p.phaseId)}</span>
+            <span class="detail-phase-name">${escapeHtml(p.name)}</span>
+            <span class="detail-phase-count">${doneCount}/${visible.length}</span>
+          </div>
+          <ul class="detail-task-list">
+            ${visible
+              .map(
+                (t) => `
+              <li class="detail-task ${t.completed ? "done" : "pending"}">
+                <span class="detail-task-check">${t.completed ? "✓" : "○"}</span>
+                <div class="detail-task-body">
+                  <div class="detail-task-title">
+                    <span class="detail-task-id">${escapeHtml(t.id)}</span>
+                    ${escapeHtml(t.title)}
+                  </div>
+                  ${
+                    t.description
+                      ? `<div class="detail-task-desc">${escapeHtml(t.description)}</div>`
+                      : ""
+                  }
+                  ${
+                    (t.linkedRequirements || []).length ||
+                    (t.linkedAcceptanceCriteria || []).length
+                      ? `<div class="detail-task-links">
+                          ${(t.linkedRequirements || [])
+                            .map((r) => `<span class="chip blue">${escapeHtml(r)}</span>`)
+                            .join("")}
+                          ${(t.linkedAcceptanceCriteria || [])
+                            .map((a) => `<span class="chip slate">${escapeHtml(a)}</span>`)
+                            .join("")}
+                        </div>`
+                      : ""
+                  }
+                </div>
+              </li>
+            `
+              )
+              .join("")}
+          </ul>
+        </div>
+      `);
+    }
+
+    if (!phaseBlocks.length) continue;
+
+    totalVisible += versionTaskCount;
+
+    const section = document.createElement("div");
+    section.className = "detail-version" + (isCurrent ? " current" : "");
+    section.innerHTML = `
+      <div class="detail-version-head">
+        <span class="version-id">
+          <span class="chip ${isCurrent ? "accent" : "slate"}">${isCurrent ? "current" : "past"}</span>
+          ${escapeHtml(version.id)}
+        </span>
+        <span class="detail-version-counts">
+          <span class="chip green">${s.completed} done</span>
+          <span class="chip amber">${s.pending} pending</span>
+          <span class="chip slate">${s.percent}%</span>
+        </span>
+      </div>
+      ${phaseBlocks.join("")}
+    `;
+    frag.appendChild(section);
+    renderedVersions++;
+  }
+
+  container.innerHTML = "";
+  if (renderedVersions === 0) {
+    container.innerHTML = `<div class="panel-loading">No tasks match the current filters.</div>`;
+    setDetailTabCount("tasks", 0);
+    return;
+  }
+  container.appendChild(frag);
+  setDetailTabCount("tasks", totalVisible);
+}
+
+function setupFeatureDetail() {
+  const back = document.getElementById("detail-back");
+  if (back) {
+    back.addEventListener("click", () => {
+      window.history.pushState({ route: "features" }, "", "/features");
+      showRoute("features");
+    });
+  }
+
+  [
+    { id: "detail-search", event: "input" },
+    { id: "detail-status", event: "change" },
+    { id: "detail-version", event: "change" },
+    { id: "detail-phase", event: "change" }
+  ].forEach(({ id, event }) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(event, renderDetailBody);
+  });
+
+  document.querySelectorAll("[data-detail-tab]").forEach((tab) => {
+    tab.addEventListener("click", () => showDetailTab(tab.dataset.detailTab));
+  });
+}
+
+/* Switch between the Tasks, Reports, and Spec Files panels on the feature
+   detail page. Reports used to sit below the task list, which meant scrolling
+   past every task to reach them. */
+function showDetailTab(name) {
+  const target = ["reports", "specs"].includes(name) ? name : "tasks";
+
+  document.querySelectorAll("[data-detail-tab]").forEach((tab) => {
+    const active = tab.dataset.detailTab === target;
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", active ? "true" : "false");
+  });
+
+  document.querySelectorAll(".detail-panel").forEach((panel) => {
+    panel.classList.toggle("active", panel.id === `detail-panel-${target}`);
+  });
+}
+
+function setDetailTabCount(tabName, count) {
+  const el = document.getElementById(`detail-tab-${tabName}-count`);
+  if (!el) return;
+  el.textContent = count > 0 ? String(count) : "";
+  el.classList.toggle("empty", !(count > 0));
+}
+
+/* ============================================================
+   TEAM & BRANCH
    ============================================================ */
 async function renderTeam() {
   const team = await fetchJson("/api/team");
@@ -804,53 +1843,97 @@ async function renderTeam() {
   if (!team || !team.members || team.members.length === 0) {
     container.className = "panel-loading";
     container.textContent = "No team members.";
+  } else {
+    container.className = "team-grid";
+    container.innerHTML = "";
+
+    team.members.forEach((m) => {
+      const card = document.createElement("div");
+      card.className = "member-card";
+      card.innerHTML = `
+        <div class="member-avatar role-${escapeHtml(m.role)}">${escapeHtml(initials(m.username))}</div>
+        <div class="member-info">
+          <div class="member-name">${escapeHtml(m.username)}</div>
+          <div class="member-role">${escapeHtml(m.role)}</div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+
+    const rules = team.rules || {};
+    if (rules.approval_required || rules.implementation_allowed) {
+      const rulesCard = document.createElement("div");
+      rulesCard.className = "team-rules";
+      rulesCard.innerHTML = `
+        ${
+          rules.approval_required
+            ? `<div>
+                <div class="rule-block-label">Approval Required</div>
+                <div class="chip-list">${rules.approval_required
+                  .map((r) => `<span class="chip green">${escapeHtml(r)}</span>`)
+                  .join("")}</div>
+              </div>`
+            : ""
+        }
+        ${
+          rules.implementation_allowed
+            ? `<div>
+                <div class="rule-block-label">Implementation Allowed</div>
+                <div class="chip-list">${rules.implementation_allowed
+                  .map((r) => `<span class="chip blue">${escapeHtml(r)}</span>`)
+                  .join("")}</div>
+              </div>`
+            : ""
+        }
+      `;
+      container.appendChild(rulesCard);
+    }
+  }
+
+  await renderBranches();
+}
+
+async function renderBranches() {
+  const container = document.getElementById("branch-list");
+  if (!container) return;
+
+  const data = await fetchJson("/api/branches");
+
+  if (!data || !data.available || !data.branches || data.branches.length === 0) {
+    container.className = "panel-loading";
+    container.textContent = "No git branches found.";
     return;
   }
 
-  container.className = "team-grid";
+  container.className = "branch-list";
   container.innerHTML = "";
 
-  team.members.forEach((m) => {
-    const card = document.createElement("div");
-    card.className = "member-card";
-    card.innerHTML = `
-      <div class="member-avatar role-${escapeHtml(m.role)}">${escapeHtml(initials(m.username))}</div>
-      <div class="member-info">
-        <div class="member-name">${escapeHtml(m.username)}</div>
-        <div class="member-role">${escapeHtml(m.role)}</div>
+  data.branches.forEach((b) => {
+    const row = document.createElement("div");
+    row.className = "branch-row" + (b.current ? " is-current" : "");
+
+    const statusChip = b.current
+      ? `<span class="chip blue">current</span>`
+      : b.merged
+        ? `<span class="chip green">merged</span>`
+        : `<span class="chip amber">active</span>`;
+
+    row.innerHTML = `
+      <div class="branch-main">
+        <div class="branch-name">
+          <span class="branch-icon">⎇</span>${escapeHtml(b.name)}
+          ${statusChip}
+        </div>
+        <div class="branch-subject">${escapeHtml(b.subject || "—")}</div>
+      </div>
+      <div class="branch-meta">
+        <span class="branch-commit">${escapeHtml(b.commit || "")}</span>
+        <span class="branch-author">${escapeHtml(b.author || "")}</span>
+        <span class="branch-date">${escapeHtml(formatDate(b.committedAt))}</span>
       </div>
     `;
-    container.appendChild(card);
+    container.appendChild(row);
   });
-
-  const rules = team.rules || {};
-  if (rules.approval_required || rules.implementation_allowed) {
-    const rulesCard = document.createElement("div");
-    rulesCard.className = "team-rules";
-    rulesCard.innerHTML = `
-      ${
-        rules.approval_required
-          ? `<div>
-              <div class="rule-block-label">Approval Required</div>
-              <div class="chip-list">${rules.approval_required
-                .map((r) => `<span class="chip green">${escapeHtml(r)}</span>`)
-                .join("")}</div>
-            </div>`
-          : ""
-      }
-      ${
-        rules.implementation_allowed
-          ? `<div>
-              <div class="rule-block-label">Implementation Allowed</div>
-              <div class="chip-list">${rules.implementation_allowed
-                .map((r) => `<span class="chip blue">${escapeHtml(r)}</span>`)
-                .join("")}</div>
-            </div>`
-          : ""
-      }
-    `;
-    container.appendChild(rulesCard);
-  }
 }
 
 /* ============================================================
@@ -875,10 +1958,19 @@ async function renderAudit() {
     return;
   }
 
-  container.className = "timeline";
-  container.innerHTML = "";
+  const ACTIVITY_PER_PAGE = 20;
 
-  events.slice(0, 40).forEach((e) => {
+  // The timeline and the pager are siblings, so wrap them in a host element
+  // that survives re-renders. The host replaces the timeline as the child.
+  const host = document.createElement("div");
+  host.className = "activity-host";
+
+  const timeline = document.createElement("div");
+  timeline.className = "timeline";
+
+  const pagerHost = document.createElement("div");
+
+  const timelineItem = (e) => {
     const item = document.createElement("div");
     item.className = "timeline-item";
 
@@ -889,18 +1981,49 @@ async function renderAudit() {
 
     const scope = [e.feature, e.version].filter(Boolean).join(" Â· ");
 
+    // Actor attribution: older events predate actor capture, so fall back to a
+    // muted "unknown" chip rather than hiding the row entirely.
+    const actor = e.actor ? String(e.actor) : "";
+    const actorChip = actor
+      ? `<span class="timeline-actor" title="Performed by ${escapeHtml(actor)}">${escapeHtml(actor)}</span>`
+      : `<span class="timeline-actor unknown" title="Actor not recorded for this event">unknown</span>`;
+
+    const sourceLabel = e.source === "audit-log" ? "audit log" : "workflow";
+
     item.innerHTML = `
       <span class="timeline-dot ${auditTone(e.event)}"></span>
       <div class="timeline-body">
         <div class="timeline-event">${escapeHtml(String(e.event).replace(/[_-]/g, " "))}</div>
-        <div class="timeline-meta">${escapeHtml(formatDateTime(e.timestamp))}${
-          scope ? ` Â· ${escapeHtml(scope)}` : ""
-        }</div>
+        <div class="timeline-meta">
+          ${actorChip}
+          <span class="timeline-time">${escapeHtml(formatDateTime(e.timestamp))}</span>
+          ${scope ? `<span class="timeline-scope">${escapeHtml(scope)}</span>` : ""}
+          <span class="timeline-source">${escapeHtml(sourceLabel)}</span>
+        </div>
         ${detailParts ? `<div class="timeline-details">${escapeHtml(detailParts)}</div>` : ""}
       </div>
     `;
-    container.appendChild(item);
-  });
+    return item;
+  };
+
+  const repaint = () => {
+    const slice = paginate(events, "activity", ACTIVITY_PER_PAGE);
+    timeline.innerHTML = "";
+    slice.items.forEach((e) => timeline.appendChild(timelineItem(e)));
+
+    pagerHost.innerHTML = "";
+    const pager = renderPager(events.length, "activity", ACTIVITY_PER_PAGE, repaint);
+    if (pager) pagerHost.appendChild(pager);
+  };
+
+  host.appendChild(timeline);
+  host.appendChild(pagerHost);
+
+  container.className = "";
+  container.innerHTML = "";
+  container.appendChild(host);
+
+  repaint();
 }
 
 /* ============================================================
@@ -919,10 +2042,19 @@ async function renderSkills() {
     return;
   }
 
-  container.className = "skills-grid";
-  container.innerHTML = "";
+  const SKILLS_PER_PAGE = 9;
 
-  skills.forEach((s) => {
+  // The grid and the pager are siblings, so wrap them in a host element that
+  // survives re-renders. The host replaces the grid as the section's child.
+  const host = document.createElement("div");
+  host.className = "skills-host";
+
+  const grid = document.createElement("div");
+  grid.className = "skills-grid";
+
+  const pagerHost = document.createElement("div");
+
+  const skillCard = (s) => {
     const card = document.createElement("div");
     card.className = "skill-card";
 
@@ -941,19 +2073,47 @@ async function renderSkills() {
 
     card.innerHTML = `
       <div class="skill-head">
-        <span class="skill-icon">âœ¦</span>
-        <div>
+        ${
+          s.logo
+            ? `<span class="skill-logo"><img src="${escapeHtml(s.logo)}" alt="${escapeHtml(
+                s.name
+              )} logo" loading="lazy" /></span>`
+            : `<span class="skill-icon">âœ¦</span>`
+        }
+        <div class="skill-title">
           <div class="skill-name">${escapeHtml(s.name)}</div>
           <div class="skill-folder">.sdrive/skills/${escapeHtml(s.folder)}</div>
         </div>
+        ${s.version ? `<span class="skill-version">v${escapeHtml(s.version)}</span>` : ""}
       </div>
       <div class="skill-desc">${escapeHtml(s.description || "No description.")}</div>
       ${tags ? `<div class="chip-list">${tags}</div>` : ""}
-      <div class="skill-meta">${escapeHtml(meta)}</div>
-      ${s.source ? `<div class="skill-source">${escapeHtml(s.source)}</div>` : ""}
+      <div class="skill-foot">
+        <div class="skill-meta">${escapeHtml(meta)}</div>
+        ${s.source ? `<div class="skill-source">${escapeHtml(s.source)}</div>` : ""}
+      </div>
     `;
-    container.appendChild(card);
-  });
+    return card;
+  };
+
+  const repaint = () => {
+    const slice = paginate(skills, "skills", SKILLS_PER_PAGE);
+    grid.innerHTML = "";
+    slice.items.forEach((s) => grid.appendChild(skillCard(s)));
+
+    pagerHost.innerHTML = "";
+    const pager = renderPager(skills.length, "skills", SKILLS_PER_PAGE, repaint);
+    if (pager) pagerHost.appendChild(pager);
+  };
+
+  host.appendChild(grid);
+  host.appendChild(pagerHost);
+
+  container.className = "";
+  container.innerHTML = "";
+  container.appendChild(host);
+
+  repaint();
 }
 
 /* ============================================================
@@ -965,7 +2125,7 @@ let commandQuery = "";
 
 function commandMatches(item) {
   if (!commandQuery) return true;
-  const haystack = `${item.command} ${item.description} ${item.group || ""}`.toLowerCase();
+  const haystack = `${item.command} ${item.description} ${item.group || ""} ${item.what || ""} ${item.why || ""} ${item.when || ""}`.toLowerCase();
   return haystack.includes(commandQuery);
 }
 
@@ -1016,7 +2176,7 @@ function commandTableEl(items) {
   head.innerHTML = `
     <tr>
       <th class="col-command">Command</th>
-      <th>Description</th>
+      <th>What it does</th>
       <th class="col-meta">Details</th>
     </tr>
   `;
@@ -1030,18 +2190,40 @@ function commandTableEl(items) {
   return wrap;
 }
 
+// Returns a DocumentFragment holding the main row plus (when available) a
+// hidden detail row that the "Details" button toggles.
 function commandRowEl(item) {
+  const frag = document.createDocumentFragment();
   const tr = document.createElement("tr");
+  tr.className = "command-row";
 
   const meta = [];
   if (item.acceptsFeature) meta.push(`<span class="chip blue">feature</span>`);
+  if (item.acceptsAll) meta.push(`<span class="chip green">--all</span>`);
   if (item.agent) meta.push(`<span class="chip slate">${escapeHtml(item.agent)}</span>`);
   (item.gates || []).forEach((g) => meta.push(`<span class="chip amber">gate: ${escapeHtml(g)}</span>`));
+  if (item.optional) meta.push(`<span class="chip optional-chip" title="${escapeHtml(item.optionalNote || "")}">optional</span>`);
+
+  const hasDetail = Boolean(
+    item.what ||
+      item.why ||
+      item.when ||
+      item.example ||
+      (item.does || []).length ||
+      (item.produces || []).length
+  );
+  const summary = item.what || item.description;
 
   tr.innerHTML = `
     <td class="col-command"><code class="command-code" title="Click to copy">${escapeHtml(item.command)}</code></td>
-    <td><div class="command-desc">${escapeHtml(item.description)}</div></td>
-    <td class="col-meta">${meta.length ? `<div class="command-meta">${meta.join("")}</div>` : ""}</td>
+    <td>
+      <div class="command-desc">${escapeHtml(summary)}</div>
+      ${item.what && item.description ? `<div class="command-sub">${escapeHtml(item.description)}</div>` : ""}
+    </td>
+    <td class="col-meta">
+      ${meta.length ? `<div class="command-meta">${meta.join("")}</div>` : ""}
+      ${hasDetail ? `<button class="command-toggle" type="button" aria-expanded="false">Details</button>` : ""}
+    </td>
   `;
 
   const code = tr.querySelector(".command-code");
@@ -1056,12 +2238,252 @@ function commandRowEl(item) {
     }
   });
 
-  return tr;
+  if (hasDetail) {
+    const toggle = tr.querySelector(".command-toggle");
+    toggle.addEventListener("click", () => openCommandDrawer(item));
+  }
+
+  frag.appendChild(tr);
+  return frag;
+}
+
+/* ============================================================
+   COMMAND DETAIL DRAWER
+   Slides in from the right with the full picture of a command:
+   what it does, why it matters, when to run it, the concrete
+   steps it performs, and the files it reads and writes.
+   ============================================================ */
+let commandDrawerReturnFocus = null;
+
+function openCommandDrawer(item) {
+  const drawer = document.getElementById("command-drawer");
+  const backdrop = document.getElementById("command-drawer-backdrop");
+  const title = document.getElementById("command-drawer-title");
+  const body = document.getElementById("command-drawer-body");
+  if (!drawer || !body) return;
+
+  commandDrawerReturnFocus = document.activeElement;
+
+  if (title) title.textContent = item.command;
+  body.innerHTML = commandDrawerBody(item);
+
+  drawer.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  if (backdrop) backdrop.classList.add("open");
+  document.body.classList.add("drawer-open");
+
+  const close = document.getElementById("command-drawer-close");
+  if (close) close.focus();
+}
+
+function closeCommandDrawer() {
+  const drawer = document.getElementById("command-drawer");
+  const backdrop = document.getElementById("command-drawer-backdrop");
+  if (!drawer || !drawer.classList.contains("open")) return;
+
+  drawer.classList.remove("open");
+  drawer.setAttribute("aria-hidden", "true");
+  if (backdrop) backdrop.classList.remove("open");
+  document.body.classList.remove("drawer-open");
+
+  if (commandDrawerReturnFocus && commandDrawerReturnFocus.focus) {
+    commandDrawerReturnFocus.focus();
+  }
+  commandDrawerReturnFocus = null;
+}
+
+function commandDrawerBody(item) {
+  const sections = [];
+
+  const prose = [];
+  if (item.what) prose.push(drawerProse("What it does", item.what));
+  if (item.why) prose.push(drawerProse("Why it matters", item.why));
+  if (item.when) prose.push(drawerProse("When to use it", item.when));
+  if (prose.length) sections.push(`<div class="drawer-prose">${prose.join("")}</div>`);
+
+  if ((item.does || []).length) {
+    sections.push(`
+      <section class="drawer-section">
+        <h3 class="drawer-section-title">What it does, step by step</h3>
+        <ol class="drawer-steps">
+          ${item.does.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}
+        </ol>
+      </section>
+    `);
+  }
+
+  if ((item.produces || []).length) {
+    sections.push(`
+      <section class="drawer-section">
+        <h3 class="drawer-section-title">Files &amp; artifacts it generates</h3>
+        <ul class="drawer-paths">
+          ${item.produces
+            .map((p) => `<li><code class="drawer-path">${escapeHtml(p)}</code></li>`)
+            .join("")}
+        </ul>
+      </section>
+    `);
+  }
+
+  if ((item.reads || []).length) {
+    sections.push(`
+      <section class="drawer-section">
+        <h3 class="drawer-section-title">What it reads</h3>
+        <ul class="drawer-paths drawer-paths-read">
+          ${item.reads
+            .map((p) => `<li><code class="drawer-path">${escapeHtml(p)}</code></li>`)
+            .join("")}
+        </ul>
+      </section>
+    `);
+  }
+
+  const facts = [];
+  if (item.agent) facts.push(drawerFact("Agent", item.agent));
+  if (item.acceptsFeature) facts.push(drawerFact("Scope", "Single feature"));
+  if (item.acceptsAll) facts.push(drawerFact("Batch", "Supports --all"));
+  if ((item.gates || []).length) facts.push(drawerFact("Gates", item.gates.join(", ")));
+  if (item.handsOff) facts.push(drawerFact("Hands off to", item.handsOff));
+  if (facts.length) {
+    sections.push(`
+      <section class="drawer-section">
+        <h3 class="drawer-section-title">At a glance</h3>
+        <dl class="drawer-facts">${facts.join("")}</dl>
+      </section>
+    `);
+  }
+
+  if (item.optional && item.optionalNote) {
+    sections.push(`
+      <aside class="drawer-note">
+        <span class="drawer-note-label">Optional</span>
+        <p>${escapeHtml(item.optionalNote)}</p>
+      </aside>
+    `);
+  }
+
+  return sections.join("");
+}
+
+function drawerProse(label, value) {
+  return `<div class="drawer-prose-item">
+    <span class="drawer-prose-label">${escapeHtml(label)}</span>
+    <p>${escapeHtml(value)}</p>
+  </div>`;
+}
+
+function drawerFact(label, value) {
+  return `<div class="drawer-fact">
+    <dt>${escapeHtml(label)}</dt>
+    <dd>${escapeHtml(value)}</dd>
+  </div>`;
+}
+
+function setupCommandDrawer() {
+  const close = document.getElementById("command-drawer-close");
+  const backdrop = document.getElementById("command-drawer-backdrop");
+  if (close) close.addEventListener("click", closeCommandDrawer);
+  if (backdrop) backdrop.addEventListener("click", closeCommandDrawer);
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeCommandDrawer();
+  });
+}
+
+function renderWorkflowCards() {
+  const container = document.getElementById("workflow-cards");
+  if (!container) return;
+
+  const workflows = (commandData && commandData.workflows) || [];
+  if (!workflows.length) {
+    container.innerHTML = "";
+    return;
+  }
+
+  container.innerHTML = workflows
+    .map(
+      (w) => `
+    <article class="workflow-card" data-workflow="${escapeHtml(w.id)}">
+      <div class="workflow-card-head">
+        <span class="workflow-icon">${escapeHtml(w.icon || "◆")}</span>
+        <div>
+          <h3 class="workflow-name">${escapeHtml(w.name)}</h3>
+          <span class="workflow-tagline">${escapeHtml(w.tagline || "")}</span>
+        </div>
+      </div>
+      <p class="workflow-summary">${escapeHtml(w.summary || "")}</p>
+      <ol class="workflow-steps">
+        ${(w.steps || [])
+          .map((s) => `<li><code>${escapeHtml(s)}</code></li>`)
+          .join("")}
+        ${(w.iteration || [])
+          .map(
+            (s) =>
+              `<li class="workflow-iteration-step"><code>${escapeHtml(s)}</code></li>`
+          )
+          .join("")}
+      </ol>
+      ${
+        w.migrationNote
+          ? `<aside class="workflow-subcard">
+              <div class="workflow-subcard-head">
+                <span class="workflow-subcard-icon">⇄</span>
+                <h4 class="workflow-subcard-title">${escapeHtml(w.migrationNote.title)}</h4>
+              </div>
+              <p class="workflow-subcard-body">${escapeHtml(w.migrationNote.body)}</p>
+            </aside>`
+          : ""
+      }
+    </article>
+  `
+    )
+    .join("");
+
+  // Optional Commands card — a separate card below the lifecycle cards that
+  // groups the on-demand commands (performance, docs, secure, test, archive).
+  // It spans the full width of the grid row.
+  const optional = commandData && commandData.optionalCommands;
+  if (optional && (optional.commands || []).length) {
+    const card = document.createElement("article");
+    card.className = "workflow-card optional-commands-card";
+    card.innerHTML = `
+      <div class="optional-head">
+        <span class="optional-icon">${escapeHtml(optional.icon || "✦")}</span>
+        <div class="optional-head-text">
+          <div class="optional-eyebrow">On demand</div>
+          <h3 class="optional-title">${escapeHtml(optional.title || "Optional Commands")}</h3>
+          <p class="optional-summary">${escapeHtml(optional.summary || "")}</p>
+        </div>
+        <span class="optional-tagline">${escapeHtml(optional.tagline || "")}</span>
+      </div>
+      <ul class="optional-command-list">
+        ${(optional.commands || [])
+          .map(
+            (c) => `
+          <li class="optional-command">
+            <div class="optional-command-top">
+              <code class="optional-command-code">${escapeHtml(c.command)}</code>
+            </div>
+            <div class="optional-command-body">
+              <div class="optional-command-what">${escapeHtml(c.what || "")}</div>
+              <div class="optional-command-when">
+                <span class="optional-when-label">When</span>
+                <span class="optional-when-text">${escapeHtml(c.when || "")}</span>
+              </div>
+            </div>
+          </li>
+        `
+          )
+          .join("")}
+      </ul>
+    `;
+    container.appendChild(card);
+  }
 }
 
 async function renderCommands() {
   const data = await fetchJson("/api/commands");
-  commandData = data || { slash: [], cli: [] };
+  commandData = data || { slash: [], cli: [], workflows: [] };
 
   const search = document.getElementById("command-search");
   if (search) {
@@ -1081,6 +2503,8 @@ async function renderCommands() {
   });
 
   renderCommandList();
+  renderWorkflowCards();
+  setupCommandDrawer();
 }
 
 /* ============================================================
@@ -1089,14 +2513,38 @@ async function renderCommands() {
    /team, /activity, /commands. The server serves the same shell
    for every route; here we show the matching section and keep the
    sidebar highlight in sync.
+
+   /features/<name> is a dynamic route that renders the feature
+   detail page (task breakdown + filters) for a single feature.
    ============================================================ */
-const ROUTES = ["overview", "product-plan", "features", "skills", "team", "activity", "commands"];
+const ROUTES = [
+  "overview",
+  "product-plan",
+  "features",
+  "feature-detail",
+  "skills",
+  "team",
+  "activity",
+  "commands"
+];
 const DEFAULT_ROUTE = "overview";
 
-function currentRoute() {
+// Returns { route, feature } for the current URL. A path like
+// /features/about-page resolves to { route: "feature-detail", feature: "about-page" }.
+function parseLocation() {
   const path = window.location.pathname.replace(/\/+$/, "");
-  const name = path.split("/").pop();
-  return ROUTES.includes(name) ? name : DEFAULT_ROUTE;
+  const parts = path.split("/").filter(Boolean);
+
+  if (parts[0] === "features" && parts.length > 1) {
+    return { route: "feature-detail", feature: decodeURIComponent(parts[1]) };
+  }
+
+  const name = parts[parts.length - 1] || "";
+  return { route: ROUTES.includes(name) ? name : DEFAULT_ROUTE, feature: null };
+}
+
+function currentRoute() {
+  return parseLocation().route;
 }
 
 function showRoute(route) {
@@ -1106,11 +2554,14 @@ function showRoute(route) {
     section.classList.toggle("active", section.id === target);
   });
 
+  // The sidebar highlights "Features" while viewing a feature detail page.
+  const navTarget = target === "feature-detail" ? "features" : target;
   document.querySelectorAll(".nav-item").forEach((item) => {
-    item.classList.toggle("active", item.dataset.nav === target);
+    item.classList.toggle("active", item.dataset.nav === navTarget);
   });
 
-  document.title = `SpecDrive · ${target.charAt(0).toUpperCase()}${target.slice(1)}`;
+  const label = target === "feature-detail" ? "Feature" : target;
+  document.title = `SpecDrive · ${label.charAt(0).toUpperCase()}${label.slice(1)}`;
   window.scrollTo({ top: 0, behavior: "auto" });
 }
 
@@ -1131,7 +2582,11 @@ function setupNav() {
   });
 
   // Handle browser back/forward.
-  window.addEventListener("popstate", () => showRoute(currentRoute()));
+  window.addEventListener("popstate", () => {
+    const { route, feature } = parseLocation();
+    showRoute(route);
+    if (route === "feature-detail" && feature) openFeatureDetail(feature);
+  });
 
   showRoute(currentRoute());
 }
@@ -1177,12 +2632,45 @@ function setupSidebarDrawer() {
 /* ============================================================
    MAIN
    ============================================================ */
+
+/* The sticky panels inside a page (task filters, Spec Files header and search
+   bar) park themselves under the topbar using `top: var(--topbar-h)`. That
+   variable is a static guess in CSS, but the topbar's real height changes with
+   its content — the project name and git chip wrap onto extra lines at narrow
+   widths, and a long branch name can push it taller still. When the guess is
+   short, the sticky panels park too high and page content scrolls through the
+   gap between them and the topbar.
+
+   Measuring the topbar and writing the value back to the CSS variable keeps
+   every sticky offset exact at any width. A ResizeObserver re-measures whenever
+   the topbar's box changes (wrap, font load, project name swap). */
+function syncTopbarHeight() {
+  const topbar = document.querySelector(".topbar");
+  if (!topbar) return;
+
+  const apply = () => {
+    const height = Math.round(topbar.getBoundingClientRect().height);
+    if (height > 0) {
+      document.documentElement.style.setProperty("--topbar-h", `${height}px`);
+    }
+  };
+
+  apply();
+
+  if (typeof ResizeObserver === "function") {
+    new ResizeObserver(apply).observe(topbar);
+  } else {
+    window.addEventListener("resize", apply);
+  }
+}
+
 async function main() {
-  const [onboarding, product, git, project] = await Promise.all([
+  const [onboarding, product, git, project, productType] = await Promise.all([
     fetchJson("/api/onboarding"),
     fetchJson("/api/product"),
     fetchJson("/api/git-info"),
-    fetchJson("/api/project-info")
+    fetchJson("/api/project-info"),
+    fetchJson("/api/product-type")
   ]);
 
   renderProjectInfo(project);
@@ -1191,7 +2679,7 @@ async function main() {
   const overviewContainer = document.getElementById("overview-panel");
   if (overviewContainer) {
     overviewContainer.innerHTML = "";
-    overviewContainer.appendChild(renderOverview(onboarding, git, product));
+    overviewContainer.appendChild(renderOverview(onboarding, git, product, productType));
   }
 
   const productContainer = document.getElementById("product-panel");
@@ -1219,12 +2707,20 @@ async function main() {
 
   setupNav();
   setupSidebarDrawer();
+  setupFeatureDetail();
+  syncTopbarHeight();
 
   await renderFeatures();
   await renderSkills();
   await renderTeam();
   await renderAudit();
   await renderCommands();
+
+  // Deep link: /features/<name> loads the detail page directly.
+  const { route, feature } = parseLocation();
+  if (route === "feature-detail" && feature) {
+    await openFeatureDetail(feature);
+  }
 }
 
 main();

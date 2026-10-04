@@ -1987,6 +1987,58 @@ body {
   color: var(--text-3);
   font-family: var(--mono);
   margin-top: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.timeline-actor {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--sans, inherit);
+  color: var(--accent-2);
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+}
+
+.timeline-actor::before {
+  content: "@";
+  opacity: 0.6;
+}
+
+.timeline-actor.unknown {
+  color: var(--text-3);
+  background: transparent;
+  font-weight: 500;
+  font-style: italic;
+}
+
+.timeline-actor.unknown::before {
+  content: "";
+}
+
+.timeline-time {
+  color: var(--text-3);
+}
+
+.timeline-scope {
+  color: var(--text-2);
+}
+
+.timeline-source {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  border: 1px solid var(--border);
 }
 
 .timeline-details {

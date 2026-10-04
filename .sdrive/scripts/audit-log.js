@@ -1,8 +1,24 @@
 const fs = require("fs");
 const path = require("path");
+const { execSync } = require("child_process");
 
 const projectRoot = process.cwd();
 const auditLogPath = path.join(projectRoot, ".sdrive", "audit-log.json");
+
+// Resolves the acting user so every audit event records WHO did it, not just
+// what and when. Prefers the Git identity (the same source `check-permission.js`
+// uses for role checks) and falls back to the OS username so events are never
+// left anonymous.
+function getActor() {
+  try {
+    const name = execSync("git config user.name", { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+    if (name) return name;
+  } catch (error) {
+    // Not a git repo, or git is unavailable — fall through to the OS user.
+  }
+
+  return process.env.USERNAME || process.env.USER || "unknown";
+}
 
 function loadAuditLog() {
   if (!fs.existsSync(auditLogPath)) {
@@ -26,6 +42,7 @@ function logEvent(event, details = {}) {
 
   log.events.push({
     timestamp: new Date().toISOString(),
+    actor: getActor(),
     ...details,
     event
   });
@@ -43,5 +60,6 @@ module.exports = {
   logEvent,
   loadAuditLog,
   saveAuditLog,
-  getRecentEvents
+  getRecentEvents,
+  getActor
 };

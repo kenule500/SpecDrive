@@ -5,7 +5,7 @@ argument-hint: Specify the feature to test (e.g., "Test user-login"), or use "--
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7', 'vision-bridge']
+tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'context7']
 agents: []
 ---
 
@@ -60,11 +60,6 @@ You operate within the current version folder only.
 - **No Shell Redirection Rule:** NEVER use `>`, `>>`, `Tee-Object`, or `Out-File` to capture test output into files. Read the command's stdout/stderr directly from the tool result. Do NOT create `test.log`, `test2.log`, `*-help.log`, or any incrementing log files. To read a command's usage text, run it and read the tool result — do NOT redirect `--help` output to a file.
 - You are tool-agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool.
 </rules>
-
-<vision>
-- If your model cannot see images natively, use the `vision-bridge` MCP tools to read screenshots, mockups, or diagrams: `describe_image`, `extract_text`, `compare_images`, `vision_status`.
-- Call `vision_status` first to confirm the bridge is configured. If it is unavailable, say so once and continue with text-only inputs.
-</vision>
 
 <capabilities>
 - **Test Writing**: Write unit, integration, or e2e tests for each acceptance criterion.
