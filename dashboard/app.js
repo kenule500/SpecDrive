@@ -875,26 +875,36 @@ function featureMembersEl(members) {
 // token; any render that finds the token has moved on aborts before mutating the DOM.
 let featureRenderToken = 0;
 
+// Feature cards are tall (each carries its version blocks and metrics), so a
+// smaller page keeps the grid scannable and the KPI explainer within reach.
+const FEATURES_PER_PAGE = 4;
+
 async function renderFeatures() {
   const token = ++featureRenderToken;
 
   const state = await fetchJson("/api/workflow-state");
   const team = (await fetchJson("/api/team")) || { members: [] };
   const container = document.getElementById("feature-list");
+  const pagerHost = document.getElementById("feature-pager");
 
   if (token !== featureRenderToken) return;
 
   if (!state || !state.features || state.features.length === 0) {
     container.className = "panel-loading";
     container.textContent = "No features yet.";
+    if (pagerHost) pagerHost.innerHTML = "";
     return;
   }
 
   const filters = getFilterValues();
   container.className = "feature-grid";
   container.innerHTML = "";
+  if (pagerHost) pagerHost.innerHTML = "";
 
-  let rendered = 0;
+  // Build every matching card first, then paginate. Filtering depends on
+  // per-version data fetched inside the loop, so we cannot slice the feature
+  // list up front — we must know how many cards actually match.
+  const cards = [];
 
   for (const f of state.features) {
     const card = document.createElement("div");
@@ -968,17 +978,32 @@ async function renderFeatures() {
       foot.appendChild(moreBtn);
       card.appendChild(foot);
 
-      container.appendChild(card);
-      rendered++;
+      cards.push(card);
     }
   }
 
   if (token !== featureRenderToken) return;
 
-  if (rendered === 0) {
+  if (cards.length === 0) {
     container.className = "panel-loading";
     container.textContent = "No features match the current filters.";
+    return;
   }
+
+  // Paint the current page of already-built cards. Re-running this on a page
+  // change only moves nodes around — no refetching, no rebuilding.
+  const repaint = () => {
+    const slice = paginate(cards, "features", FEATURES_PER_PAGE);
+    container.innerHTML = "";
+    slice.items.forEach((card) => container.appendChild(card));
+
+    if (!pagerHost) return;
+    pagerHost.innerHTML = "";
+    const pager = renderPager(cards.length, "features", FEATURES_PER_PAGE, repaint);
+    if (pager) pagerHost.appendChild(pager);
+  };
+
+  repaint();
 }
 
 /* ============================================================
