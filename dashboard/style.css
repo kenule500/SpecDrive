@@ -3593,6 +3593,113 @@ body.drawer-open {
   background: rgba(79, 70, 229, 0.16);
 }
 
+/* ---- Spec Files: in-document search bar ---- */
+.spec-search {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(148, 163, 184, 0.04);
+}
+
+.spec-search-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.spec-search-field:focus-within {
+  border-color: rgba(79, 70, 229, 0.45);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.spec-search-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: var(--text-3);
+}
+
+.spec-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--text);
+  padding: 3px 0;
+}
+
+.spec-search-input::placeholder {
+  color: var(--text-3);
+}
+
+.spec-search-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.spec-search-count.empty {
+  color: #dc2626;
+}
+
+.spec-search-nav,
+.spec-search-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.spec-search-nav svg,
+.spec-search-close svg {
+  width: 14px;
+  height: 14px;
+}
+
+.spec-search-nav:hover:not(:disabled),
+.spec-search-close:hover {
+  background: rgba(79, 70, 229, 0.12);
+  color: var(--accent);
+}
+
+.spec-search-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Highlighted matches inside the rendered document. */
+.spec-markdown mark.spec-hit {
+  background: rgba(250, 204, 21, 0.45);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+.spec-markdown mark.spec-hit.active {
+  background: #f59e0b;
+  color: #1f2937;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+}
+
 .spec-markdown {
   padding: 20px 24px 28px;
   font-size: 13.5px;

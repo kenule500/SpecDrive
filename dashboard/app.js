@@ -1070,6 +1070,33 @@ async function renderDetailSpecs() {
           <code class="spec-files-path" id="spec-files-path">${escapeHtml(initial.path)}</code>
           <button class="spec-copy-btn" id="spec-copy-btn" type="button">Copy</button>
         </div>
+        <div class="spec-search" id="spec-search">
+          <div class="spec-search-field">
+            <svg class="spec-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              id="spec-search-input"
+              class="spec-search-input"
+              placeholder="Search in document"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Search in document"
+            />
+            <span class="spec-search-count" id="spec-search-count"></span>
+            <button class="spec-search-nav" id="spec-search-prev" type="button" title="Previous match" aria-label="Previous match" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"></polyline></svg>
+            </button>
+            <button class="spec-search-nav" id="spec-search-next" type="button" title="Next match" aria-label="Next match" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <button class="spec-search-close" id="spec-search-close" type="button" title="Clear search" aria-label="Clear search" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+        </div>
         <article class="spec-markdown" id="spec-markdown">
           ${renderMarkdown(initial.content)}
         </article>
@@ -1092,6 +1119,8 @@ async function renderDetailSpecs() {
       });
     });
   }
+
+  setupSpecSearch();
 }
 
 function currentSpecDoc() {
@@ -1113,6 +1142,165 @@ function selectSpecDoc(id) {
 
   const md = document.getElementById("spec-markdown");
   if (md) md.innerHTML = renderMarkdown(doc.content);
+
+  // Re-apply the active search to the newly rendered document.
+  runSpecSearch();
+}
+
+/* ============================================================
+   SPEC FILES — IN-DOCUMENT SEARCH
+   A VS Code-style find bar: type a query, every occurrence is
+   highlighted, and the up/down arrows step through the matches.
+   ============================================================ */
+let specSearchMatches = [];
+let specSearchIndex = -1;
+
+function setupSpecSearch() {
+  const input = document.getElementById("spec-search-input");
+  const prev = document.getElementById("spec-search-prev");
+  const next = document.getElementById("spec-search-next");
+  const close = document.getElementById("spec-search-close");
+  if (!input) return;
+
+  input.addEventListener("input", () => {
+    runSpecSearch();
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      stepSpecSearch(e.shiftKey ? -1 : 1);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      clearSpecSearch();
+    }
+  });
+
+  if (prev) prev.addEventListener("click", () => stepSpecSearch(-1));
+  if (next) next.addEventListener("click", () => stepSpecSearch(1));
+  if (close) close.addEventListener("click", clearSpecSearch);
+}
+
+function clearSpecSearch() {
+  const input = document.getElementById("spec-search-input");
+  if (input) input.value = "";
+  runSpecSearch();
+  if (input) input.focus();
+}
+
+/* Walks the rendered markdown, wraps every case-insensitive occurrence of the
+   query in a <mark>, and records the marks so the arrows can step through them.
+   Text nodes are visited in document order, so match order matches reading
+   order. Existing highlights are unwrapped first so re-running is idempotent. */
+function runSpecSearch() {
+  const input = document.getElementById("spec-search-input");
+  const countEl = document.getElementById("spec-search-count");
+  const prev = document.getElementById("spec-search-prev");
+  const next = document.getElementById("spec-search-next");
+  const close = document.getElementById("spec-search-close");
+  const md = document.getElementById("spec-markdown");
+  if (!input || !md) return;
+
+  // Remove any previous highlights and restore the original text.
+  md.querySelectorAll("mark.spec-hit").forEach((mark) => {
+    const parent = mark.parentNode;
+    if (!parent) return;
+    parent.replaceChild(document.createTextNode(mark.textContent), mark);
+    parent.normalize();
+  });
+
+  specSearchMatches = [];
+  specSearchIndex = -1;
+
+  const query = input.value.trim();
+  if (close) close.hidden = !query;
+
+  if (!query) {
+    if (countEl) countEl.textContent = "";
+    if (prev) prev.disabled = true;
+    if (next) next.disabled = true;
+    return;
+  }
+
+  const needle = query.toLowerCase();
+
+  // Collect text nodes first — mutating the DOM while walking it is unsafe.
+  const walker = document.createTreeWalker(md, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      const tag = node.parentNode && node.parentNode.nodeName;
+      if (tag === "SCRIPT" || tag === "STYLE") return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  const textNodes = [];
+  let node;
+  while ((node = walker.nextNode())) textNodes.push(node);
+
+  textNodes.forEach((textNode) => {
+    const text = textNode.nodeValue;
+    const lower = text.toLowerCase();
+    let from = 0;
+    let idx = lower.indexOf(needle, from);
+    if (idx === -1) return;
+
+    const frag = document.createDocumentFragment();
+    let cursor = 0;
+    while (idx !== -1) {
+      if (idx > cursor) {
+        frag.appendChild(document.createTextNode(text.slice(cursor, idx)));
+      }
+      const mark = document.createElement("mark");
+      mark.className = "spec-hit";
+      mark.textContent = text.slice(idx, idx + query.length);
+      frag.appendChild(mark);
+      specSearchMatches.push(mark);
+      cursor = idx + query.length;
+      from = cursor;
+      idx = lower.indexOf(needle, from);
+    }
+    if (cursor < text.length) {
+      frag.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+    textNode.parentNode.replaceChild(frag, textNode);
+  });
+
+  const total = specSearchMatches.length;
+  if (countEl) {
+    countEl.textContent = total ? `1 of ${total}` : "No results";
+    countEl.classList.toggle("empty", total === 0);
+  }
+  if (prev) prev.disabled = total === 0;
+  if (next) next.disabled = total === 0;
+
+  if (total) {
+    specSearchIndex = 0;
+    focusSpecMatch();
+  }
+}
+
+/* Moves the active highlight by `delta` (wrapping around) and scrolls it into
+   view. The active mark gets a distinct class so it stands out from the rest. */
+function stepSpecSearch(delta) {
+  if (!specSearchMatches.length) return;
+  specSearchIndex =
+    (specSearchIndex + delta + specSearchMatches.length) % specSearchMatches.length;
+  focusSpecMatch();
+}
+
+function focusSpecMatch() {
+  const countEl = document.getElementById("spec-search-count");
+  specSearchMatches.forEach((mark, i) => {
+    mark.classList.toggle("active", i === specSearchIndex);
+  });
+  const active = specSearchMatches[specSearchIndex];
+  if (active) {
+    active.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+  if (countEl && specSearchMatches.length) {
+    countEl.textContent = `${specSearchIndex + 1} of ${specSearchMatches.length}`;
+  }
 }
 
 /* Minimal, dependency-free Markdown renderer. It covers the subset the spec
