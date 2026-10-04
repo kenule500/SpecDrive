@@ -21,6 +21,120 @@ function gateClass(status) {
   return "gate pending";
 }
 
+/* ============================================================
+   PAGINATION
+   A tiny shared pager. Each paginated view keeps its own page
+   number in `pagerState` and re-renders only its own list, so
+   switching pages never refetches from the server.
+
+   Usage:
+     const slice = paginate(items, "skills", 9);
+     ...render slice.items...
+     container.appendChild(renderPager(items.length, "skills", 9, renderSkills));
+   ============================================================ */
+const pagerState = {};
+
+// Clamp the stored page for `key` and return the visible slice.
+function paginate(items, key, perPage) {
+  const total = items.length;
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  let page = pagerState[key] || 1;
+  if (page > pages) page = pages;
+  if (page < 1) page = 1;
+  pagerState[key] = page;
+
+  const start = (page - 1) * perPage;
+  return {
+    items: items.slice(start, start + perPage),
+    page,
+    pages,
+    total,
+    start,
+    end: Math.min(start + perPage, total)
+  };
+}
+
+// Build the page-number buttons, collapsing long runs with an ellipsis.
+// Always shows first, last, current, and one neighbour on each side.
+function pageNumbers(page, pages) {
+  if (pages <= 7) {
+    return Array.from({ length: pages }, (_, i) => i + 1);
+  }
+  const out = [1];
+  const from = Math.max(2, page - 1);
+  const to = Math.min(pages - 1, page + 1);
+  if (from > 2) out.push("…");
+  for (let i = from; i <= to; i++) out.push(i);
+  if (to < pages - 1) out.push("…");
+  out.push(pages);
+  return out;
+}
+
+// Render the pager bar. Returns null when everything fits on one page so
+// callers can append unconditionally.
+function renderPager(total, key, perPage, onNavigate) {
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  if (pages <= 1) return null;
+
+  const page = Math.min(pagerState[key] || 1, pages);
+  const start = (page - 1) * perPage + 1;
+  const end = Math.min(page * perPage, total);
+
+  const wrap = document.createElement("div");
+  wrap.className = "pager";
+
+  const summary = document.createElement("div");
+  summary.className = "pager-summary";
+  summary.innerHTML = `Showing <strong>${start}–${end}</strong> of <strong>${total}</strong>`;
+  wrap.appendChild(summary);
+
+  const controls = document.createElement("div");
+  controls.className = "pager-controls";
+
+  const goTo = (next) => {
+    if (next < 1 || next > pages || next === page) return;
+    pagerState[key] = next;
+    onNavigate();
+  };
+
+  const makeBtn = (label, target, opts = {}) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pager-btn" + (opts.active ? " is-active" : "");
+    btn.textContent = label;
+    if (opts.title) btn.title = opts.title;
+    if (opts.ariaLabel) btn.setAttribute("aria-label", opts.ariaLabel);
+    if (opts.active) btn.setAttribute("aria-current", "page");
+    btn.disabled = !!opts.disabled;
+    if (!opts.disabled && !opts.active) {
+      btn.addEventListener("click", () => goTo(target));
+    }
+    return btn;
+  };
+
+  controls.appendChild(
+    makeBtn("‹", page - 1, { disabled: page === 1, ariaLabel: "Previous page", title: "Previous page" })
+  );
+
+  pageNumbers(page, pages).forEach((n) => {
+    if (n === "…") {
+      const gap = document.createElement("span");
+      gap.className = "pager-ellipsis";
+      gap.textContent = "…";
+      controls.appendChild(gap);
+    } else {
+      controls.appendChild(makeBtn(String(n), n, { active: n === page, ariaLabel: `Page ${n}` }));
+    }
+  });
+
+  controls.appendChild(
+    makeBtn("›", page + 1, { disabled: page === pages, ariaLabel: "Next page", title: "Next page" })
+  );
+
+  wrap.appendChild(controls);
+  return wrap;
+}
+
 // Human-readable gate metadata. Gates are approval checkpoints a feature must
 // clear before it can advance; without a label users mistake them for metrics.
 const GATE_DEFS = [
@@ -510,15 +624,15 @@ function renderProduct(product) {
   const pending = backlog.filter((item) => /pending|backlog/i.test(item.status)).length;
   const deferred = backlog.filter((item) => /deferred/i.test(item.status)).length;
 
-  const backlogRows = backlog.length
-    ? backlog
-        .map((item) => {
-          const tone = /deferred/i.test(item.status)
-            ? "slate"
-            : /pending|backlog/i.test(item.status)
-            ? "amber"
-            : "green";
-          return `
+  const BACKLOG_PER_PAGE = 10;
+
+  const backlogRow = (item) => {
+    const tone = /deferred/i.test(item.status)
+      ? "slate"
+      : /pending|backlog/i.test(item.status)
+      ? "amber"
+      : "green";
+    return `
         <tr>
           <td class="backlog-id">${escapeHtml(item.id)}</td>
           <td>${escapeHtml(item.feature)}</td>
@@ -526,8 +640,11 @@ function renderProduct(product) {
           <td>${item.priority ? escapeHtml(item.priority) : "—"}</td>
           <td><span class="chip ${tone}">${escapeHtml(item.status)}</span></td>
         </tr>`;
-        })
-        .join("")
+  };
+
+  const backlogSlice = paginate(backlog, "product-backlog", BACKLOG_PER_PAGE);
+  const backlogRows = backlog.length
+    ? backlogSlice.items.map(backlogRow).join("")
     : `<tr><td colspan="5" class="product-empty">No backlog items yet.</td></tr>`;
 
   div.innerHTML = `
@@ -566,15 +683,30 @@ function renderProduct(product) {
           <thead>
             <tr><th>ID</th><th>Feature</th><th>Milestone</th><th>Priority</th><th>Status</th></tr>
           </thead>
-          <tbody>${backlogRows}</tbody>
+          <tbody id="backlog-body">${backlogRows}</tbody>
         </table>
       </div>
+
+      <div id="backlog-pager"></div>
 
       <div class="product-note">
         Backlog items are product-level candidates. Promote one with <code>/sdrive:propose</code> to start detailed planning.
       </div>
     </div>
   `;
+
+  // Re-render only the table body + pager when the page changes, so the
+  // stat cards and artifact chips are never rebuilt.
+  const pagerHost = div.querySelector("#backlog-pager");
+  const bodyHost = div.querySelector("#backlog-body");
+  const repaint = () => {
+    const slice = paginate(backlog, "product-backlog", BACKLOG_PER_PAGE);
+    bodyHost.innerHTML = slice.items.map(backlogRow).join("");
+    pagerHost.innerHTML = "";
+    const pager = renderPager(backlog.length, "product-backlog", BACKLOG_PER_PAGE, repaint);
+    if (pager) pagerHost.appendChild(pager);
+  };
+  repaint();
 
   return div;
 }
@@ -1801,10 +1933,19 @@ async function renderAudit() {
     return;
   }
 
-  container.className = "timeline";
-  container.innerHTML = "";
+  const ACTIVITY_PER_PAGE = 20;
 
-  events.slice(0, 40).forEach((e) => {
+  // The timeline and the pager are siblings, so wrap them in a host element
+  // that survives re-renders. The host replaces the timeline as the child.
+  const host = document.createElement("div");
+  host.className = "activity-host";
+
+  const timeline = document.createElement("div");
+  timeline.className = "timeline";
+
+  const pagerHost = document.createElement("div");
+
+  const timelineItem = (e) => {
     const item = document.createElement("div");
     item.className = "timeline-item";
 
@@ -1825,8 +1966,27 @@ async function renderAudit() {
         ${detailParts ? `<div class="timeline-details">${escapeHtml(detailParts)}</div>` : ""}
       </div>
     `;
-    container.appendChild(item);
-  });
+    return item;
+  };
+
+  const repaint = () => {
+    const slice = paginate(events, "activity", ACTIVITY_PER_PAGE);
+    timeline.innerHTML = "";
+    slice.items.forEach((e) => timeline.appendChild(timelineItem(e)));
+
+    pagerHost.innerHTML = "";
+    const pager = renderPager(events.length, "activity", ACTIVITY_PER_PAGE, repaint);
+    if (pager) pagerHost.appendChild(pager);
+  };
+
+  host.appendChild(timeline);
+  host.appendChild(pagerHost);
+
+  container.className = "";
+  container.innerHTML = "";
+  container.appendChild(host);
+
+  repaint();
 }
 
 /* ============================================================
@@ -1845,10 +2005,19 @@ async function renderSkills() {
     return;
   }
 
-  container.className = "skills-grid";
-  container.innerHTML = "";
+  const SKILLS_PER_PAGE = 9;
 
-  skills.forEach((s) => {
+  // The grid and the pager are siblings, so wrap them in a host element that
+  // survives re-renders. The host replaces the grid as the section's child.
+  const host = document.createElement("div");
+  host.className = "skills-host";
+
+  const grid = document.createElement("div");
+  grid.className = "skills-grid";
+
+  const pagerHost = document.createElement("div");
+
+  const skillCard = (s) => {
     const card = document.createElement("div");
     card.className = "skill-card";
 
@@ -1887,8 +2056,27 @@ async function renderSkills() {
         ${s.source ? `<div class="skill-source">${escapeHtml(s.source)}</div>` : ""}
       </div>
     `;
-    container.appendChild(card);
-  });
+    return card;
+  };
+
+  const repaint = () => {
+    const slice = paginate(skills, "skills", SKILLS_PER_PAGE);
+    grid.innerHTML = "";
+    slice.items.forEach((s) => grid.appendChild(skillCard(s)));
+
+    pagerHost.innerHTML = "";
+    const pager = renderPager(skills.length, "skills", SKILLS_PER_PAGE, repaint);
+    if (pager) pagerHost.appendChild(pager);
+  };
+
+  host.appendChild(grid);
+  host.appendChild(pagerHost);
+
+  container.className = "";
+  container.innerHTML = "";
+  container.appendChild(host);
+
+  repaint();
 }
 
 /* ============================================================
