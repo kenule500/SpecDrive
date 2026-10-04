@@ -28,6 +28,9 @@
   --shadow: 0 4px 16px rgba(15, 23, 42, 0.07);
   --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12);
   --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  /* Height of the sticky topbar. Sticky panels inside the page offset by this
+     so they park directly beneath it instead of sliding underneath. */
+  --topbar-h: 86px;
 }
 
 * {
@@ -2713,6 +2716,11 @@ body.drawer-open {
 
 /* --- Tablet / small laptop --- */
 @media (max-width: 720px) {
+  :root {
+    /* The topbar actions wrap onto a second line below 720px. */
+    --topbar-h: 120px;
+  }
+
   .topbar {
     padding: 14px 16px;
     gap: 12px;
@@ -2785,6 +2793,10 @@ body.drawer-open {
 
 /* --- Phones --- */
 @media (max-width: 520px) {
+  :root {
+    --topbar-h: 114px;
+  }
+
   .sidebar {
     width: 82vw;
     max-width: 300px;
@@ -3555,17 +3567,22 @@ body.drawer-open {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-  overflow: hidden;
+  /* `clip` keeps the rounded-corner clipping without creating a scroll
+     container, which would break `position: sticky` on the children. */
+  overflow: clip;
 }
 
 .spec-files-view-head {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--surface);
 }
 
 .spec-files-path {
@@ -3595,9 +3612,13 @@ body.drawer-open {
 
 /* ---- Spec Files: in-document search bar ---- */
 .spec-search {
+  position: sticky;
+  /* Sits directly under the sticky path/copy header (topbar + 46px header). */
+  top: calc(var(--topbar-h) + 46px);
+  z-index: 2;
   padding: 8px 14px;
   border-bottom: 1px solid var(--border);
-  background: rgba(148, 163, 184, 0.04);
+  background: var(--surface);
 }
 
 .spec-search-field {
