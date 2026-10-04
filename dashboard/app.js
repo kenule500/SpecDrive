@@ -877,7 +877,7 @@ let featureRenderToken = 0;
 
 // Feature cards are tall (each carries its version blocks and metrics), so a
 // smaller page keeps the grid scannable and the KPI explainer within reach.
-const FEATURES_PER_PAGE = 4;
+const FEATURES_PER_PAGE = 12;
 
 async function renderFeatures() {
   const token = ++featureRenderToken;
