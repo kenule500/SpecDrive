@@ -2620,6 +2620,38 @@ function setupSidebarDrawer() {
 /* ============================================================
    MAIN
    ============================================================ */
+
+/* The sticky panels inside a page (task filters, Spec Files header and search
+   bar) park themselves under the topbar using `top: var(--topbar-h)`. That
+   variable is a static guess in CSS, but the topbar's real height changes with
+   its content — the project name and git chip wrap onto extra lines at narrow
+   widths, and a long branch name can push it taller still. When the guess is
+   short, the sticky panels park too high and page content scrolls through the
+   gap between them and the topbar.
+
+   Measuring the topbar and writing the value back to the CSS variable keeps
+   every sticky offset exact at any width. A ResizeObserver re-measures whenever
+   the topbar's box changes (wrap, font load, project name swap). */
+function syncTopbarHeight() {
+  const topbar = document.querySelector(".topbar");
+  if (!topbar) return;
+
+  const apply = () => {
+    const height = Math.round(topbar.getBoundingClientRect().height);
+    if (height > 0) {
+      document.documentElement.style.setProperty("--topbar-h", `${height}px`);
+    }
+  };
+
+  apply();
+
+  if (typeof ResizeObserver === "function") {
+    new ResizeObserver(apply).observe(topbar);
+  } else {
+    window.addEventListener("resize", apply);
+  }
+}
+
 async function main() {
   const [onboarding, product, git, project, productType] = await Promise.all([
     fetchJson("/api/onboarding"),
@@ -2664,6 +2696,7 @@ async function main() {
   setupNav();
   setupSidebarDrawer();
   setupFeatureDetail();
+  syncTopbarHeight();
 
   await renderFeatures();
   await renderSkills();

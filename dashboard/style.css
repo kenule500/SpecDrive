@@ -3035,6 +3035,20 @@ body.drawer-open {
   margin-bottom: 18px;
 }
 
+/* The task filters (search + status/version/phase selects) pin to the topbar
+   while the task list scrolls, mirroring the Spec Files search bar. Without
+   this, scrolling a long task list pushes the search box out of view and the
+   only way back is to scroll all the way up. */
+.detail-panel.active > .detail-filters {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 4;
+  /* The bar is opaque so task rows scroll underneath it rather than showing
+     through. `--surface` matches the panel background. */
+  background: var(--surface);
+  box-shadow: 0 6px 12px -8px rgba(15, 23, 42, 0.18);
+}
+
 .detail-body {
   display: flex;
   flex-direction: column;
