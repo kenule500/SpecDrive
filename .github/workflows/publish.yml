@@ -1,0 +1,73 @@
+# Publishes specdrive-cli to npm using Trusted Publishing (OIDC).
+#
+# No long-lived npm token is used or required. GitHub Actions proves this
+# workflow's identity to npm with a short-lived, workflow-specific OIDC token,
+# so there is no credential to leak, rotate, or wait to expire.
+#
+# Release flow:
+#   1. npm version patch|minor|major --no-git-tag-version
+#   2. git add -A && git commit -m "chore: release vX.Y.Z"
+#   3. git tag vX.Y.Z && git push origin main && git push origin vX.Y.Z
+#      -> this workflow publishes that tag automatically.
+#
+# One-time setup on npmjs.com (see docs/releasing.md):
+#   Package Settings -> Trusted publishing -> Add trusted publisher -> GitHub Actions
+#     Organization or user : kenule500
+#     Repository           : SpecDrive
+#     Workflow filename    : publish.yml      (filename only, no path)
+
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Required for OIDC. `contents: read` is enough to check out the tag.
+# Note: do NOT add a `workflow_dispatch` trigger - npm validates the calling
+# workflow's filename, which can silently break the trusted publisher match.
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    name: Publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js and the npm registry
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          # Never cache in a release build: a stale cache could change what we ship.
+          package-manager-cache: false
+
+      - name: Ensure npm supports Trusted Publishing (>= 11.5.1)
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      # No `npm ci` / `npm test` step on purpose: this package has no lockfile,
+      # no test script, and no build step. `npm publish` only packs the `files`
+      # list from package.json, so dependencies are never needed here.
+
+      - name: Verify the tag matches package.json
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "package.json : $PKG_VERSION"
+          echo "git tag      : $TAG_VERSION"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' does not match package.json version '$PKG_VERSION'. Refusing to publish."
+            exit 1
+          fi
+
+      - name: Review the exact package contents
+        run: npm pack --dry-run
+
+      - name: Publish (OIDC - no token)
+        run: npm publish --access public
