@@ -119,7 +119,7 @@ SpecDrive assigns the feature to `v1` automatically.
 
 The agent asks:
 
-- Which base branch to use
+- Which base branch to use — the feature always gets its OWN `feature/<feature>` branch (one branch per feature)
 - Whether to create a new branch
 
 The agent writes production code only.
@@ -169,7 +169,7 @@ Once review returns `Status: PASS`, archive the feature:
 /sdrive:archive
 ```
 
-Archive merges the approved feature to `main` and completes its lifecycle. The feature folder moves from `specs/ongoing/` to `specs/completed/` and the version's `phase` becomes `completed`.
+Archive merges the approved feature to the confirmed target branch — the default branch is detected and confirmed with you, never assumed — and completes its lifecycle. The feature folder moves from `specs/ongoing/` to `specs/completed/` and the version's `phase` becomes `completed`.
 
 ---
 

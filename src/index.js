@@ -1339,11 +1339,285 @@ program
     }
   });
 
+// ---------- REOPEN BRANCH HANDLING ----------
+// Reopening is a LIFECYCLE operation (completed/ -> ongoing/), never a branching
+// one: this helper never creates a branch on its own. But `archive` deletes the
+// feature branch, so a reopened feature usually has nowhere to live. So we ask
+// where the reopened work should happen AND which branch to base it on.
+function makeGitRunner() {
+  return (cmd) =>
+    execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+}
+
+// Resolve the repository's default branch. Never assume `main`.
+function resolveDefaultBranch(run) {
+  try {
+    const ref = run("git symbolic-ref refs/remotes/origin/HEAD --short");
+    if (ref) return ref.replace(/^origin\//, "");
+  } catch (error) {
+    // no remote HEAD symref — fall through
+  }
+
+  try {
+    const name = run("gh repo view --json defaultBranchRef --jq .defaultBranchRef.name");
+    if (name) return name;
+  } catch (error) {
+    // gh unavailable or not authenticated — fall through
+  }
+
+  try {
+    return run("git rev-parse --abbrev-ref HEAD");
+  } catch (error) {
+    return "";
+  }
+}
+
+function isValidBranchName(name) {
+  return typeof name === "string" && /^[A-Za-z0-9._/-]+$/.test(name);
+}
+
+function branchExists(run, name) {
+  try {
+    run(`git rev-parse --verify --quiet "${name}"`);
+    return true;
+  } catch (error) {
+    try {
+      run(`git rev-parse --verify --quiet "origin/${name}"`);
+      return true;
+    } catch (innerError) {
+      return false;
+    }
+  }
+}
+
+function resolveReopenBranch(feature, options) {
+  const run = makeGitRunner();
+
+  try {
+    run("git rev-parse --is-inside-work-tree");
+  } catch (error) {
+    console.log("⚠️  Not a Git repository. Skipping branch handling.");
+    return null;
+  }
+
+  let currentBranch = "";
+  try {
+    currentBranch = run("git rev-parse --abbrev-ref HEAD");
+  } catch (error) {
+    currentBranch = "";
+  }
+
+  const defaultBranch = resolveDefaultBranch(run);
+  const defaultName = `feature/${feature}`;
+  const stay = () => {
+    console.log(
+      `ℹ️  Staying on the current branch${currentBranch ? ` (${currentBranch})` : ""}.`
+    );
+    return null;
+  };
+
+  if (options.stay) return stay();
+
+  // Explicit --branch: no prompt. Base on --base when given, otherwise the
+  // detected default branch (the merged feature's code lives there).
+  if (typeof options.branch === "string" && options.branch.length > 0) {
+    const base =
+      (typeof options.base === "string" && options.base.length > 0 && options.base) ||
+      defaultBranch ||
+      currentBranch;
+
+    if (base && currentBranch && base !== currentBranch) {
+      console.log(
+        `ℹ️  Note: basing "${options.branch}" on "${base}" (current branch is "${currentBranch}").`
+      );
+    }
+
+    return { explicit: options.branch, base };
+  }
+
+  if (options.branch === true) {
+    return { explicit: defaultName, base: defaultBranch || currentBranch };
+  }
+
+  const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+
+  if (!interactive) {
+    console.log("ℹ️  Non-interactive session: staying on the current branch.");
+    console.log(`   Re-run with \`--branch ${defaultName}\` to create one.`);
+    return null;
+  }
+
+  return { defaultName, currentBranch, defaultBranch };
+}
+
+async function promptReopenBranch(feature, defaultName, currentBranch) {
+  const rl = require("readline/promises").createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  try {
+    const answer = await rl.question(
+      `\nWhich branch should the reopened work happen on?\n` +
+        `  1) Create or switch to "${defaultName}" (recommended)\n` +
+        `  2) Stay on the current branch${currentBranch ? ` (${currentBranch})` : ""}\n` +
+        `Choose [1/2]: `
+    );
+    return (answer || "").trim().toLowerCase();
+  } finally {
+    rl.close();
+  }
+}
+
+// Ask which branch the NEW feature branch should be based on. The merged feature's
+// code now lives on the target/default branch, so that is the recommended base.
+async function promptReopenBase(defaultBranch, currentBranch) {
+  const choices = [];
+  if (defaultBranch) choices.push(defaultBranch);
+  if (currentBranch && currentBranch !== defaultBranch) choices.push(currentBranch);
+
+  if (choices.length === 0) return "";
+
+  const lines = ["\nBase the new branch on which branch?"];
+  choices.forEach((name, index) => {
+    lines.push(`  ${index + 1}) "${name}"${index === 0 ? " (recommended)" : ""}`);
+  });
+  lines.push(`  ${choices.length + 1}) Another branch — type its name`);
+
+  const rl = require("readline/promises").createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  try {
+    const answer = (
+      await rl.question(lines.join("\n") + `\nChoose [1-${choices.length + 1}]: `)
+    ).trim();
+
+    const index = Number.parseInt(answer, 10);
+
+    if (Number.isInteger(index) && index >= 1 && index <= choices.length) {
+      return choices[index - 1];
+    }
+
+    if (index === choices.length + 1) {
+      return (await rl.question("Branch name: ")).trim();
+    }
+
+    return choices[0];
+  } finally {
+    rl.close();
+  }
+}
+
+function applyReopenBranch(feature, target, base) {
+  // Guard against shell injection through a user-supplied branch name.
+  if (!isValidBranchName(target)) {
+    console.error(`❌ Invalid branch name "${target}". Reopened without branch changes.`);
+    return null;
+  }
+
+  const run = makeGitRunner();
+
+  // Switching to an existing branch needs no base.
+  if (branchExists(run, target)) {
+    try {
+      execSync(`git checkout "${target}"`, { stdio: "inherit" });
+      console.log(`✅ Switched to existing branch "${target}".`);
+      return target;
+    } catch (error) {
+      console.error(`❌ Could not switch to "${target}".`);
+      console.error("   The feature was still reopened; you remain on the previous branch.");
+      return null;
+    }
+  }
+
+  if (base && !isValidBranchName(base)) {
+    console.error(`❌ Invalid base branch "${base}". Reopened without branch changes.`);
+    return null;
+  }
+
+  try {
+    if (base) {
+      let onBase = false;
+      try {
+        onBase = run("git rev-parse --abbrev-ref HEAD") === base;
+      } catch (error) {
+        onBase = false;
+      }
+
+      if (!onBase) {
+        execSync(`git checkout "${base}"`, { stdio: "inherit" });
+        try {
+          execSync(`git pull origin "${base}"`, { stdio: "inherit" });
+        } catch (error) {
+          console.log(`⚠️  Could not pull "${base}" (offline or no upstream). Continuing.`);
+        }
+      }
+
+      execSync(`git checkout -b "${target}"`, { stdio: "inherit" });
+      console.log(`✅ Created branch "${target}" from "${base}".`);
+    } else {
+      execSync(`git checkout -b "${target}"`, { stdio: "inherit" });
+      console.log(`✅ Created branch "${target}" from the current branch.`);
+    }
+
+    return target;
+  } catch (error) {
+    console.error(`❌ Could not create branch "${target}".`);
+    console.error("   The feature was still reopened; you remain on the previous branch.");
+    return null;
+  }
+}
+
+async function handleReopenBranch(feature, options) {
+  const resolved = resolveReopenBranch(feature, options);
+
+  if (resolved === null) return null;
+
+  if (resolved.explicit) {
+    return applyReopenBranch(feature, resolved.explicit, resolved.base);
+  }
+
+  const choice = await promptReopenBranch(
+    feature,
+    resolved.defaultName,
+    resolved.currentBranch
+  );
+
+  if (choice !== "1" && choice !== "y" && choice !== "yes" && choice !== "") {
+    console.log(
+      `ℹ️  Staying on the current branch${resolved.currentBranch ? ` (${resolved.currentBranch})` : ""}.`
+    );
+    return null;
+  }
+
+  if (!resolved.defaultBranch) {
+    console.log("⚠️  Could not resolve the repository's default branch.");
+  } else if (resolved.currentBranch && resolved.currentBranch !== resolved.defaultBranch) {
+    console.log(
+      `⚠️  You are on "${resolved.currentBranch}", not the default branch ` +
+        `("${resolved.defaultBranch}"). Reopened work should start from the branch ` +
+        `that already contains the merged feature.`
+    );
+  }
+
+  const base = await promptReopenBase(resolved.defaultBranch, resolved.currentBranch);
+
+  return applyReopenBranch(feature, resolved.defaultName, base);
+}
+
 // ---------- REOPEN ----------
 program
   .command("reopen <feature>")
   .description("Reopen a completed feature")
-  .action((feature) => {
+  .option(
+    "-b, --branch [name]",
+    "Create or switch to a branch for the reopened work (default: feature/<feature>)"
+  )
+  .option("--base [name]", "Base the new branch on this branch (skips the base prompt)")
+  .option("--stay", "Stay on the current branch (do not create or switch)")
+  .action(async (feature, options) => {
     requirePermission("reopen");
 
     const projectRoot = process.cwd();
@@ -1408,6 +1682,21 @@ program
 
     console.log(`✅ Feature "${feature}" reopened.`);
     console.log("   Review gate reset to pending.");
+
+    const appliedBranch = await handleReopenBranch(feature, options);
+
+    // Record the branch on the feature so review / security / archive can read it
+    // instead of guessing or hardcoding a branch name.
+    if (appliedBranch) {
+      const freshState = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
+      const freshTarget = freshState.features?.find((f) => f.name === feature);
+
+      if (freshTarget) {
+        freshTarget.branch = appliedBranch;
+        fs.writeFileSync(workflowStatePath, JSON.stringify(freshState, null, 2));
+        console.log(`✅ Recorded branch "${appliedBranch}" on feature "${feature}".`);
+      }
+    }
   });
 
 // ---------- ONBOARD COMMAND ----------

@@ -900,9 +900,9 @@ const CLI_COMMANDS = [
     why: "Lets you evolve a shipped feature without erasing its history.",
     when: "When adding significant new scope to a completed feature.",
     example: "sdrive version:new user-login" },
-  { command: "sdrive reopen <feature>", description: "Reopen a completed feature", group: "Features",
-    what: "Moves a finished feature back into active work.",
-    why: "Handles the reality that 'done' features sometimes need more work.",
+  { command: "sdrive reopen <feature>", description: "Reopen a completed feature (--branch, --base, --stay)", group: "Features",
+    what: "Moves a finished feature back into active work, then asks which branch the work should happen on and which branch to base it on.",
+    why: "Handles the reality that 'done' features sometimes need more work — and that archive deleted the feature branch.",
     when: "When a completed feature needs changes.",
     example: "sdrive reopen user-login" },
   { command: "sdrive diff:version <feature> <a> <b>", description: "Compare two versions of a feature", group: "Features",
@@ -1168,11 +1168,11 @@ const SLASH_DETAILS = {
     handsOff: "/sdrive:archive"
   },
   "/sdrive:archive": {
-    what: "Merges an approved feature to main and completes its lifecycle.",
+    what: "Merges an approved feature to the confirmed target branch and completes its lifecycle.",
     why: "Turns a passing review into shipped, archived work — specs move to completed/ and the branch is cleaned up.",
     when: "Only after /sdrive:review has passed. Use --all to archive every ongoing feature that passed review.",
     does: [
-      "Merges the feature branch into main",
+      "Merges the feature branch into the confirmed target branch",
       "Moves the spec from ongoing/ to completed/",
       "Deletes the merged feature branch",
       "Marks the feature complete in the workflow state"
@@ -1324,7 +1324,7 @@ const OPTIONAL_COMMANDS = {
     },
     {
       command: "/sdrive:archive",
-      what: "Merges an approved feature to main and completes its lifecycle.",
+      what: "Merges an approved feature to the confirmed target branch and completes its lifecycle.",
       when: "When the feature is totally done and /sdrive:review has passed."
     }
   ]

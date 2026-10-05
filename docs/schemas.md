@@ -132,6 +132,17 @@ Validates the traceability matrix.
 
 Validates feature lifecycle state.
 
+### Feature Fields
+
+Each entry in `features[]`:
+
+| Field | Description |
+|-------|-------------|
+| `name` | Feature name (kebab-case) |
+| `branch` | **The branch this feature is tied to.** Written by `/sdrive:apply` when the branch is created or resumed, and by `sdrive reopen` when a branch is chosen. This is the single source of truth — `/sdrive:review`, `/sdrive:secure` and `/sdrive:archive` read it rather than guessing the name or hardcoding `main`. Optional: absent for features that have not been branched yet. |
+| `currentVersion` | The active version (`v1`, `v2`, ...) |
+| `versions[]` | Per-version `id`, `phase`, `currentStep`, `gates`, and `history` |
+
 ### Phase Values
 
 - `backlog` — created by `/sdrive:propose`

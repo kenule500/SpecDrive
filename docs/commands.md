@@ -30,7 +30,7 @@ SpecDrive has two types of commands:
 | `sdrive diff <old> <new>` | Show differences between two spec files |
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
 | `sdrive dashboard` | Start local web dashboard |
-| `sdrive reopen <feature>` | Reopen a completed feature |
+| `sdrive reopen <feature>` | Reopen a completed feature (`--branch [name]`, `--base [name]`, `--stay`) |
 | `sdrive verify <feature>` | Verify code matches plan.json |
 | `sdrive version:new <feature>` | Create a new version of a feature |
 | `sdrive diff:version <feature> <vA> <vB>` | Compare two versions of a feature |
@@ -254,11 +254,18 @@ sdrive template:set nextjs
 
 ### `sdrive hooks:install`
 
-Installs a pre-commit hook that runs governance validation.
+Installs the SpecDrive pre-commit hook.
 
 ```bash
 sdrive hooks:install
 ```
+
+The hook runs two things on every commit:
+
+1. The governance validator.
+2. `sdrive verify` for features that are **ready for it** — only a feature whose `phase` is `ongoing` **and** whose `implementation` gate is `approved`. Features in `backlog/` or `completed/`, and features still being implemented, are skipped and reported.
+
+> **Note:** The commit is blocked if governance validation fails, or if any verified feature returns `fail` (missing or renamed code). A `warn` status does not block. Because deferred and in-progress features are skipped, work on one feature never blocks commits for another.
 
 ---
 
@@ -406,7 +413,7 @@ The dashboard also supports filters:
 | `/sdrive:performance` | Performance | Benchmark and optimize for speed and SEO |
 | `/sdrive:debug` | Debug | Reproduce, isolate, and fix defects — layout, APIs, runtime, glitches |
 | `/sdrive:review` | Review | Final audit — pass/fail verdict, no merge |
-| `/sdrive:archive` | Archive | Merge an approved feature to `main` and complete its lifecycle |
+| `/sdrive:archive` | Archive | Merge an approved feature to the confirmed target branch and complete its lifecycle |
 | `/sdrive:secure` | Security | Security audit |
 
 ---
@@ -499,7 +506,7 @@ Extends an **existing** feature specification with new requirements, user storie
 **When to use:**
 
 - When adding requirements to a feature that already exists
-- When a completed feature needs more work — run `sdrive reopen <feature>` first
+- When a completed feature needs more work — run `sdrive reopen <feature>` first (it restores the feature to `ongoing/`, then asks which branch to create and which branch to base it on)
 
 **What it does NOT do:**
 
@@ -600,7 +607,7 @@ Sweeps every ongoing feature for defects, one after the other, and writes an agg
 
 ### `/sdrive:archive`
 
-Merges an approved feature to `main` and completes its lifecycle.
+Merges an approved feature to the confirmed target branch and completes its lifecycle.
 
 ```text
 /sdrive:archive user-login

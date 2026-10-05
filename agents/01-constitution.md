@@ -199,6 +199,14 @@ Every feature that touches authentication, user input, or an HTTP surface MUST a
 - **CON-604:** New versions MUST only be created for structural changes (new workflow, new user story, behavior change). Minor edits stay in the current version. <!-- source: SpecDrive -->
 - **CON-605:** All agents MUST operate within the feature's `currentVersion` folder only. Older versions MUST NOT be modified. <!-- source: SpecDrive -->
 
+### Branching Policy (CON-60x continuation — Enterprise Standard)
+- **CON-606:** ONE BRANCH PER FEATURE (non-negotiable). Each feature MUST be implemented on its own dedicated branch. Two features MUST NEVER share a branch, and a feature MUST NEVER be implemented on another feature's branch. <!-- source: SpecDrive Enterprise Branching Policy -->
+- **CON-607:** The feature branch MUST be named `feature/<feature-name>` using the SpecDrive feature folder name (kebab-case), e.g. `feature/user-login`. If that name is taken, append `-v2`, `-v3`, ... The resolved branch name MUST be reported to the user. <!-- source: SpecDrive Enterprise Branching Policy -->
+- **CON-608:** Agents MUST NEVER implement directly on the repository's default or protected branch. The default branch MUST be resolved dynamically and NEVER assumed to be `main`. Implementing on a protected branch is a blocking violation. <!-- source: SpecDrive Enterprise Branching Policy -->
+- **CON-609:** A feature branch MUST be created from an approved base branch, and the working tree MUST be clean (`git status --porcelain` empty) before any branch switch or creation. A dirty tree MUST block the operation. <!-- source: SpecDrive Enterprise Branching Policy -->
+- **CON-610:** The feature branch MUST be deleted after its merge is confirmed — locally (`git branch -d`) and on the remote (`git push origin --delete`) — unless the user explicitly declines. The merge target branch MUST NEVER be deleted. <!-- source: SpecDrive Enterprise Branching Policy -->
+- **CON-611:** A branch MUST be merged as a single review unit. `/sdrive:archive` MUST refuse to merge a branch that contains commits belonging to other in-flight features. <!-- source: SpecDrive Enterprise Branching Policy -->
+
 ## 7. AI Agent Rules (CON-7xx)
 - **CON-701:** [Rule text] <!-- source: .sdrive/context/ai-workflow-rules.md -->
 

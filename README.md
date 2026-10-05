@@ -255,7 +255,7 @@ Optional: If you have an app idea but no product roadmap yet, run `/sdrive:produ
 /sdrive:review
 ```
 
-7. Archive (merge to `main` and complete the lifecycle):
+7. Archive (merge to the confirmed target branch and complete the lifecycle):
 
 ```text
 /sdrive:archive
@@ -503,8 +503,8 @@ Writes production code from the approved tasks.
 
 - **Moves the feature from `specs/backlog/` to `specs/ongoing/`** and sets the version's `phase` to `ongoing`
 - Reads approved tasks and plan from the current version
-- Asks which base branch to pull from
-- Creates a feature branch with user approval
+- Creates the feature's OWN branch, `feature/<feature>` — one branch per feature (CON-606)
+- Creates the feature branch with a suggested name and user approval
 - Implements production code only (no tests)
 - Runs `sdrive verify <feature>`
 - Commits and pushes
@@ -556,7 +556,7 @@ Final audit and pass/fail verdict. Does **not** merge or archive.
 - Runs spec-to-code verification
 - Audits code against spec and traceability
 - Writes a `review.md` report with `Status: PASS` or `Status: FAIL`
-- On failure: creates a PR, comments the findings, adds fix tasks, and stops
+- On failure: records the findings in `review.md`, adds fix tasks, and stops (no PR, no branch, no merge)
 - On pass: notifies you to run `/sdrive:archive <feature>`
 - Requires human approval before the verdict is recorded
 
@@ -573,7 +573,7 @@ Final audit and pass/fail verdict. Does **not** merge or archive.
 
 ### 6. `/sdrive:archive`
 
-Merges an approved feature to `main` and completes its lifecycle.
+Merges an approved feature to the confirmed target branch and completes its lifecycle.
 
 **What it does:**
 
@@ -827,7 +827,7 @@ Audits and manages AI skills.
 | `sdrive diff <old> <new>` | Show differences between two spec files |
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
 | `sdrive dashboard` | Start local web dashboard |
-| `sdrive reopen <feature>` | Reopen a completed feature |
+| `sdrive reopen <feature>` | Reopen a completed feature (`--branch [name]`, `--base [name]`, `--stay`) |
 | `sdrive verify <feature>` | Verify code matches plan.json |
 | `sdrive version:new <feature>` | Create a new version of a feature |
 | `sdrive diff:version <feature> <vA> <vB>` | Compare two versions of a feature |
@@ -852,7 +852,7 @@ Audits and manages AI skills.
 | Review & Complete | `09-review-complete.md` | Final audit and pass/fail verdict (no merge) |
 | Security | `10-security.md` | Security audit and fixes |
 | Test | `11-test.md` | Write tests, run them, report coverage |
-| Archive | `14-archive.md` | Merge an approved feature to `main` and complete its lifecycle |
+| Archive | `14-archive.md` | Merge an approved feature to the confirmed target branch and complete its lifecycle |
 | Debug | `15-debug.md` | Reproduce, isolate, and fix defects — layout, APIs, runtime, glitches |
 
 ---
@@ -945,6 +945,33 @@ A feature moves through three spec folders. Each transition has exactly one owne
 
 > **Note:** `governance/` is not lifecycle-partitioned. Governance files live at `.sdrive/governance/<feature>/<version>/` regardless of the spec's lifecycle folder.
 
+### Returning to a Completed Feature
+
+`archive` deletes the feature branch, so a completed feature has no branch of its own. To make a further change:
+
+1. **`sdrive reopen <feature>`** — moves the feature back to `ongoing/` and resets the `review` gate to `pending`. It asks which branch the work should happen on, and **which branch to base it on** — the detected default branch is recommended, because that is where the merged code now lives.
+2. Make the change on the new branch.
+3. `/sdrive:test` → `/sdrive:review` → `/sdrive:archive`, as normal.
+
+**A minor change is NOT a new version** (CON-604). New versions are only for structural changes — a new workflow, a new user story, or a behaviour change. Small edits stay in the current version, and `/sdrive:update-propose` extends the existing spec in place.
+
+A defect in already-shipped code is a *different* work unit: use a `fix/<ticket>` or `hotfix/<ticket>` branch off the target rather than reopening the feature.
+
+### Branching Policy (Enterprise Standard)
+
+One branch per feature is mandatory. The constitution encodes this as **CON-606 – CON-611**, so it is enforceable project governance, not just agent guidance.
+
+| Rule | Requirement |
+|------|-------------|
+| **CON-606** | **One branch per feature.** Two features never share a branch, and a feature is never implemented on another feature's branch |
+| **CON-607** | The branch is named `feature/<feature-name>` (kebab-case). If that name is taken, append `-v2`, `-v3`, … |
+| **CON-608** | Never implement on the repository's default or protected branch. The default branch is resolved dynamically — never assumed to be `main` |
+| **CON-609** | Branch from an approved base branch with a clean working tree (`git status --porcelain` must be empty) |
+| **CON-610** | Delete the feature branch after a confirmed merge — locally (`git branch -d`) and on the remote (`git push origin --delete`) — unless the user declines. Never delete the merge target branch |
+| **CON-611** | One review unit per branch. `/sdrive:archive` refuses to merge a branch that contains other in-flight features' commits |
+
+`/sdrive:apply` always creates or resumes the feature's **own** branch. Resuming the same feature's existing branch is still one-branch-per-feature. `/sdrive:archive` asks which branch to merge into (detected, never assumed), then asks separately whether to delete the feature branch.
+
 ---
 
 ## Directory Structure
@@ -1001,11 +1028,13 @@ Checks only `.sdrive/config.json`.
 
 ### Pre-commit Hook
 
-Automatically validate governance files before every commit:
+Validate governance and verify ready features before every commit:
 
 ```bash
 sdrive hooks:install
 ```
+
+The hook runs the governance validator, then `sdrive verify` for each feature whose `phase` is `ongoing` **and** whose `implementation` gate is `approved`. Deferred, backlog, and in-progress features are skipped — so one feature's state never blocks commits for another.
 
 ---
 

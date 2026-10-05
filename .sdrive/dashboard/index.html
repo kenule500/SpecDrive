@@ -38,7 +38,7 @@
           <span class="nav-icon">✦</span><span>Skills</span>
         </a>
         <a class="nav-item" href="/team" data-nav="team">
-          <span class="nav-icon">◉</span><span>Team</span>
+          <span class="nav-icon">◉</span><span>Team &amp; Branch</span>
         </a>
         <a class="nav-item" href="/activity" data-nav="activity">
           <span class="nav-icon">◷</span><span>Activity</span>
@@ -138,6 +138,186 @@
             <div class="skeleton-card"></div>
             <div class="skeleton-card"></div>
           </div>
+
+          <div id="feature-pager"></div>
+
+          <!-- KPI explainer -->
+          <div class="kpi-explainer">
+            <div class="kpi-explainer-head">
+              <h3>What these metrics mean</h3>
+              <span class="kpi-explainer-hint">Plain-language guide to the KPIs shown on each feature</span>
+            </div>
+            <div class="kpi-explainer-grid">
+              <div class="kpi-explain">
+                <div class="kpi-explain-top">
+                  <span class="kpi-explain-icon tone-blue">◎</span>
+                  <span class="kpi-explain-name">Traceability</span>
+                </div>
+                <p class="kpi-explain-desc">
+                  How much of the feature is linked end-to-end — every requirement traced to a
+                  design, a task, and a test. <strong>100%</strong> means nothing is orphaned.
+                </p>
+                <div class="kpi-explain-scale">
+                  <span class="kpi-explain-scale-item"><i class="dot green"></i>100% — fully linked</span>
+                  <span class="kpi-explain-scale-item"><i class="dot amber"></i>Partial — gaps remain</span>
+                  <span class="kpi-explain-scale-item"><i class="dot red"></i>0% — nothing linked</span>
+                </div>
+              </div>
+
+              <div class="kpi-explain">
+                <div class="kpi-explain-top">
+                  <span class="kpi-explain-icon tone-green">✓</span>
+                  <span class="kpi-explain-name">Verification</span>
+                </div>
+                <p class="kpi-explain-desc">
+                  Whether the built code matches the approved spec. The system compares what was
+                  specified against what was implemented and reports the difference.
+                </p>
+                <div class="kpi-explain-scale">
+                  <span class="kpi-explain-scale-item"><i class="dot green"></i>PASS — spec &amp; code match</span>
+                  <span class="kpi-explain-scale-item"><i class="dot amber"></i>WARN — extra, unplanned work</span>
+                  <span class="kpi-explain-scale-item"><i class="dot red"></i>FAIL — spec items missing</span>
+                  <span class="kpi-explain-scale-item"><i class="dot slate"></i>NOT RUN — not checked yet</span>
+                </div>
+              </div>
+
+              <div class="kpi-explain">
+                <div class="kpi-explain-top">
+                  <span class="kpi-explain-icon tone-amber">▤</span>
+                  <span class="kpi-explain-name">Tests</span>
+                </div>
+                <p class="kpi-explain-desc">
+                  Test coverage of the feature's acceptance criteria — the share of ACs that have a
+                  passing automated test behind them.
+                </p>
+                <div class="kpi-explain-scale">
+                  <span class="kpi-explain-scale-item"><i class="dot green"></i>Complete — 100% of ACs</span>
+                  <span class="kpi-explain-scale-item"><i class="dot amber"></i>Partial — some ACs untested</span>
+                  <span class="kpi-explain-scale-item"><i class="dot slate"></i>NOT RUN — no tests yet</span>
+                </div>
+              </div>
+
+              <div class="kpi-explain">
+                <div class="kpi-explain-top">
+                  <span class="kpi-explain-icon tone-slate">⛨</span>
+                  <span class="kpi-explain-name">Gates</span>
+                </div>
+                <p class="kpi-explain-desc">
+                  The four approval checkpoints a version must clear before it can ship. Each gate
+                  is signed off by a human reviewer.
+                </p>
+                <div class="kpi-explain-scale">
+                  <span class="kpi-explain-scale-item"><i class="dot green"></i>Approved — signed off</span>
+                  <span class="kpi-explain-scale-item"><i class="dot amber"></i>Pending — awaiting review</span>
+                  <span class="kpi-explain-scale-item"><i class="dot blue"></i>In progress — being worked</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== FEATURE DETAIL (routed page: /features/<name>) ===== -->
+        <section id="feature-detail" class="section">
+          <div class="detail-back-row">
+            <button id="detail-back" class="detail-back" type="button">
+              <span class="detail-back-arrow">←</span> All features
+            </button>
+          </div>
+
+          <div class="section-head">
+            <h2 id="detail-title">Feature</h2>
+            <span id="detail-subtitle" class="section-hint"></span>
+          </div>
+
+          <div id="detail-summary" class="detail-summary">
+            <div class="skeleton-card"></div>
+          </div>
+
+          <div class="detail-tabs" role="tablist" aria-label="Feature detail views">
+            <button
+              id="detail-tab-tasks"
+              class="detail-tab active"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="detail-panel-tasks"
+              data-detail-tab="tasks"
+            >
+              Tasks
+              <span id="detail-tab-tasks-count" class="detail-tab-count"></span>
+            </button>
+            <button
+              id="detail-tab-reports"
+              class="detail-tab"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="detail-panel-reports"
+              data-detail-tab="reports"
+            >
+              Reports
+              <span id="detail-tab-reports-count" class="detail-tab-count"></span>
+            </button>
+            <button
+              id="detail-tab-specs"
+              class="detail-tab"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="detail-panel-specs"
+              data-detail-tab="specs"
+            >
+              Spec Files
+              <span id="detail-tab-specs-count" class="detail-tab-count"></span>
+            </button>
+          </div>
+
+          <div id="detail-panel-tasks" class="detail-panel active" role="tabpanel" aria-labelledby="detail-tab-tasks">
+            <div id="detail-filters" class="filters detail-filters">
+              <div class="filter-search">
+                <span class="filter-search-icon">⌕</span>
+                <input id="detail-search" type="text" placeholder="Search tasks…" />
+              </div>
+
+              <select id="detail-status" class="filter-select">
+                <option value="">All tasks</option>
+                <option value="pending">Pending</option>
+                <option value="completed">Completed</option>
+              </select>
+
+              <select id="detail-version" class="filter-select">
+                <option value="">All versions</option>
+              </select>
+
+              <select id="detail-phase" class="filter-select">
+                <option value="">All phases</option>
+              </select>
+            </div>
+
+            <div id="detail-body" class="detail-body">
+              <div class="skeleton-card"></div>
+            </div>
+          </div>
+
+          <div id="detail-panel-reports" class="detail-panel" role="tabpanel" aria-labelledby="detail-tab-reports">
+            <div class="detail-reports-head">
+              <h3>Reports</h3>
+              <span class="section-hint">Artifacts written by the agents for this feature</span>
+            </div>
+            <div id="detail-reports" class="detail-reports">
+              <div class="skeleton-card"></div>
+            </div>
+          </div>
+
+          <div id="detail-panel-specs" class="detail-panel" role="tabpanel" aria-labelledby="detail-tab-specs">
+            <div class="detail-reports-head">
+              <h3>Spec Files</h3>
+              <span class="section-hint">The raw spec, plan, tasks, and traceability documents for this feature</span>
+            </div>
+            <div id="detail-specs" class="detail-specs">
+              <div class="skeleton-card"></div>
+            </div>
+          </div>
         </section>
 
         <!-- ===== SKILLS ===== -->
@@ -155,10 +335,18 @@
         <!-- ===== TEAM ===== -->
         <section id="team" class="section">
           <div class="section-head">
-            <h2>Team</h2>
-            <span class="section-hint">Members &amp; approval rules</span>
+            <h2>Team &amp; Branch</h2>
+            <span class="section-hint">Members, approval rules &amp; branches</span>
           </div>
           <div id="team-list" class="team-grid">
+            <div class="skeleton-card"></div>
+          </div>
+
+          <div class="section-head branch-head">
+            <h2>Branches</h2>
+            <span class="section-hint">Local git branches &amp; merge status</span>
+          </div>
+          <div id="branch-list" class="branch-list">
             <div class="skeleton-card"></div>
           </div>
         </section>
@@ -178,7 +366,22 @@
         <section id="commands" class="section">
           <div class="section-head">
             <h2>Command Reference</h2>
-            <span class="section-hint">Slash commands &amp; CLI — your quick guide</span>
+            <span class="section-hint">Every command, explained in plain language</span>
+          </div>
+
+          <div class="command-intro">
+            <p>
+              SpecDrive works through <strong>commands</strong> — short instructions you give to your
+              AI assistant (slash commands) or to your terminal (CLI). Each one moves your project
+              forward through a series of <strong>approval gates</strong>, so nothing is built until
+              it has been clearly specified and signed off.
+            </p>
+            <p>
+              Don't worry about memorising them. Start with <code>/sdrive:constitution</code> to set
+              the ground rules, then <code>/sdrive:propose</code> whenever you want to build something
+              new. Click <em>Details</em> on any row below to see what it does, why it matters, and
+              when to use it.
+            </p>
           </div>
 
           <div class="command-search">
@@ -195,10 +398,47 @@
             <div class="skeleton-card"></div>
             <div class="skeleton-card"></div>
           </div>
+
+          <div class="workflow-section">
+            <div class="section-head">
+              <h2>Product Workflow Lifecycles</h2>
+              <span class="section-hint">Which path are you on?</span>
+            </div>
+            <p class="workflow-intro">
+              SpecDrive adapts to how your project started. Find the lifecycle that matches your
+              situation — the commands run in the order shown.
+            </p>
+            <div id="workflow-cards" class="workflow-cards">
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+            </div>
+          </div>
         </section>
       </main>
     </div>
   </div>
+
+  <!-- ===== COMMAND DETAIL DRAWER ===== -->
+  <div id="command-drawer-backdrop" class="command-drawer-backdrop"></div>
+  <aside
+    id="command-drawer"
+    class="command-drawer"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="command-drawer-title"
+    aria-hidden="true"
+  >
+    <div class="command-drawer-head">
+      <div class="command-drawer-head-text">
+        <span class="command-drawer-eyebrow">Command</span>
+        <h2 id="command-drawer-title" class="command-drawer-title">—</h2>
+      </div>
+      <button id="command-drawer-close" class="command-drawer-close" type="button" aria-label="Close details">
+        ✕
+      </button>
+    </div>
+    <div id="command-drawer-body" class="command-drawer-body"></div>
+  </aside>
 
   <script src="/app.js"></script>
 </body>

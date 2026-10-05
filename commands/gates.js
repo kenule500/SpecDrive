@@ -19,9 +19,25 @@ function saveWorkflowState(state) {
   fs.writeFileSync(workflowStatePath, JSON.stringify(state, null, 2));
 }
 
+// Gates live on the feature's CURRENT VERSION (`versions[].gates`), never on the
+// feature itself. Older builds read `feature.gates`, which does not exist, so
+// every gate looked unapproved and `sdrive approve` silently did nothing.
+function resolveVersion(feature) {
+  if (!feature || !Array.isArray(feature.versions) || feature.versions.length === 0) {
+    return null;
+  }
+
+  return (
+    feature.versions.find((v) => v.id === feature.currentVersion) || feature.versions[0]
+  );
+}
+
+function findFeature(state, featureName) {
+  return (state.features || []).find((f) => f.name === featureName) || null;
+}
+
 function getFeature(featureName) {
-  const state = getWorkflowState();
-  return state.features?.find((f) => f.name === featureName);
+  return findFeature(getWorkflowState(), featureName);
 }
 
 function gateStatus(featureName, gate) {
@@ -31,26 +47,39 @@ function gateStatus(featureName, gate) {
     return "unknown";
   }
 
-  return feature.gates?.[gate] || "pending";
+  const version = resolveVersion(feature);
+
+  if (!version) {
+    return "unknown";
+  }
+
+  return (version.gates && version.gates[gate]) || "pending";
 }
 
 function approveGate(featureName, gate) {
+  // Read ONCE and mutate that same object. The old implementation called
+  // getFeature() — which re-reads the file — so the mutation was applied to a
+  // throwaway object and discarded when `state` was saved.
   const state = getWorkflowState();
-  const feature = getFeature(featureName);
+  const feature = findFeature(state, featureName);
 
   if (!feature) {
     console.error(`❌ Feature "${featureName}" not found.`);
     return false;
   }
 
-  if (!feature.gates) {
-    feature.gates = {};
+  const version = resolveVersion(feature);
+
+  if (!version) {
+    console.error(`❌ Feature "${featureName}" has no versions.`);
+    return false;
   }
 
-  feature.gates[gate] = "approved";
+  version.gates = version.gates || {};
+  version.gates[gate] = "approved";
 
-  feature.history = feature.history || [];
-  feature.history.push({
+  version.history = version.history || [];
+  version.history.push({
     event: `${gate}_approved`,
     timestamp: new Date().toISOString()
   });
@@ -67,6 +96,7 @@ function isGateApproved(featureName, gate) {
 module.exports = {
   getWorkflowState,
   saveWorkflowState,
+  resolveVersion,
   getFeature,
   gateStatus,
   approveGate,

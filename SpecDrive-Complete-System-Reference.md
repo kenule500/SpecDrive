@@ -211,7 +211,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | 6 | `team.js` | Team role management helpers |
 | 7 | `generate-adapters.js` | Creates tool adapters |
 | 8 | `load-plugins.js` | Loads plugins |
-| 9 | `pre-commit.js` | Runs validation before commit |
+| 9 | `pre-commit.js` | Runs governance validation and verifies ready features before commit |
 | 10 | `install-hooks.js` | Installs pre-commit hook |
 | 11 | `diff-spec.js` | Compares two spec files |
 | 12 | `generate-openapi.js` | Generates OpenAPI 3.0 spec |
@@ -247,7 +247,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | `sdrive diff` | Compare two spec files |
 | `sdrive openapi:generate` | Generate OpenAPI spec |
 | `sdrive dashboard` | Start web dashboard |
-| `sdrive reopen` | Reopen a completed feature |
+| `sdrive reopen` | Reopen a completed feature (`--branch`, `--base`, `--stay`) |
 | `sdrive verify` | Verify code vs plan |
 | `sdrive version:new` | Create new feature version |
 | `sdrive diff:version` | Compare versions |

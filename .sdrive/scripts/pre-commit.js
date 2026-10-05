@@ -7,17 +7,67 @@ const projectRoot = process.cwd();
 const validatorPath = path.join(projectRoot, ".sdrive", "scripts", "validate-governance.js");
 const verifyPath = path.join(projectRoot, ".sdrive", "scripts", "verify.js");
 
-function getFeatureNames() {
+// Only features that actually claim to be implemented are worth verifying.
+//
+// Previously this returned EVERY feature, so a feature that was still being
+// written (or one that had already shipped) could fail verification and block
+// unrelated commits. A feature is verifiable only when:
+//   1. its current version is in the "ongoing" phase (not backlog / completed),
+//   2. its "implementation" gate is approved (the code is declared complete), and
+//   3. at least one gate is still outstanding (there is something left to do).
+//
+// Mitigating risk beats blocking the whole repo: deferred work in other folders
+// must never stop you committing the feature you are actually working on.
+function getVerifiableFeatures() {
   const workflowStatePath = path.join(projectRoot, ".sdrive", "workflow-state.json");
 
-  if (!fs.existsSync(workflowStatePath)) return [];
+  if (!fs.existsSync(workflowStatePath)) return { verifiable: [], skipped: [] };
 
+  let state;
   try {
-    const state = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
-    return (state.features || []).map((f) => f.name);
+    state = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
   } catch (error) {
-    return [];
+    return { verifiable: [], skipped: [] };
   }
+
+  const verifiable = [];
+  const skipped = [];
+
+  for (const feature of state.features || []) {
+    const versions = feature.versions || [];
+    const version =
+      versions.find((v) => v.id === feature.currentVersion) || versions[0];
+
+    if (!version) {
+      skipped.push({ name: feature.name, reason: "no version recorded" });
+      continue;
+    }
+
+    if (version.phase !== "ongoing") {
+      skipped.push({ name: feature.name, reason: `phase is "${version.phase}"` });
+      continue;
+    }
+
+    const gates = version.gates || {};
+    const gateValues = Object.values(gates);
+
+    if (gateValues.length > 0 && gateValues.every((s) => s === "approved")) {
+      skipped.push({ name: feature.name, reason: "all gates already approved" });
+      continue;
+    }
+
+    if (gates.implementation !== "approved") {
+      skipped.push({
+        name: feature.name,
+        reason: `implementation gate is "${gates.implementation || "pending"}"`
+      });
+      continue;
+    }
+
+    verifiable.push({ name: feature.name });
+  }
+
+  return { verifiable, skipped };
 }
 
 // 1. Run governance validator
@@ -33,20 +83,27 @@ if (fs.existsSync(validatorPath)) {
   console.log("⚠️  Validator not found. Skipping governance validation.");
 }
 
-// 2. Run spec-to-code verification for every active feature
-const features = getFeatureNames();
+// 2. Run spec-to-code verification for features that claim to be implemented.
+const { verifiable, skipped } = getVerifiableFeatures();
 
-if (features.length === 0) {
-  console.log("⚠️  No features found. Skipping spec-to-code verification.");
+if (skipped.length > 0) {
+  console.log("\n⏭️  Skipping features that are not ready for verification:");
+  for (const entry of skipped) {
+    console.log(`   • ${entry.name} — ${entry.reason}`);
+  }
+}
+
+if (verifiable.length === 0) {
+  console.log("⚠️  No features ready for spec-to-code verification. Skipping.");
   process.exit(0);
 }
 
-for (const feature of features) {
+for (const { name } of verifiable) {
   try {
-    execSync(`node "${verifyPath}" "${feature}"`, { stdio: "pipe" });
-    console.log(`✅ Spec-to-code verification passed for ${feature}.`);
+    execSync(`node "${verifyPath}" "${name}"`, { stdio: "pipe" });
+    console.log(`✅ Spec-to-code verification passed for ${name}.`);
   } catch (error) {
-    console.error(`❌ Verification failed for ${feature}.`);
+    console.error(`❌ Verification failed for ${name}.`);
     console.error(error.stdout ? error.stdout.toString() : "");
     process.exit(1);
   }

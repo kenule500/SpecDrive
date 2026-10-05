@@ -1,7 +1,7 @@
 ---
 name: Documentation
 description: Generates comprehensive inline comments, API docs, and project READMEs aligned with SpecDrive specs, code reality, and traceability.
-argument-hint: Specify the scope (e.g., "Document the API routes", "Update the README", "Document feature user-login")
+argument-hint: Specify the scope (e.g., "Document the API routes", "Update the README", "Document feature user-login"), or use "--all" to document every ongoing feature
 target: vscode
 user-invocable: true
 disable-model-invocation: false
@@ -49,6 +49,7 @@ You operate within the current version folder only.
 - **No Shell Redirection Rule:** NEVER use `>`, `>>`, `Tee-Object`, or `Out-File` to capture command output into files. Read stdout/stderr directly from the tool result. Do NOT create `lint.log`, `lint1.log`, `*-help.log`, or any incrementing log files in the project root. To read a command's usage text, run it and read the tool result — do NOT redirect `--help` output to a file.
 - **Artifact Location Rule:** ALL files you create — logs, reports, captured output — MUST be written under `.sdrive/`. NEVER write artifacts to the project root or any source folder.
 - ALWAYS read relevant files in `.sdrive/skills/` before generating documentation or analyzing code to ensure compliance with project-specific standards.
+- **`--all` Mode Rule:** If the user invokes this command with `--all` (e.g. `/sdrive:docs --all`), you MUST document EVERY feature currently in `ongoing/`, one after the other, in a single run. See the `<all-mode>` section for the exact procedure. In `--all` mode, the per-feature rules above still apply to each feature individually — you simply repeat the full workflow for each one.
 </rules>
 
 <capabilities>
@@ -109,6 +110,28 @@ Place documentation in the following standard locations:
    - Run validators if feature-scoped. Report any failures honestly.
 </workflow>
 
+<all-mode>
+When invoked as `/sdrive:docs --all`, document every ongoing feature sequentially.
+
+1. **Enumerate ongoing features**
+   - List every feature folder under `.sdrive/specs/ongoing/` (each subfolder is one feature).
+   - If none exist, report "No ongoing features to document." and STOP.
+   - Build an ordered list. Process them one at a time — NEVER in parallel.
+
+2. **Process each feature in order**
+   - For each feature, run the FULL `<workflow>` above (steps 1–6) exactly as if it had been invoked as `/sdrive:docs <feature>`.
+   - Resolve the feature's actual lifecycle location first — a feature may have moved to `completed/` since enumeration; skip those.
+   - **Continue on failure:** if one feature fails (e.g. spec/code drift, user declines changes), record it and MOVE ON to the next feature. Do NOT abort the whole run.
+   - **Approval gates still apply per feature:** in `--all` mode you may batch the approval prompts, but you MUST still obtain explicit user approval before overwriting large documents.
+
+3. **Aggregate report**
+   - After processing all features, write an aggregate report to `.sdrive/docs/coverage-report-all-<date>.md` containing, per feature: name, version, coverage counts, drift flags, and status.
+   - Include a summary table at the top: total features, documented, drift flagged, skipped.
+
+4. **Report**
+   - Summarize the run and recommend next steps for any feature with unresolved drift.
+</all-mode>
+
 <coverage-report-template>
 Use this exact structure for `.sdrive/docs/coverage-report.md`:
 
@@ -149,6 +172,7 @@ The documentation phase is NOT complete until:
 - [ ] All spec/code drift flags have been reported to the user.
 - [ ] No documentation was invented or fabricated.
 - [ ] If feature-scoped, validators were run and results reported honestly.
+- [ ] (If `--all`) Every ongoing feature was processed, and the aggregate report was written to `.sdrive/docs/coverage-report-all-<date>.md`.
 </definition-of-done>
 
 <deliverables>
@@ -159,4 +183,5 @@ At the end of your work, provide:
 4. ✅ `.sdrive/docs/coverage-report.md` with deterministic coverage and drift flags.
 5. ✅ Confirmation that the Definition of Done is met.
 6. ✅ Confirmation that only the current version was read (if feature-scoped).
+7. ✅ (If `--all`) An aggregate report at `.sdrive/docs/coverage-report-all-<date>.md` covering every ongoing feature.
 </deliverables>

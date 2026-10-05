@@ -8,7 +8,7 @@
       "agentFile": ".sdrive/agents/01-constitution.md",
       "description": "Initialize or update the project constitution",
       "acceptsFeature": false,
-      "gates": ["constitution"],
+      "gates": [],
       "validators": ["governance"]
     },
     {
@@ -26,7 +26,7 @@
       "agentFile": ".sdrive/agents/02-specification.md",
       "description": "Create feature specification, traceability, technical plan, and tasks",
       "acceptsFeature": true,
-      "gates": ["specification", "planning"],
+      "gates": [],
       "validators": ["governance"]
     },
     {
@@ -82,7 +82,7 @@
       "description": "Write production code from approved tasks",
       "acceptsFeature": true,
       "acceptsAll": true,
-      "gates": ["implementation"],
+      "gates": ["specification", "planning"],
       "validators": ["governance"]
     },
     {
@@ -112,14 +112,14 @@
       "description": "Final audit — pass/fail verdict, no merge",
       "acceptsFeature": true,
       "acceptsAll": true,
-      "gates": ["review"],
+      "gates": ["implementation"],
       "validators": ["governance"]
     },
     {
       "command": "/sdrive:archive",
       "agent": "archive",
       "agentFile": ".sdrive/agents/14-archive.md",
-      "description": "Merge an approved feature to main and complete its lifecycle",
+      "description": "Merge an approved feature to the confirmed target branch and complete its lifecycle",
       "acceptsFeature": true,
       "acceptsAll": true,
       "gates": ["review"],
