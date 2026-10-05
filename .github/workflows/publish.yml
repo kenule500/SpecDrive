@@ -8,13 +8,15 @@
 #   1. npm version patch|minor|major --no-git-tag-version
 #   2. git add -A && git commit -m "chore: release vX.Y.Z"
 #   3. git tag vX.Y.Z && git push origin main && git push origin vX.Y.Z
-#      -> this workflow publishes that tag automatically.
+#   4. Approve the paused run in GitHub (Actions -> the run -> Review deployments)
+#      -> this workflow then publishes that tag.
 #
 # One-time setup on npmjs.com (see docs/releasing.md):
 #   Package Settings -> Trusted publishing -> Add trusted publisher -> GitHub Actions
 #     Organization or user : kenule500
 #     Repository           : SpecDrive
 #     Workflow filename    : publish.yml      (filename only, no path)
+#     Environment name     : npm-publish      (must match `environment:` below)
 
 name: Publish to npm
 
@@ -34,6 +36,14 @@ jobs:
   publish:
     name: Publish ${{ github.ref_name }}
     runs-on: ubuntu-latest
+
+    # Human gate. GitHub pauses the job here until the `npm-publish`
+    # environment's required reviewers approve the run; only then is the OIDC
+    # token issued and the publish allowed. Remove this line AND clear npm's
+    # "Environment name" field together - they must match, or the publish
+    # fails with ENEEDAUTH.
+    environment: npm-publish
+
     steps:
       - name: Check out the tagged commit
         uses: actions/checkout@v6
