@@ -814,7 +814,7 @@ Audits and manages AI skills.
 | `sdrive validate` | Validate governance files |
 | `sdrive config:validate` | Validate `.sdrive/config.json` |
 | `sdrive status` | Show feature lifecycle state |
-| `sdrive approve <gate>` | Approve a workflow gate |
+| `sdrive approve <feature> <gate>` | Approve a workflow gate (verifies the stage is genuinely complete) |
 | `sdrive create <feature>` | Create feature scaffold (internal) |
 | `sdrive team:add <username> <role>` | Add a new team member |
 | `sdrive team:remove <username>` | Remove a team member |

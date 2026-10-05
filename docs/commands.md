@@ -17,7 +17,7 @@ SpecDrive has two types of commands:
 | `sdrive validate` | Validate all governance files |
 | `sdrive config:validate` | Validate `.sdrive/config.json` |
 | `sdrive status` | Show feature lifecycle state |
-| `sdrive approve <gate>` | Approve a workflow gate |
+| `sdrive approve <feature> <gate>` | Approve a workflow gate (verifies the stage is genuinely complete) |
 | `sdrive create <feature>` | Create feature scaffold (internal) |
 | `sdrive team:add <username> <role>` | Add a new team member |
 | `sdrive team:remove <username>` | Remove a team member |
@@ -161,20 +161,27 @@ For each feature, it lists every version and its phase, step, and gate status.
 
 ---
 
-### `sdrive approve <gate>`
+### `sdrive approve <feature> <gate>`
 
-Approves a workflow gate.
+Approves a workflow gate — but only after verifying that the stage's artifacts actually exist. An approval is a claim that the work is done, so the check runs **before** anything is written; if it fails, the state file is left untouched and the command exits non-zero.
 
 ```bash
-sdrive approve specification
+sdrive approve user-login specification
 ```
 
-Allowed gates:
+Allowed gates, in order:
 
-- `specification`
-- `planning`
-- `implementation`
-- `review`
+- `specification` — requires `spec.md` and `spec.json`
+- `planning` — requires `specification` approved, plus `plan.md`, `tasks.md`, `plan.json`, `tasks.json`, and `traceability.json`
+- `implementation` — requires `specification` and `planning` approved, every task in `tasks.json` marked `completed`, and no failing `verification.json`
+- `review` — requires `implementation` approved, plus a `review.md` recording `Status: PASS`
+
+Extra safeguards:
+
+- Every preceding gate must already be `approved`.
+- Gates cannot be approved on an archived feature (`specs/completed/`) — run `sdrive reopen <feature>` first.
+- The feature is named explicitly; the command never falls back to the first feature in the list.
+- Overwriting a `rejected` or `in_progress` value is reported, and the previous value is recorded in the version history.
 
 Approval applies to the feature's current version.
 
@@ -395,7 +402,7 @@ The dashboard also supports filters:
 
 > **Typical workflow:** `/sdrive:onboard` (brownfield only) → `/sdrive:constitution` → optionally `/sdrive:product-plan` → `/sdrive:propose` → `/sdrive:apply` → `/sdrive:test` → `/sdrive:review` → `/sdrive:archive`
 
-> **Extending an existing feature:** `/sdrive:update-propose "<feature>" <what to add>` → `sdrive approve specification` → `/sdrive:apply` → `/sdrive:test`
+> **Extending an existing feature:** `/sdrive:update-propose "<feature>" <what to add>` → `sdrive approve <feature> specification` → `/sdrive:apply` → `/sdrive:test`
 
 | Command | Agent | Purpose |
 |---------|-------|---------|
@@ -732,7 +739,7 @@ If a gate is not approved, the command is blocked.
 Approve a gate with:
 
 ```bash
-sdrive approve <gate>
+sdrive approve <feature> <gate>
 ```
 
 ---

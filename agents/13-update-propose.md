@@ -190,7 +190,7 @@ For existing feature `<feature-name>` and version `<version>`, UPDATE these file
      - Which gate was reset.
      - **Next step guidance (be explicit):**
        - The spec, plan, tasks, and traceability are already fully synced — do NOT run `/sdrive:sync`.
-       - Re-approve the reset `specification` gate: `sdrive approve specification`.
+       - Re-approve the reset `specification` gate: `sdrive approve <feature> specification`.
        - Then run `/sdrive:apply` to implement the new requirements.
        - After implementation, run `/sdrive:test` to cover the new acceptance criteria.
 </workflow>

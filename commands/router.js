@@ -148,7 +148,7 @@ function main() {
         if (!isGateApproved(featureName, gate)) {
           console.log(`\n⏸️  Gate "${gate}" is NOT approved for "${featureName}".`);
           console.log(`   Please approve this gate before running this command.`);
-          console.log(`   Use: sdrive approve ${gate}\n`);
+          console.log(`   Use: sdrive approve ${featureName} ${gate}\n`);
           process.exit(1);
         }
         console.log(`✅ Gate "${gate}" is approved.`);

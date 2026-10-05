@@ -238,7 +238,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | `sdrive validate` | Validate all governance files |
 | `sdrive config:validate` | Validate `config.json` |
 | `sdrive status` | Show feature lifecycle |
-| `sdrive approve <gate>` | Approve a gate |
+| `sdrive approve <feature> <gate>` | Approve a gate (only if its requirements are met) |
 | `sdrive create <feature>` | Create feature scaffold |
 | `sdrive team:add/remove/list/update` | Manage team |
 | `sdrive team:sync` | Sync from GitHub |

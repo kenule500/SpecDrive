@@ -1068,15 +1068,20 @@ program
 
 // ---------- APPROVE COMMAND ----------
 program
-  .command("approve <gate>")
+  .command("approve <feature> <gate>")
   .description("Approve a workflow gate (specification, planning, implementation, review)")
-  .action((gate) => {
+  .action((featureName, gate) => {
     requirePermission("approve");
 
-    const allowedGates = ["specification", "planning", "implementation", "review"];
+    const {
+      GATE_ORDER,
+      checkGateRequirements,
+      findFeature,
+      resolveVersion
+    } = require("../commands/gates");
 
-    if (!allowedGates.includes(gate)) {
-      console.error(`❌ Invalid gate. Allowed: ${allowedGates.join(", ")}`);
+    if (!GATE_ORDER.includes(gate)) {
+      console.error(`❌ Invalid gate "${gate}". Allowed: ${GATE_ORDER.join(", ")}`);
       process.exit(1);
     }
 
@@ -1090,37 +1095,80 @@ program
 
     const state = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
 
-    if (!state.features || state.features.length === 0) {
-      console.error("❌ No features found.");
+    // The feature is explicit. NEVER fall back to state.features[0] - approving
+    // the wrong feature writes a false record while reporting success.
+    const feature = findFeature(state, featureName);
+
+    if (!feature) {
+      console.error(`❌ Feature "${featureName}" not found.`);
+
+      const known = (state.features || []).map((f) => f.name);
+
+      if (known.length > 0) {
+        console.error(`   Known features: ${known.join(", ")}`);
+      }
+
       process.exit(1);
     }
 
-    const feature = state.features[0];
-    const versionId = feature.currentVersion;
+    const version = resolveVersion(feature);
 
-    if (!feature.versions || feature.versions.length === 0) {
-      console.error("❌ No versions found.");
+    if (!version) {
+      console.error(`❌ Feature "${featureName}" has no versions.`);
       process.exit(1);
     }
 
-    const version = feature.versions.find((v) => v.id === versionId) || feature.versions[0];
+    version.gates = version.gates || {};
 
-    if (!version.gates) {
-      version.gates = {};
+    // Verify BEFORE writing anything. A gate may only be approved when the work
+    // it certifies actually exists.
+    const { ok, blockers, warnings, current } = checkGateRequirements(
+      projectRoot,
+      feature,
+      version,
+      gate
+    );
+
+    warnings.forEach((warning) => console.warn(`⚠️  ${warning}`));
+
+    if (!ok) {
+      console.error(`\n❌ Refusing to approve "${gate}" for "${featureName}" version "${version.id}".`);
+
+      blockers.forEach((blocker) => console.error(`   • ${blocker}`));
+
+      console.error("\nNothing was written. Approving an unmet gate would falsify the governance record.\n");
+      process.exit(1);
     }
+
+    if (current === "approved") {
+      console.log(`\n✅ Gate "${gate}" is already approved for "${featureName}" version "${version.id}". Nothing changed.\n`);
+      return;
+    }
+
+    const actor = currentActor();
 
     version.gates[gate] = "approved";
     version.history = version.history || [];
     version.history.push({
       event: `${gate}_approved`,
-      actor: currentActor(),
+      // `by` is the schema's field; `actor` is retained for existing readers.
+      by: actor,
+      actor,
+      previousValue: current || "pending",
       timestamp: new Date().toISOString()
     });
 
     fs.writeFileSync(workflowStatePath, JSON.stringify(state, null, 2));
-    audit("gate_approved", { feature: feature.name, version: version.id, gate });
+    audit("gate_approved", {
+      feature: feature.name,
+      version: version.id,
+      gate,
+      previousValue: current || "pending"
+    });
 
-    console.log(`✅ Gate "${gate}" approved for feature "${feature.name}" version "${version.id}".`);
+    console.log(`\n✅ Gate "${gate}" approved for feature "${feature.name}" version "${version.id}".`);
+    console.log(`   "${current || "pending"}" → "approved"`);
+    console.log("");
   });
 
 // ---------- TEAM COMMANDS ----------
