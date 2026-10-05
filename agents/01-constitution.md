@@ -206,6 +206,7 @@ Every feature that touches authentication, user input, or an HTTP surface MUST a
 - **CON-609:** A feature branch MUST be created from an approved base branch, and the working tree MUST be clean (`git status --porcelain` empty) before any branch switch or creation. A dirty tree MUST block the operation. <!-- source: SpecDrive Enterprise Branching Policy -->
 - **CON-610:** The feature branch MUST be deleted after its merge is confirmed — locally (`git branch -d`) and on the remote (`git push origin --delete`) — unless the user explicitly declines. The merge target branch MUST NEVER be deleted. <!-- source: SpecDrive Enterprise Branching Policy -->
 - **CON-611:** A branch MUST be merged as a single review unit. `/sdrive:archive` MUST refuse to merge a branch that contains commits belonging to other in-flight features. <!-- source: SpecDrive Enterprise Branching Policy -->
+- **CON-612:** A feature branch MUST be based on the branch it will eventually merge into, so that `git log <target-branch>..<base-branch>` is empty at creation. Basing a feature branch on another in-flight feature's branch stacks the two and makes this feature unarchivable until the other one is merged; that must be reported with its consequences and explicitly confirmed, never done silently. Dependent work MUST become a new version of the same feature (`sdrive version:new`), not a stacked feature. <!-- source: SpecDrive Enterprise Branching Policy -->
 
 ## 7. AI Agent Rules (CON-7xx)
 - **CON-701:** [Rule text] <!-- source: .sdrive/context/ai-workflow-rules.md -->

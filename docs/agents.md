@@ -219,7 +219,7 @@ SpecDrive uses 16 specialized agents. Each agent has one slash command.
 
 - **Moves the feature from `specs/backlog/` to `specs/ongoing/`** and sets the version's `phase` to `ongoing` (the backlog → ongoing transition)
 - Reads approved tasks and plan from the current version
-- Creates the feature's OWN branch `feature/<feature>` — one branch per feature (CON-606); asks the base branch and the branch name, with a suggested name
+- Creates the feature's OWN branch `feature/<feature>` — one branch per feature (CON-606); bases it on the branch the feature will merge into and verifies that base carries no other feature's commits (CON-612), then asks for the branch name with a suggested default
 - Implements production code only (no tests)
 - Runs `sdrive verify <feature>` before declaring completion
 - Commits and pushes

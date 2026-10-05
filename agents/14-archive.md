@@ -133,7 +133,26 @@ When invoked as `/sdrive:archive --all`, archive every ongoing feature that has 
    - Confirm the review report is current: its timestamp should be newer than `spec.md` and `plan.md`. If it is older, warn the user that the review may be stale and ask whether to continue.
    - Confirm the working tree is clean: `git status --porcelain`. If there are uncommitted changes, STOP and ask the user to commit or stash them.
    - Confirm the feature branch exists locally or on the remote. If it does not, apply the Resume Rule.
-   - **Single-Feature Branch Check (CON-611, MANDATORY):** confirm `<feature-branch>` contains ONLY this feature's work. Inspect `git log <target-branch>..<feature-branch> --oneline` and compare those commits against the other in-flight features under `.sdrive/specs/ongoing/`. If commits belonging to another feature are present, STOP and report — never merge a branch that would ship an unrelated, unaudited feature.
+   - **Single-Feature Branch Check (CON-611, MANDATORY):** confirm `<feature-branch>` contains ONLY this feature's work. Inspect `git log <target-branch>..<feature-branch> --oneline` and compare those commits against the other in-flight features under `.sdrive/specs/ongoing/`. If commits belonging to another feature are present, STOP — never merge a branch that would ship an unrelated, unaudited feature.
+     - **Report the merge order, not just the refusal.** A stacked branch is cleared by merging bottom-up, because the range `git log <target-branch>..<feature-branch>` shrinks as ancestors land on `<target-branch>`. So:
+       1. Group the offending commits by owning feature and give the count for each.
+       2. For each blocking feature, test whether ITS branch is already clean against `<target-branch>`: `git log <target-branch>..<blocking-branch> --oneline`. The features that are clean sit at the bottom of the stack and must be archived first.
+       3. Print the resulting order, then STOP. Do NOT rebase, rewrite history, or delete branches to force the merge through.
+     - Example report:
+       ```text
+       ❌ Refusing to archive "contact-page".
+          Its branch also contains work belonging to:
+            • about-page    — 12 commits (e.g. feat(T9.1) ...)
+            • services-hub  —  3 commits (e.g. feat(T8.4) ...)
+
+       This is a stacked branch. Merge bottom-up to clear it — no rebasing needed:
+           1. /sdrive:archive about-page        (branch is clean against <target-branch>)
+           2. /sdrive:archive services-hub      (clean once about-page is merged)
+           3. /sdrive:archive contact-page      <- this feature
+
+       To avoid this next time, base every feature branch on <target-branch>
+       (CON-612, see the Base-Branch Invariant in /sdrive:apply).
+       ```
 
 3. **DECISION GATE**
    - **IF REVIEW DID NOT PASS:**

@@ -117,15 +117,48 @@ You operate within the current version folder only.
      - Apply the Dirty-Tree Precondition below, then `git checkout feature/<feature>` and `git pull origin feature/<feature>` (if it exists on the remote). Record `<feature-branch>` = `feature/<feature>` and skip branch creation.
    - **If the user chooses to create the feature branch:** continue with the base-branch and branch-name steps below.
 
-   - **Base Branch (User-Approved)** — ask:
+   - **Base Branch (User-Approved) — base it on the branch this feature will merge into.**
 
-     "Which branch should this feature branch be based on?"
+     A feature branch MUST be based on its target branch. One invariant decides it:
 
-     Options:
+     ```bash
+     git log <target-branch>..<base-branch> --oneline   # MUST print nothing
+     ```
 
-     1. `<current-branch>` (current) — the branch you are on right now. List it FIRST. This is the common case when extending work that is already in progress.
-     2. The repository's default branch — resolve it dynamically (never assume `main`).
+     If that prints commits, the base carries work the target does not have, so this feature's branch will carry it too. That couples two features' lifecycles: one review verdict would cover both, they share a single revert unit, and `/sdrive:archive` will refuse this feature (CON-611) until the other one is merged.
+
+     Never stack a feature on another in-flight feature's branch to build dependent work. Use `sdrive version:new <feature>` instead — follow-on work belongs in a new version of the SAME feature, on the same branch (CON-612).
+
+     Resolve `<target-branch>` first (never assume `main` — CON-608):
+
+     ```bash
+     git symbolic-ref refs/remotes/origin/HEAD --short   # -> origin/<default>
+     ```
+
+     Then ask:
+
+     "Which branch should `<feature>` be based on? It will eventually merge back into `<target-branch>`."
+
+     Options, in this order:
+
+     1. **`<target-branch>`** — the recommended default. It IS the branch this feature merges into, so it satisfies the invariant by definition and keeps the branch a single review unit (CON-611).
+     2. `<current-branch>` (current) — offer it, but describe it accurately. If `git log <target-branch>..<current-branch>` prints nothing, it is level with the target and is a safe choice. If it prints commits, label it with the cost, e.g. `⚠️ <current-branch> (carries <n> commits of <owning-feature> not yet in <target-branch>)`, and let the Base-Branch Invariant step below handle the acknowledgment.
      3. Another branch — list the local branches (`git branch --format='%(refname:short)'`) and ask the user to pick one.
+
+   - **Base-Branch Invariant (MANDATORY — run it after the user picks a base, before creating anything)**
+
+     ```bash
+     git log <target-branch>..<base-branch> --oneline
+     ```
+
+     - Prints **nothing** → the base is clean. Proceed.
+     - Prints **commits** → group them by owning feature (compare task IDs and file paths against `.sdrive/specs/ongoing/`), then STOP and state the consequences in plain words before doing anything else:
+       - `<base-branch>` carries `<n>` commits belonging to `<owning-feature>` that `<target-branch>` does not have.
+       - `<feature>`'s branch will therefore contain `<owning-feature>`'s work.
+       - `/sdrive:archive <feature>` will refuse to merge (CON-611) until `<owning-feature>` is merged.
+       - If `<owning-feature>` has no passing `review.md`, `<feature>` cannot be archived at all until it does.
+     - Then ask whether to continue on that base or switch to `<target-branch>` — **recommend and default to `<target-branch>`**.
+     - Only continue on a non-clean base if the user explicitly confirms, and report that decision in the final summary. Never proceed silently: an unrecorded stacked branch is what produces a merge that ships several features under one feature's completion record.
 
    - **Dirty-Tree Precondition (MANDATORY)** — before switching branches, run:
 

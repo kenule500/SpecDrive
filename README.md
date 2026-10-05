@@ -959,7 +959,7 @@ A defect in already-shipped code is a *different* work unit: use a `fix/<ticket>
 
 ### Branching Policy (Enterprise Standard)
 
-One branch per feature is mandatory. The constitution encodes this as **CON-606 – CON-611**, so it is enforceable project governance, not just agent guidance.
+One branch per feature is mandatory. The constitution encodes this as **CON-606 – CON-612**, so it is enforceable project governance, not just agent guidance.
 
 | Rule | Requirement |
 |------|-------------|
@@ -969,6 +969,7 @@ One branch per feature is mandatory. The constitution encodes this as **CON-606 
 | **CON-609** | Branch from an approved base branch with a clean working tree (`git status --porcelain` must be empty) |
 | **CON-610** | Delete the feature branch after a confirmed merge — locally (`git branch -d`) and on the remote (`git push origin --delete`) — unless the user declines. Never delete the merge target branch |
 | **CON-611** | One review unit per branch. `/sdrive:archive` refuses to merge a branch that contains other in-flight features' commits |
+| **CON-612** | Base a feature branch on the branch it will merge into — `git log <target>..<base>` must be empty. Stacking on another in-flight feature branch is reported with its consequences and must be confirmed, never silent. Dependent work uses `sdrive version:new`, not a stacked feature |
 
 `/sdrive:apply` always creates or resumes the feature's **own** branch. Resuming the same feature's existing branch is still one-branch-per-feature. `/sdrive:archive` asks which branch to merge into (detected, never assumed), then asks separately whether to delete the feature branch.
 
