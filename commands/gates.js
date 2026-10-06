@@ -145,6 +145,81 @@ function countTasks(tasksJson) {
   return { total, done };
 }
 
+// Acceptance criteria are declared on the user stories in spec.json. Coverage is
+// always measured against THESE, never against the traceability matrix's own rows —
+// otherwise a criterion that is missing from the matrix would silently stop counting
+// and the feature would look fully covered.
+function collectAcceptanceCriteria(specJson) {
+  const ids = [];
+
+  for (const story of (specJson && specJson.userStories) || []) {
+    for (const ac of story.acceptanceCriteria || []) {
+      if (ac && ac.id && !ids.includes(ac.id)) {
+        ids.push(ac.id);
+      }
+    }
+  }
+
+  return ids;
+}
+
+// A criterion counts as tested only when a traceability row links it to at least one
+// test AND that row is complete. A row with no test ID, or one still in progress, is
+// not evidence that anything was verified.
+function collectTestedAcceptanceCriteria(traceJson) {
+  const ids = [];
+
+  for (const row of (traceJson && traceJson.rows) || []) {
+    const linkedTests = Array.isArray(row.testIds) ? row.testIds.length : 0;
+
+    if (linkedTests === 0 || row.status !== "complete") {
+      continue;
+    }
+
+    for (const ac of row.acceptanceCriteriaIds || []) {
+      if (!ids.includes(ac)) {
+        ids.push(ac);
+      }
+    }
+  }
+
+  return ids;
+}
+
+// Which criteria are planned for. spec.json links requirements -> ACs, and tasks link
+// back to requirements (`linkedRequirements` is required on every task), so that chain
+// is the reliable route. Tasks' own `linkedAcceptanceCriteria` is optional in the
+// schema, so relying on it alone would falsely warn about correctly planned features.
+function collectPlannedAcceptanceCriteria(specJson, tasksJson) {
+  const acsByRequirement = new Map();
+
+  for (const group of ["functionalRequirements", "nonFunctionalRequirements"]) {
+    for (const requirement of (specJson && specJson[group]) || []) {
+      if (requirement && requirement.id) {
+        acsByRequirement.set(requirement.id, requirement.linkedAcceptanceCriteria || []);
+      }
+    }
+  }
+
+  const planned = new Set();
+
+  for (const phase of (tasksJson && tasksJson.phases) || []) {
+    for (const task of phase.tasks || []) {
+      for (const ac of task.linkedAcceptanceCriteria || []) {
+        planned.add(ac);
+      }
+
+      for (const requirementId of task.linkedRequirements || []) {
+        for (const ac of acsByRequirement.get(requirementId) || []) {
+          planned.add(ac);
+        }
+      }
+    }
+  }
+
+  return planned;
+}
+
 // Returns { ok, blockers, warnings, location, current, tasks }.
 // `ok === false` means the gate must NOT be approved and nothing may be written.
 function checkGateRequirements(root, feature, version, gate) {
@@ -163,7 +238,7 @@ function checkGateRequirements(root, feature, version, gate) {
 
   if (location && location.stage === "completed") {
     blockers.push(
-      `"${feature.name}" is archived in specs/completed/. Gates on a completed feature are history - run \`sdrive reopen ${feature.name}\` first.`
+      `"${feature.name}" is archived in specs/completed/. Gates on a completed feature are history - run \`sdrive amend ${feature.name}\` first.`
     );
   }
 
@@ -209,6 +284,26 @@ function checkGateRequirements(root, feature, version, gate) {
     requireGovFile("plan.json", "machine-readable plan");
     requireGovFile("tasks.json", "machine-readable tasks");
     requireGovFile("traceability.json", "requirement-to-task traceability");
+
+    // Every acceptance criterion has to be planned for, otherwise the review gate's
+    // coverage requirement can never be met and the feature dead-ends at review.
+    // Advisory rather than blocking: `linkedAcceptanceCriteria` is optional in the
+    // tasks schema, so a plan that links only requirements is warned about, not rejected.
+    const specJson = readJsonIfPresent(govFile("spec.json"));
+    const tasksJson = readJsonIfPresent(govFile("tasks.json"));
+
+    if (specJson && tasksJson) {
+      const planned = collectPlannedAcceptanceCriteria(specJson, tasksJson);
+      const unplanned = collectAcceptanceCriteria(specJson).filter((ac) => !planned.has(ac));
+
+      if (unplanned.length > 0) {
+        warnings.push(
+          `${unplanned.length} acceptance criteria are not linked to any task (${unplanned
+            .slice(0, 6)
+            .join(", ")}${unplanned.length > 6 ? ", ..." : ""}). The review gate needs a passing test for every one of them - plan them explicitly.`
+        );
+      }
+    }
   }
 
   if (gate === "implementation") {
@@ -253,6 +348,51 @@ function checkGateRequirements(root, feature, version, gate) {
     } else if (!/Status:\s*PASS/i.test(fs.readFileSync(reviewPath, "utf8"))) {
       blockers.push(
         `review.md does not record \`Status: PASS\` - a failing or torn verdict cannot be approved.`
+      );
+    }
+
+    // Coverage is the whole point of this gate. Approving review is what unlocks
+    // /sdrive:archive, and archive is what merges to the target branch and moves the
+    // feature to completed/. An untested feature that reaches completed/ is already on
+    // the target branch, so its tests can no longer gate anything - the window to
+    // verify it has closed. That makes coverage a BLOCKER here, enforced in code.
+    // It used to be asked for only in the review agent's prompt, and a prompt is not
+    // a gate: a review could write `Status: PASS` at 0% coverage and be approved.
+    const traceJson = readJsonIfPresent(govFile("traceability.json"));
+
+    if (!traceJson) {
+      blockers.push(
+        "Missing or unreadable traceability.json, so test coverage cannot be verified."
+      );
+    } else {
+      const allAcs = collectAcceptanceCriteria(readJsonIfPresent(govFile("spec.json")));
+      const testedAcs = collectTestedAcceptanceCriteria(traceJson);
+      const untested = allAcs.filter((ac) => !testedAcs.includes(ac));
+
+      if (allAcs.length === 0) {
+        warnings.push(
+          "spec.json declares no acceptance criteria, so coverage could not be computed."
+        );
+      } else if (untested.length > 0) {
+        blockers.push(
+          `${untested.length} of ${allAcs.length} acceptance criteria have no passing test (${untested
+            .slice(0, 6)
+            .join(", ")}${untested.length > 6 ? ", ..." : ""}) - run \`/sdrive:test ${feature.name}\` first, then re-run the review.`
+        );
+      }
+    }
+
+    // The coverage report is a human-readable artifact. Its absence weakens the audit
+    // trail, but traceability.json above is the machine-checkable source of truth, so
+    // a missing report warns rather than blocks.
+    const reportsDir = path.join(root, ".sdrive", "reports", "tests");
+    const reportPrefix = `test-report-${feature.name}-${version.id}-`;
+
+    if (!fs.existsSync(reportsDir)) {
+      warnings.push("No .sdrive/reports/tests/ directory, so no test report was found.");
+    } else if (!fs.readdirSync(reportsDir).some((f) => f.startsWith(reportPrefix))) {
+      warnings.push(
+        `No test report matching ${reportPrefix}<date>.md in .sdrive/reports/tests/.`
       );
     }
   }

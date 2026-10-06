@@ -304,7 +304,7 @@ SpecDrive uses 16 specialized agents. Each agent has one slash command.
 - On pass: notifies the user to run `/sdrive:archive <feature>`
 - Verifies permission before and after the audit
 
-**Lifecycle ownership:** `/sdrive:apply` owns `backlog/` → `ongoing/`; `/sdrive:archive` owns `ongoing/` → `completed/`; `sdrive reopen` owns `completed/` → `ongoing/`.
+**Lifecycle ownership:** `/sdrive:apply` owns `backlog/` → `ongoing/`; `/sdrive:archive` owns `ongoing/` → `completed/`; `sdrive amend` owns `completed/` → `ongoing/` for that version only, and only as a corrective action on a wrongly-closed record; new work on a released feature is `sdrive version:new`, which creates a new version and leaves the released one in `completed/`.
 
 **Batch mode:** `/sdrive:review --all` reviews every ongoing feature one after the other and writes an aggregate report to `.sdrive/reports/reviews/review-report-all-<date>.md`. A feature that fails review is never cleared for archive.
 

@@ -6,6 +6,24 @@
   <title>SpecDrive Dashboard</title>
   <link rel="icon" href="/logo.png" />
   <link rel="stylesheet" href="/style.css" />
+  <script>
+    /* Set the theme before first paint, so the page never flashes the wrong one.
+       Order of precedence: saved choice -> OS preference -> light. */
+    (function () {
+      var theme = "light";
+      try {
+        var saved = window.localStorage.getItem("sdrive-theme");
+        if (saved === "light" || saved === "dark") {
+          theme = saved;
+        } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+          theme = "dark";
+        }
+      } catch (error) {
+        /* localStorage can be blocked; light is a safe default. */
+      }
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
 </head>
 <body>
   <div class="app-shell">
@@ -65,6 +83,10 @@
           <p class="topbar-subtitle">Spec-driven development with built-in governance</p>
         </div>
         <div class="topbar-actions">
+          <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch between light and dark theme" title="Switch theme">
+            <span id="theme-toggle-icon" class="theme-toggle-icon" aria-hidden="true">◐</span>
+            <span id="theme-toggle-label" class="theme-toggle-label">Theme</span>
+          </button>
           <div id="topbar-git" class="git-chip">Loading…</div>
         </div>
       </header>

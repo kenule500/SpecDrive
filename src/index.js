@@ -963,8 +963,9 @@ program
     const versionEntry = (target.versions || []).find((v) => v.id === version);
 
     if (versionEntry && versionEntry.phase === "completed") {
-      console.error(`❌ Feature "${feature}" is completed and cannot be extended.`);
-      console.error(`   Run \`sdrive reopen ${feature}\` first.`);
+      console.error(`❌ Version "${version}" of "${feature}" is released and cannot be extended in place.`);
+      console.error(`   Run \`sdrive version:new ${feature}\` to start a new version. It leaves the`);
+      console.error("   released version and its record untouched.");
       process.exit(1);
     }
 
@@ -1169,6 +1170,82 @@ program
     console.log(`\n✅ Gate "${gate}" approved for feature "${feature.name}" version "${version.id}".`);
     console.log(`   "${current || "pending"}" → "approved"`);
     console.log("");
+  });
+
+// ---------- ARCHIVE COMMANDS ----------
+// Approving a gate and closing a lifecycle are separate acts. `sdrive approve` checks
+// the evidence and writes the approval; these close the record. Neither will grant an
+// approval that does not already exist, so a feature that was never tested or reviewed
+// cannot be recorded as archived. See commands/archive.js for the reasoning.
+program
+  .command("archive:check <feature>")
+  .description("Report whether a feature may be archived. Changes nothing")
+  .action((featureName) => {
+    requirePermission("archive:check");
+
+    const { checkArchivable } = require("../commands/archive");
+    const verdict = checkArchivable(process.cwd(), featureName);
+
+    verdict.warnings.forEach((warning) => console.warn(`⚠️  ${warning}`));
+
+    if (verdict.alreadyFinalized) {
+      console.log(
+        `\n✅ "${featureName}" is already finalized - ${verdict.version.id} is in specs/completed/.\n`
+      );
+      return;
+    }
+
+    if (!verdict.ok) {
+      console.error(`\n❌ "${featureName}" cannot be archived yet.`);
+      verdict.blockers.forEach((blocker) => console.error(`   • ${blocker}`));
+      console.error("");
+      process.exit(1);
+    }
+
+    console.log(`\n✅ "${featureName}" ${verdict.version.id} is archivable.`);
+    console.log("   All four gates are approved and the evidence behind them is still present.");
+    console.log("");
+  });
+
+program
+  .command("archive:finalize <feature>")
+  .description(
+    "Close a feature's lifecycle: move its spec to completed/ and mark the version completed. Refuses unless every gate is already approved"
+  )
+  .option("--merge-commit <sha>", "Record the merge commit in the feature history")
+  .action((featureName, options) => {
+    requirePermission("archive:finalize");
+
+    const { finalizeArchive } = require("../commands/archive");
+    const result = finalizeArchive(process.cwd(), featureName, {
+      actor: currentActor(),
+      mergeCommit: options.mergeCommit
+    });
+
+    result.warnings.forEach((warning) => console.warn(`⚠️  ${warning}`));
+
+    if (result.alreadyFinalized) {
+      console.log(`\n✅ "${featureName}" is already finalized. Nothing changed.\n`);
+      return;
+    }
+
+    if (!result.ok) {
+      console.error(`\n❌ Refusing to finalize "${featureName}".`);
+      result.blockers.forEach((blocker) => console.error(`   • ${blocker}`));
+      console.error(
+        "\nNothing was written. A lifecycle may only be closed on approvals that already exist.\n"
+      );
+      process.exit(1);
+    }
+
+    audit("feature_archived", { feature: featureName, version: result.version });
+
+    console.log(`\n✅ Feature "${featureName}" finalized (${result.version}).`);
+    console.log(
+      `   Spec moved: specs/${result.from}/${featureName} → specs/completed/${featureName}`
+    );
+    console.log("   Governance left in place at .sdrive/governance/<feature>/<version>/.");
+    console.log("   Commit the move, then let /sdrive:archive delete the branch.\n");
   });
 
 // ---------- TEAM COMMANDS ----------
@@ -1387,11 +1464,11 @@ program
     }
   });
 
-// ---------- REOPEN BRANCH HANDLING ----------
-// Reopening is a LIFECYCLE operation (completed/ -> ongoing/), never a branching
+// ---------- AMEND BRANCH HANDLING ----------
+// Amending is a LIFECYCLE operation (completed/ -> ongoing/), never a branching
 // one: this helper never creates a branch on its own. But `archive` deletes the
-// feature branch, so a reopened feature usually has nowhere to live. So we ask
-// where the reopened work should happen AND which branch to base it on.
+// feature branch, so an amended feature usually has nowhere to live. So we ask
+// where the amended work should happen AND which branch to base it on.
 function makeGitRunner() {
   return (cmd) =>
     execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -1438,7 +1515,7 @@ function branchExists(run, name) {
   }
 }
 
-function resolveReopenBranch(feature, options) {
+function resolveAmendBranch(feature, options) {
   const run = makeGitRunner();
 
   try {
@@ -1446,6 +1523,26 @@ function resolveReopenBranch(feature, options) {
   } catch (error) {
     console.log("⚠️  Not a Git repository. Skipping branch handling.");
     return null;
+  }
+
+  // Refresh the remote-tracking refs before probing anything. Both the "does this
+  // branch still exist" check and the base invariant below are only trustworthy if
+  // they describe the remote as it is NOW, not as it was the last time someone
+  // happened to fetch.
+  let remotes = [];
+
+  try {
+    remotes = run("git remote").split(/\s+/).filter(Boolean);
+  } catch (error) {
+    remotes = [];
+  }
+
+  if (remotes.includes("origin")) {
+    try {
+      run("git fetch origin --prune");
+    } catch (error) {
+      console.log("⚠️  Could not fetch from origin (offline?). Using local refs.");
+    }
   }
 
   let currentBranch = "";
@@ -1480,11 +1577,16 @@ function resolveReopenBranch(feature, options) {
       );
     }
 
-    return { explicit: options.branch, base };
+    return { explicit: options.branch, base, defaultBranch, currentBranch };
   }
 
   if (options.branch === true) {
-    return { explicit: defaultName, base: defaultBranch || currentBranch };
+    return {
+      explicit: defaultName,
+      base: defaultBranch || currentBranch,
+      defaultBranch,
+      currentBranch
+    };
   }
 
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
@@ -1498,7 +1600,7 @@ function resolveReopenBranch(feature, options) {
   return { defaultName, currentBranch, defaultBranch };
 }
 
-async function promptReopenBranch(feature, defaultName, currentBranch) {
+async function promptAmendBranch(feature, defaultName, currentBranch) {
   const rl = require("readline/promises").createInterface({
     input: process.stdin,
     output: process.stdout
@@ -1506,7 +1608,7 @@ async function promptReopenBranch(feature, defaultName, currentBranch) {
 
   try {
     const answer = await rl.question(
-      `\nWhich branch should the reopened work happen on?\n` +
+      `\nWhich branch should the amended work happen on?\n` +
         `  1) Create or switch to "${defaultName}" (recommended)\n` +
         `  2) Stay on the current branch${currentBranch ? ` (${currentBranch})` : ""}\n` +
         `Choose [1/2]: `
@@ -1519,7 +1621,7 @@ async function promptReopenBranch(feature, defaultName, currentBranch) {
 
 // Ask which branch the NEW feature branch should be based on. The merged feature's
 // code now lives on the target/default branch, so that is the recommended base.
-async function promptReopenBase(defaultBranch, currentBranch) {
+async function promptAmendBase(defaultBranch, currentBranch) {
   const choices = [];
   if (defaultBranch) choices.push(defaultBranch);
   if (currentBranch && currentBranch !== defaultBranch) choices.push(currentBranch);
@@ -1558,33 +1660,145 @@ async function promptReopenBase(defaultBranch, currentBranch) {
   }
 }
 
-function applyReopenBranch(feature, target, base) {
+// Is `branch` already an ancestor of `into`? If so it is a SPENT branch: its commits
+// are already in the integration branch, so putting new work on it re-opens a finished
+// review and can re-merge content that has already landed.
+function isMergedInto(run, branch, into) {
+  if (!branch || !into) return false;
+
+  for (const anchor of [into, `origin/${into}`]) {
+    try {
+      run(`git merge-base --is-ancestor "${branch}" "${anchor}"`);
+      return true;
+    } catch (error) {
+      // not an ancestor of this ref - try the next one
+    }
+  }
+
+  return false;
+}
+
+// CON-607: a feature branch is `feature/<name>`, and on collision it takes the next
+// free `-v2`, `-v3`, ... suffix. Amend needs this because the branch that was just
+// archived may still exist, and a merged branch must never be reused.
+function nextAvailableBranchName(run, preferred) {
+  if (!branchExists(run, preferred)) return preferred;
+
+  for (let index = 2; index <= 99; index += 1) {
+    const candidate = `${preferred}-v${index}`;
+
+    if (!branchExists(run, candidate)) return candidate;
+  }
+
+  return "";
+}
+
+// CON-612: the branch must not carry commits the base does not have. Verifying it is
+// the whole point - asking for a base is not evidence that the base was used.
+function verifyBaseInvariant(run, base, branch) {
+  if (!base) return true;
+
+  try {
+    const ahead = run(`git log "${base}..${branch}" --oneline`);
+    const lines = ahead ? ahead.split("\n").filter(Boolean) : [];
+
+    if (lines.length === 0) {
+      console.log(
+        `✅ Base invariant (CON-612) holds: "${branch}" has no commits outside "${base}".`
+      );
+      return true;
+    }
+
+    console.log(
+      `⚠️  Base invariant (CON-612) is violated: "${branch}" carries commits not on "${base}":`
+    );
+    lines.slice(0, 10).forEach((line) => console.log(`     ${line}`));
+
+    if (lines.length > 10) {
+      console.log(`     ...and ${lines.length - 10} more.`);
+    }
+
+    console.log(
+      `   Merge "${base}" into "${branch}" before continuing, or recreate the branch from it.`
+    );
+    return false;
+  } catch (error) {
+    return true;
+  }
+}
+
+function applyAmendBranch(feature, target, base, defaultBranch) {
   // Guard against shell injection through a user-supplied branch name.
   if (!isValidBranchName(target)) {
-    console.error(`❌ Invalid branch name "${target}". Reopened without branch changes.`);
+    console.error(`❌ Invalid branch name "${target}". Amended without branch changes.`);
+    return null;
+  }
+
+  const integration = defaultBranch || "";
+  let workBranch = target;
+
+  // CON-608: never implement on the default or a protected branch. Amended work on
+  // the integration branch itself steps around every review boundary the framework
+  // has, so it is refused rather than warned about.
+  if (integration && workBranch === integration) {
+    console.error(`❌ Refusing to amend work on "${workBranch}" (CON-608).`);
+    console.error("   That is the integration branch - amended work needs its own branch.");
+    console.error(`   Re-run with \`--branch feature/${feature}\`.`);
+    console.error("   The feature was still amended; you remain on the previous branch.");
+    return null;
+  }
+
+  if (base && workBranch === base) {
+    console.error(
+      `❌ A branch cannot be based on itself ("${workBranch}"). Amended without branch changes.`
+    );
+    return null;
+  }
+
+  if (base && !isValidBranchName(base)) {
+    console.error(`❌ Invalid base branch "${base}". Amended without branch changes.`);
     return null;
   }
 
   const run = makeGitRunner();
 
-  // Switching to an existing branch needs no base.
-  if (branchExists(run, target)) {
-    try {
-      execSync(`git checkout "${target}"`, { stdio: "inherit" });
-      console.log(`✅ Switched to existing branch "${target}".`);
-      return target;
-    } catch (error) {
-      console.error(`❌ Could not switch to "${target}".`);
-      console.error("   The feature was still reopened; you remain on the previous branch.");
-      return null;
+  if (branchExists(run, workBranch)) {
+    if (integration && isMergedInto(run, workBranch, integration)) {
+      // CON-607 + CON-610: merged branches are disposable. Reusing one is how
+      // already-landed work gets merged a second time, so take a fresh name.
+      const replacement = nextAvailableBranchName(run, workBranch);
+
+      if (!replacement) {
+        console.error(
+          `❌ "${workBranch}" is already merged and no free "-vN" name was found.`
+        );
+        console.error("   The feature was still amended; you remain on the previous branch.");
+        return null;
+      }
+
+      console.log(
+        `ℹ️  "${workBranch}" is already merged into "${integration}" - not reusing it.`
+      );
+      console.log(`   Using "${replacement}" instead (CON-607).`);
+      workBranch = replacement;
+    } else {
+      try {
+        execSync(`git checkout "${workBranch}"`, { stdio: "inherit" });
+        console.log(`✅ Switched to existing branch "${workBranch}".`);
+        verifyBaseInvariant(run, base || integration, workBranch);
+        // Record the base alongside the branch. Archive recommends the branch this one
+        // was cut from, because CON-612 requires base == merge target - so the base is
+        // the exact answer, not a proxy for it.
+        return { branch: workBranch, base: base || integration || "" };
+      } catch (error) {
+        console.error(`❌ Could not switch to "${workBranch}".`);
+        console.error("   The feature was still amended; you remain on the previous branch.");
+        return null;
+      }
     }
   }
 
-  if (base && !isValidBranchName(base)) {
-    console.error(`❌ Invalid base branch "${base}". Reopened without branch changes.`);
-    return null;
-  }
-
+  // Switching to an existing branch needs no base; creating one does.
   try {
     if (base) {
       let onBase = false;
@@ -1596,38 +1810,48 @@ function applyReopenBranch(feature, target, base) {
 
       if (!onBase) {
         execSync(`git checkout "${base}"`, { stdio: "inherit" });
-        try {
-          execSync(`git pull origin "${base}"`, { stdio: "inherit" });
-        } catch (error) {
-          console.log(`⚠️  Could not pull "${base}" (offline or no upstream). Continuing.`);
-        }
       }
 
-      execSync(`git checkout -b "${target}"`, { stdio: "inherit" });
-      console.log(`✅ Created branch "${target}" from "${base}".`);
+      // Bring the base up to date even when we were ALREADY on it. Cutting the new
+      // branch from a stale base makes the invariant below a half-truth the moment
+      // the remote has moved on.
+      try {
+        execSync(`git pull origin "${base}"`, { stdio: "inherit" });
+      } catch (error) {
+        console.log(`⚠️  Could not pull "${base}" (offline or no upstream). Continuing.`);
+      }
+
+      execSync(`git checkout -b "${workBranch}"`, { stdio: "inherit" });
+      console.log(`✅ Created branch "${workBranch}" from "${base}".`);
     } else {
-      execSync(`git checkout -b "${target}"`, { stdio: "inherit" });
-      console.log(`✅ Created branch "${target}" from the current branch.`);
+      execSync(`git checkout -b "${workBranch}"`, { stdio: "inherit" });
+      console.log(`✅ Created branch "${workBranch}" from the current branch.`);
     }
 
-    return target;
+    verifyBaseInvariant(run, base, workBranch);
+    return { branch: workBranch, base: base || "" };
   } catch (error) {
-    console.error(`❌ Could not create branch "${target}".`);
-    console.error("   The feature was still reopened; you remain on the previous branch.");
+    console.error(`❌ Could not create branch "${workBranch}".`);
+    console.error("   The feature was still amended; you remain on the previous branch.");
     return null;
   }
 }
 
-async function handleReopenBranch(feature, options) {
-  const resolved = resolveReopenBranch(feature, options);
+async function handleAmendBranch(feature, options) {
+  const resolved = resolveAmendBranch(feature, options);
 
   if (resolved === null) return null;
 
   if (resolved.explicit) {
-    return applyReopenBranch(feature, resolved.explicit, resolved.base);
+    return applyAmendBranch(
+      feature,
+      resolved.explicit,
+      resolved.base,
+      resolved.defaultBranch
+    );
   }
 
-  const choice = await promptReopenBranch(
+  const choice = await promptAmendBranch(
     feature,
     resolved.defaultName,
     resolved.currentBranch
@@ -1645,53 +1869,54 @@ async function handleReopenBranch(feature, options) {
   } else if (resolved.currentBranch && resolved.currentBranch !== resolved.defaultBranch) {
     console.log(
       `⚠️  You are on "${resolved.currentBranch}", not the default branch ` +
-        `("${resolved.defaultBranch}"). Reopened work should start from the branch ` +
+        `("${resolved.defaultBranch}"). Amended work should start from the branch ` +
         `that already contains the merged feature.`
     );
   }
 
-  const base = await promptReopenBase(resolved.defaultBranch, resolved.currentBranch);
+  const base = await promptAmendBase(resolved.defaultBranch, resolved.currentBranch);
 
-  return applyReopenBranch(feature, resolved.defaultName, base);
+  return applyAmendBranch(feature, resolved.defaultName, base, resolved.defaultBranch);
 }
 
-// ---------- REOPEN ----------
+// ---------- AMEND ----------
+// An amendment is a CORRECTIVE ACTION, not a way to get back to work. It exists for
+// exactly one case: a feature whose lifecycle was closed WRONGLY - shipped without the
+// tests or review its acceptance criteria required, or archived by mistake.
+//
+// The version is the same piece of work, so issuing a new version for that would be a
+// false record: it would attach v1's proofs to a version nobody ever shipped. Amending
+// the record is what makes v1's history true.
+//
+// Changing or extending a RELEASED feature is CHANGE CONTROL, and that is
+// `sdrive version:new`, which never touches the released version or its record.
 program
-  .command("reopen <feature>")
-  .description("Reopen a completed feature")
+  .command("amend <feature>")
+  .description("Reopen a wrongly-closed feature to correct its record (corrective action, not new scope)")
   .option(
     "-b, --branch [name]",
-    "Create or switch to a branch for the reopened work (default: feature/<feature>)"
+    "Create the amended work on this branch (default: feature/<feature>). A merged branch is never reused - CON-607 adds a -v2 suffix instead"
   )
   .option("--base [name]", "Base the new branch on this branch (skips the base prompt)")
   .option("--stay", "Stay on the current branch (do not create or switch)")
+  .option("--reason <text>", "Required. Why the original closure was wrong - recorded in the feature history")
   .action(async (feature, options) => {
-    requirePermission("reopen");
+    requirePermission("amend");
 
-    const projectRoot = process.cwd();
-    const sdriveRoot = path.join(projectRoot, ".sdrive");
+    const reason = String(options.reason || "").trim();
 
-    const completedSpecDir = path.join(sdriveRoot, "specs", "completed", feature);
-    const ongoingSpecDir = path.join(sdriveRoot, "specs", "ongoing", feature);
-
-    const completedGovDir = path.join(sdriveRoot, "governance", "completed", feature);
-    const ongoingGovDir = path.join(sdriveRoot, "governance", feature);
-
-    if (fs.existsSync(completedSpecDir)) {
-      fs.mkdirSync(path.dirname(ongoingSpecDir), { recursive: true });
-      fs.renameSync(completedSpecDir, ongoingSpecDir);
-      console.log(`✅ Moved spec: completed/${feature} → ongoing/${feature}`);
-    } else if (!fs.existsSync(ongoingSpecDir)) {
-      console.error(`❌ Feature "${feature}" not found in completed/ or ongoing/.`);
+    if (!reason) {
+      console.error("❌ An amendment needs a reason.");
+      console.error(`   Usage: sdrive amend ${feature} --reason "why the closure was wrong"`);
+      console.error("   The reason IS the record: without it, re-opening a closed lifecycle");
+      console.error("   is indistinguishable from editing history.");
+      console.error("");
+      console.error(`   To CHANGE a released feature instead, run \`sdrive version:new ${feature}\`.`);
       process.exit(1);
     }
 
-    if (fs.existsSync(completedGovDir)) {
-      fs.mkdirSync(path.dirname(ongoingGovDir), { recursive: true });
-      fs.renameSync(completedGovDir, ongoingGovDir);
-      console.log(`✅ Moved governance: completed/${feature} → ${feature}`);
-    }
-
+    const projectRoot = process.cwd();
+    const sdriveRoot = path.join(projectRoot, ".sdrive");
     const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
 
     if (!fs.existsSync(workflowStatePath)) {
@@ -1713,14 +1938,68 @@ program
     }
 
     const currentVersion = target.versions.find((v) => v.id === target.currentVersion);
+    const versionId = currentVersion ? currentVersion.id : "v1";
 
+    const completedFeatureDir = path.join(sdriveRoot, "specs", "completed", feature);
+    const completedVersionDir = path.join(completedFeatureDir, versionId);
+    const ongoingFeatureDir = path.join(sdriveRoot, "specs", "ongoing", feature);
+    const ongoingVersionDir = path.join(ongoingFeatureDir, versionId);
+
+    // An amendment corrects a CLOSED record. If nothing was closed, this is the wrong
+    // command - more work on an in-flight feature is just more work.
+    const looksClosed =
+      (currentVersion && currentVersion.phase === "completed") ||
+      fs.existsSync(completedVersionDir);
+
+    if (!looksClosed) {
+      console.error(
+        `❌ "${feature}" ${versionId} does not look closed: phase is "${currentVersion ? currentVersion.phase : "unknown"}" and its spec is not in specs/completed/.`
+      );
+      console.error("   Amend is a corrective action on a closed lifecycle.");
+      console.error("   For more work on a released feature, run `sdrive version:new " + feature + "`.");
+      process.exit(1);
+    }
+
+    // Only THIS version's folder moves. Other versions stay in specs/completed/, so
+    // amending v2 never reads or rewrites a released v1.
+    if (fs.existsSync(completedVersionDir)) {
+      fs.mkdirSync(ongoingFeatureDir, { recursive: true });
+      fs.renameSync(completedVersionDir, ongoingVersionDir);
+      console.log(`✅ Moved spec: completed/${feature}/${versionId} → ongoing/${feature}/${versionId}`);
+
+      if (!fs.existsSync(ongoingVersionDir)) {
+        console.error("❌ The spec folder did not move as expected. The lifecycle was left unchanged.");
+        process.exit(1);
+      }
+
+      // Drop the released feature folder only when this was its last version.
+      try {
+        if (fs.readdirSync(completedFeatureDir).length === 0) {
+          fs.rmdirSync(completedFeatureDir);
+        }
+      } catch (error) {
+        // An empty folder left behind is not a false record.
+      }
+    } else if (!fs.existsSync(ongoingVersionDir)) {
+      console.error(
+        `❌ Version "${versionId}" of "${feature}" is in neither specs/completed/ nor specs/ongoing/.`
+      );
+      process.exit(1);
+    }
+
+    // Only the VERDICT is stale. The spec, plan and implementation were true when they
+    // were approved and the code has not changed, so review is what has to be re-earned.
+    // The reason is recorded because that is the entire point of a corrective action.
     if (currentVersion) {
       currentVersion.phase = "ongoing";
-      currentVersion.currentStep = "specification";
+      currentVersion.gates = currentVersion.gates || {};
       currentVersion.gates.review = "pending";
+      currentVersion.currentStep = "review";
+
       currentVersion.history = currentVersion.history || [];
       currentVersion.history.push({
-        event: "feature_reopened",
+        event: "feature_amended",
+        reason,
         actor: currentActor(),
         timestamp: new Date().toISOString()
       });
@@ -1728,23 +2007,50 @@ program
 
     fs.writeFileSync(workflowStatePath, JSON.stringify(state, null, 2));
 
-    console.log(`✅ Feature "${feature}" reopened.`);
-    console.log("   Review gate reset to pending.");
+    console.log(`✅ Feature "${feature}" amended (${versionId}).`);
+    console.log(`   Reason: ${reason}`);
+    console.log("   Review gate reset to pending. Specification, planning and implementation remain approved.");
+    console.log("   Next: /sdrive:test, then /sdrive:review, then /sdrive:archive.");
 
-    const appliedBranch = await handleReopenBranch(feature, options);
+    const applied = await handleAmendBranch(feature, options);
 
-    // Record the branch on the feature so review / security / archive can read it
-    // instead of guessing or hardcoding a branch name.
-    if (appliedBranch) {
+    // Record the branch AND the base on the feature. Archive recommends the recorded
+    // base first: CON-612 requires a feature branch to be based on the branch it will
+    // merge into, so the base is the target, not an assumption about it.
+    if (applied && applied.branch) {
       const freshState = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
       const freshTarget = freshState.features?.find((f) => f.name === feature);
 
       if (freshTarget) {
-        freshTarget.branch = appliedBranch;
+        freshTarget.branch = applied.branch;
+
+        if (applied.base) {
+          freshTarget.base = applied.base;
+        }
+
         fs.writeFileSync(workflowStatePath, JSON.stringify(freshState, null, 2));
-        console.log(`✅ Recorded branch "${appliedBranch}" on feature "${feature}".`);
+        console.log(
+          `✅ Recorded branch "${applied.branch}"${applied.base ? ` (base "${applied.base}")` : ""} on feature "${feature}".`
+        );
       }
     }
+  });
+
+// Deprecated alias. `reopen` was renamed to `amend` because the old name invited
+// "reopen a shipped feature" as a way to do MORE WORK, which is what `version:new` is
+// for. It deliberately does not run the old behaviour, and `{ hidden: true }` keeps it
+// out of --help. (Do NOT use the 3-arg `command(name, description, opts)` form here -
+// a string description makes commander treat it as an executable subcommand.)
+program
+  .command("reopen <feature>", { hidden: true })
+  .description("Deprecated - renamed to `amend`")
+  .allowUnknownOption()
+  .action(() => {
+    console.error("❌ `sdrive reopen` was renamed to `sdrive amend`.");
+    console.error("");
+    console.error("   `amend`  = corrective action on a wrongly-closed record (same version).");
+    console.error("   `version:new` = new work on a released feature (new version).");
+    process.exit(1);
   });
 
 // ---------- ONBOARD COMMAND ----------

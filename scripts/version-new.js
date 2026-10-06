@@ -15,13 +15,27 @@ if (!featureName) {
 const sdriveRoot = path.join(projectRoot, ".sdrive");
 const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
 
+// A feature may be in flight (specs/ongoing/) or already released (specs/completed/).
+// Adding a version to a RELEASED feature must not require un-archiving it: that would
+// rewrite the record of a version that already shipped. So old versions are read where
+// they live, and the new one is always written under specs/ongoing/ - which is valid
+// because findSpecLocation() resolves specs/<stage>/<feature>/<version> per version.
 const specFeatureDir = findFeatureDir(path.join(sdriveRoot, "specs", "ongoing"), featureName);
+const releasedSpecDir = findFeatureDir(path.join(sdriveRoot, "specs", "completed"), featureName);
 const govFeatureDir = findFeatureDir(path.join(sdriveRoot, "governance"), featureName);
 
-if (!specFeatureDir && !govFeatureDir) {
-  console.error(`❌ Feature "${featureName}" not found in ongoing or governance.`);
+if (!specFeatureDir && !releasedSpecDir && !govFeatureDir) {
+  console.error(
+    `❌ Feature "${featureName}" not found in specs/ongoing, specs/completed or governance.`
+  );
   process.exit(1);
 }
+
+// Where existing versions' files live (legacy migration reads these), and where the new
+// version goes. The released folder is read, never written.
+const specSourceDir = specFeatureDir || releasedSpecDir;
+const specTargetDir =
+  specFeatureDir || path.join(sdriveRoot, "specs", "ongoing", featureName);
 
 function findFeatureDir(baseDir, name) {
   if (!fs.existsSync(baseDir)) return null;
@@ -154,7 +168,7 @@ function main() {
 
   // Migrate if needed
   if (!feature.versions || feature.versions.length === 0) {
-    const v1 = migrateToVersions(feature, specFeatureDir, govFeatureDir);
+    const v1 = migrateToVersions(feature, specSourceDir, govFeatureDir);
     feature.versions = [v1];
     feature.currentVersion = "v1";
 
@@ -169,7 +183,7 @@ function main() {
 
   console.log(`📦 Creating version ${nextVersionId} for "${featureName}"`);
 
-  createVersionSkeleton(nextVersionId, specFeatureDir, govFeatureDir);
+  createVersionSkeleton(nextVersionId, specTargetDir, govFeatureDir);
 
   feature.versions.push({
     id: nextVersionId,
@@ -196,6 +210,13 @@ function main() {
   console.log(`✅ Version ${nextVersionId} created.`);
   console.log(`   Spec folder: .sdrive/specs/ongoing/${featureName}/${nextVersionId}/`);
   console.log(`   Governance: .sdrive/governance/${featureName}/${nextVersionId}/`);
+
+  if (releasedSpecDir) {
+    console.log(
+      `   ${featureName} stays released: specs/completed/${featureName}/ and its record are untouched.`
+    );
+  }
+
   console.log(`   Next: run /sdrive:propose to fill it.`);
 }
 

@@ -2440,7 +2440,9 @@ function renderWorkflowCards() {
     .join("");
 
   // Optional Commands card — a separate card below the lifecycle cards that
-  // groups the on-demand commands (performance, docs, secure, test, archive).
+  // groups the genuinely on-demand commands (performance, docs, secure, test).
+  // /sdrive:archive is deliberately NOT here: it is the compulsory final step of
+  // the core lifecycle, so it belongs to the workflow cards above.
   // It spans the full width of the grid row.
   const optional = commandData && commandData.optionalCommands;
   if (optional && (optional.commands || []).length) {
@@ -2630,6 +2632,89 @@ function setupSidebarDrawer() {
 }
 
 /* ============================================================
+   THEME
+   ============================================================ */
+
+const THEME_KEY = "sdrive-theme";
+
+/* An inline script in index.html sets <html data-theme> before first paint, so
+   this never has to apply the stored theme - it only reacts to clicks and keeps
+   the button's own label in step. The stored value is what that script reads. */
+function applyTheme(theme) {
+  const next = theme === "dark" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", next);
+
+  try {
+    window.localStorage.setItem(THEME_KEY, next);
+  } catch (error) {
+    /* localStorage can be blocked (private mode). The toggle still works for this session. */
+  }
+
+  syncThemeToggle(next);
+}
+
+/* The button advertises the theme it switches TO, not the one you are in, so the
+   label always describes the action a click will take. */
+function syncThemeToggle(theme) {
+  const current = theme || document.documentElement.getAttribute("data-theme") || "light";
+  const button = document.getElementById("theme-toggle");
+  if (!button) return;
+
+  const icon = document.getElementById("theme-toggle-icon");
+  const label = document.getElementById("theme-toggle-label");
+  const nextName = current === "dark" ? "light" : "dark";
+
+  button.setAttribute("aria-label", `Switch to ${nextName} theme`);
+  button.setAttribute("title", `Switch to ${nextName} theme`);
+  button.setAttribute("aria-pressed", current === "dark" ? "true" : "false");
+  if (label) label.textContent = nextName === "dark" ? "Dark" : "Light";
+  if (icon) icon.textContent = current === "dark" ? "☀" : "☾";
+}
+
+function setupThemeToggle() {
+  const button = document.getElementById("theme-toggle");
+  if (button) {
+    button.addEventListener("click", () => {
+      const current = document.documentElement.getAttribute("data-theme") || "light";
+      applyTheme(current === "dark" ? "light" : "dark");
+    });
+  }
+
+  // Keep in step when the theme changes elsewhere: another tab, or the OS
+  // switching while the user has not made an explicit choice yet.
+  window.addEventListener("storage", (event) => {
+    if (event.key === THEME_KEY && (event.newValue === "light" || event.newValue === "dark")) {
+      document.documentElement.setAttribute("data-theme", event.newValue);
+      syncThemeToggle(event.newValue);
+    }
+  });
+
+  if (window.matchMedia) {
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const followSystem = (event) => {
+      let saved = null;
+      try {
+        saved = window.localStorage.getItem(THEME_KEY);
+      } catch (error) {
+        /* ignore */
+      }
+      if (saved === "light" || saved === "dark") return;
+
+      document.documentElement.setAttribute("data-theme", event.matches ? "dark" : "light");
+      syncThemeToggle();
+    };
+
+    if (typeof query.addEventListener === "function") {
+      query.addEventListener("change", followSystem);
+    } else if (typeof query.addListener === "function") {
+      query.addListener(followSystem);
+    }
+  }
+
+  syncThemeToggle();
+}
+
+/* ============================================================
    MAIN
    ============================================================ */
 
@@ -2665,6 +2750,11 @@ function syncTopbarHeight() {
 }
 
 async function main() {
+  // Wire the theme toggle before the data fetches below. It needs no fetched
+  // data, and running it first means the button shows the right label straight
+  // away instead of the static "Theme" placeholder until the panels resolve.
+  setupThemeToggle();
+
   const [onboarding, product, git, project, productType] = await Promise.all([
     fetchJson("/api/onboarding"),
     fetchJson("/api/product"),

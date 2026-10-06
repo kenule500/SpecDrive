@@ -30,7 +30,7 @@ SpecDrive has two types of commands:
 | `sdrive diff <old> <new>` | Show differences between two spec files |
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
 | `sdrive dashboard` | Start local web dashboard |
-| `sdrive reopen <feature>` | Reopen a completed feature (`--branch [name]`, `--base [name]`, `--stay`) |
+| `sdrive amend <feature> --reason "..."` | Correct a wrongly-closed record — moves that version back to `ongoing/` (corrective action; new scope uses `sdrive version:new`) |
 | `sdrive verify <feature>` | Verify code matches plan.json |
 | `sdrive version:new <feature>` | Create a new version of a feature |
 | `sdrive diff:version <feature> <vA> <vB>` | Compare two versions of a feature |
@@ -179,7 +179,7 @@ Allowed gates, in order:
 Extra safeguards:
 
 - Every preceding gate must already be `approved`.
-- Gates cannot be approved on an archived feature (`specs/completed/`) — run `sdrive reopen <feature>` first.
+- Gates cannot be approved on an archived feature (`specs/completed/`) — run `sdrive amend <feature> --reason "..."` first if the closure was wrong.
 - The feature is named explicitly; the command never falls back to the first feature in the list.
 - Overwriting a `rejected` or `in_progress` value is reported, and the previous value is recorded in the version history.
 
@@ -513,7 +513,7 @@ Extends an **existing** feature specification with new requirements, user storie
 **When to use:**
 
 - When adding requirements to a feature that already exists
-- When a completed feature needs more work — run `sdrive reopen <feature>` first (it restores the feature to `ongoing/`, then asks which branch to create and which branch to base it on)
+- When a released feature must be changed — run `sdrive version:new <feature>`. That creates a new version under `ongoing/` and leaves the released version and its record untouched. Use `sdrive amend <feature> --reason "..."` only when the *closure itself* was wrong (for example it was archived before its tests were written), since amending updates the same version's record
 
 **What it does NOT do:**
 
@@ -714,7 +714,7 @@ A feature moves through three spec folders. Each transition has exactly one owne
 | → `specs/backlog/<feature>/<version>/` | `/sdrive:propose` | New specs are created in `backlog/` with `phase: backlog` |
 | `backlog/` → `ongoing/` | `/sdrive:apply` | Happens at the start of implementation; sets `phase: ongoing` |
 | `ongoing/` → `completed/` | `/sdrive:archive` | Happens after merge and archive; sets `phase: completed` |
-| `completed/` → `ongoing/` | `sdrive reopen <feature>` | Manual reopen for further work |
+| `completed/` → `ongoing/` | `sdrive amend <feature> --reason "..."` | Corrective action on a wrongly-closed record |
 
 `/sdrive:apply` MUST NOT begin implementation while the spec is still in `backlog/`. If the feature is in neither `backlog/` nor `ongoing/`, the agent stops and asks.
 

@@ -15,6 +15,9 @@
           "branch": {
             "type": "string"
           },
+          "base": {
+            "type": "string"
+          },
           "currentVersion": {
             "type": "string",
             "pattern": "^v[0-9]+$"

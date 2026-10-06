@@ -827,7 +827,7 @@ Audits and manages AI skills.
 | `sdrive diff <old> <new>` | Show differences between two spec files |
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
 | `sdrive dashboard` | Start local web dashboard |
-| `sdrive reopen <feature>` | Reopen a completed feature (`--branch [name]`, `--base [name]`, `--stay`) |
+| `sdrive amend <feature> --reason "..."` | Correct a wrongly-closed record — moves that version back to `ongoing/` (corrective action; new scope uses `sdrive version:new`) |
 | `sdrive verify <feature>` | Verify code matches plan.json |
 | `sdrive version:new <feature>` | Create a new version of a feature |
 | `sdrive diff:version <feature> <vA> <vB>` | Compare two versions of a feature |
@@ -939,7 +939,7 @@ A feature moves through three spec folders. Each transition has exactly one owne
 | → `specs/backlog/<feature>/<version>/` | `/sdrive:propose` | New specs are created in `backlog/` with `phase: backlog` |
 | `backlog/` → `ongoing/` | `/sdrive:apply` | Happens at the start of implementation; sets `phase: ongoing` |
 | `ongoing/` → `completed/` | `/sdrive:archive` | Happens after merge and archive; sets `phase: completed` |
-| `completed/` → `ongoing/` | `sdrive reopen <feature>` | Manual reopen for further work |
+| `completed/` → `ongoing/` | `sdrive amend <feature> --reason "..."` | Corrective action on a wrongly-closed record |
 
 `/sdrive:apply` MUST NOT begin implementation while the spec is still in `backlog/`. If the feature is in neither `backlog/` nor `ongoing/`, the agent stops and asks.
 
@@ -949,13 +949,13 @@ A feature moves through three spec folders. Each transition has exactly one owne
 
 `archive` deletes the feature branch, so a completed feature has no branch of its own. To make a further change:
 
-1. **`sdrive reopen <feature>`** — moves the feature back to `ongoing/` and resets the `review` gate to `pending`. It asks which branch the work should happen on, and **which branch to base it on** — the detected default branch is recommended, because that is where the merged code now lives.
+1. **`sdrive amend <feature> --reason "..."`** — for a closure that was *wrong*, for example a feature shipped before its tests were written. It moves that version back to `ongoing/` and resets the `review` gate to `pending`. It asks which branch the work should happen on, and **which branch to base it on** — the detected default branch is recommended, because that is where the merged code now lives. The reason is required and recorded, because that is what makes it a corrective action rather than an edit to history. To *change* a released feature, use `sdrive version:new <feature>` instead — that creates a new version and leaves the released one untouched.
 2. Make the change on the new branch.
 3. `/sdrive:test` → `/sdrive:review` → `/sdrive:archive`, as normal.
 
 **A minor change is NOT a new version** (CON-604). New versions are only for structural changes — a new workflow, a new user story, or a behaviour change. Small edits stay in the current version, and `/sdrive:update-propose` extends the existing spec in place.
 
-A defect in already-shipped code is a *different* work unit: use a `fix/<ticket>` or `hotfix/<ticket>` branch off the target rather than reopening the feature.
+A defect in already-shipped code is a *different* work unit: use a `fix/<ticket>` or `hotfix/<ticket>` branch off the target rather than amending the feature.
 
 ### Branching Policy (Enterprise Standard)
 

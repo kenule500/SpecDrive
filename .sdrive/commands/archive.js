@@ -1,0 +1,267 @@
+// Archive finalization.
+//
+// Closing a feature's lifecycle is the one operation that must never happen on trust.
+// Before this module existed, `/sdrive:archive` was an agent prompt that read a single
+// string (`Status: PASS` in review.md) and then wrote the gates itself — setting them
+// all to "approved" whether or not anything had verified them. A feature that was never
+// tested or reviewed could be merged AND recorded as verified, because the record was
+// written by the same prose that was supposed to check it.
+//
+// The split is now:
+//   `sdrive approve <feature> review`  -> CHECKS the evidence and writes the approval
+//   `sdrive archive:finalize <feature>` -> CLOSES the lifecycle, but only if every
+//                                          approval already exists and the evidence
+//                                          behind them is still present
+//
+// This module never promotes a gate. An outstanding gate is a refusal, not a shortcut.
+
+const fs = require("fs");
+const path = require("path");
+
+const { GATE_ORDER, SPEC_STAGES, findSpecLocation, checkGateRequirements } = require("./gates");
+
+function readJson(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (error) {
+    return null;
+  }
+}
+
+function loadState(root) {
+  return readJson(path.join(root, ".sdrive", "workflow-state.json"));
+}
+
+function resolveVersion(feature) {
+  if (!feature || !Array.isArray(feature.versions) || feature.versions.length === 0) {
+    return null;
+  }
+
+  return feature.versions.find((v) => v.id === feature.currentVersion) || feature.versions[0];
+}
+
+// checkGateRequirements() repeats a few verdicts this module already reaches on its own
+// (phase, archived location, prerequisite gates). Filter those out so a refusal reads as
+// one list of reasons rather than the same reason twice.
+function isDuplicateVerdict(blocker) {
+  return (
+    /^Prerequisite gate /.test(blocker) ||
+    /^Version ".*" is already completed\.$/.test(blocker) ||
+    /is archived in specs\/completed\//.test(blocker) ||
+    /^No spec folder for /.test(blocker)
+  );
+}
+
+// Read-only verdict. Never writes anything, so it is safe to run over every feature.
+function checkArchivable(root, featureName) {
+  const blockers = [];
+  const warnings = [];
+
+  const state = loadState(root);
+
+  if (!state) {
+    return {
+      ok: false,
+      alreadyFinalized: false,
+      blockers: ["No readable .sdrive/workflow-state.json - run `sdrive init` first."],
+      warnings
+    };
+  }
+
+  const feature = (state.features || []).find((f) => f.name === featureName);
+
+  if (!feature) {
+    return {
+      ok: false,
+      alreadyFinalized: false,
+      blockers: [`Feature "${featureName}" is not in workflow-state.json.`],
+      warnings
+    };
+  }
+
+  const version = resolveVersion(feature);
+
+  if (!version) {
+    return {
+      ok: false,
+      alreadyFinalized: false,
+      blockers: [`Feature "${featureName}" has no versions.`],
+      warnings
+    };
+  }
+
+  const location = findSpecLocation(root, featureName, version.id);
+  const completedFeatureDir = path.join(root, ".sdrive", "specs", "completed", featureName);
+  const completedVersionDir = path.join(completedFeatureDir, version.id);
+
+  // Already done. Idempotent by design: a re-run must never duplicate history entries.
+  if (version.phase === "completed" && fs.existsSync(completedVersionDir)) {
+    return { ok: true, alreadyFinalized: true, feature, version, location, blockers, warnings };
+  }
+
+  if (!location) {
+    blockers.push(
+      `No spec folder for "${featureName}" ${version.id} under .sdrive/specs/{${SPEC_STAGES.join(", ")}}/.`
+    );
+  }
+
+  // specs/completed/<feature>/ existing WITHOUT this version is normal: an earlier version
+  // of the same feature is already released, and versions are archived individually, so
+  // the two coexist. The contradiction is when the folder is there but the record does not
+  // agree that this version is completed.
+  if (fs.existsSync(completedVersionDir) && version.phase !== "completed") {
+    blockers.push(
+      `specs/completed/${featureName}/${version.id}/ already exists but the version is not marked completed. That state contradicts itself - resolve it by hand.`
+    );
+  }
+
+  if (version.phase === "completed") {
+    blockers.push(
+      `Version "${version.id}" is already marked completed but its spec is not in specs/completed/. That state contradicts itself - resolve it by hand.`
+    );
+  } else if (version.phase !== "ongoing") {
+    blockers.push(
+      `Version "${version.id}" is in phase "${version.phase}", not "ongoing". Only an in-flight feature can be finalized.`
+    );
+  }
+
+  if (location && location.stage !== "ongoing") {
+    warnings.push(`Spec lives in specs/${location.stage}/ rather than specs/ongoing/.`);
+  }
+
+  // Every gate must ALREADY be approved. This command records a closure; it does not
+  // grant approvals. If a gate is outstanding, that is the refusal.
+  const gates = version.gates || {};
+  const outstanding = GATE_ORDER.filter((gate) => gates[gate] !== "approved");
+
+  outstanding.forEach((gate) => {
+    blockers.push(
+      `Gate "${gate}" is "${gates[gate] || "pending"}", not "approved" - run \`sdrive approve ${featureName} ${gate}\` first.`
+    );
+  });
+
+  // Re-verify the evidence NOW. An approval granted yesterday is not proof that the
+  // evidence still exists today: traceability.json could have been deleted, or
+  // review.md edited, between the approval and this moment.
+  const requirements = checkGateRequirements(root, feature, version, "review");
+
+  requirements.blockers
+    .filter((blocker) => !isDuplicateVerdict(blocker))
+    .forEach((blocker) => blockers.push(`Evidence changed since approval: ${blocker}`));
+
+  requirements.warnings.forEach((warning) => warnings.push(warning));
+
+  return {
+    ok: blockers.length === 0,
+    alreadyFinalized: false,
+    feature,
+    version,
+    location,
+    blockers,
+    warnings
+  };
+}
+
+// Perform the closure. Only ever called after checkArchivable() returns ok.
+function finalizeArchive(root, featureName, options = {}) {
+  const verdict = checkArchivable(root, featureName);
+
+  if (!verdict.ok) {
+    return { ok: false, blockers: verdict.blockers, warnings: verdict.warnings };
+  }
+
+  if (verdict.alreadyFinalized) {
+    return { ok: true, alreadyFinalized: true, version: verdict.version, warnings: verdict.warnings };
+  }
+
+  const { version, location } = verdict;
+  const sourceVersionDir = location.dir;
+  const sourceFeatureDir = path.dirname(sourceVersionDir);
+  const destFeatureDir = path.join(root, ".sdrive", "specs", "completed", featureName);
+  const destVersionDir = path.join(destFeatureDir, version.id);
+
+  fs.mkdirSync(destFeatureDir, { recursive: true });
+
+  try {
+    // Only THIS version's folder moves. An earlier release of the same feature stays
+    // exactly where it is, so archiving v2 never disturbs a released v1. A plain
+    // filesystem move rather than `git mv`: it also works when the spec folder is
+    // untracked, and `git add -A` picks the rename up for the commit afterwards.
+    fs.renameSync(sourceVersionDir, destVersionDir);
+  } catch (error) {
+    return {
+      ok: false,
+      blockers: [`Could not move "${sourceVersionDir}" to "${destVersionDir}": ${error.message}`],
+      warnings: verdict.warnings
+    };
+  }
+
+  // Verify the move BEFORE writing the record. A lifecycle marked complete whose spec
+  // never actually moved is precisely the false record this module exists to prevent.
+  const moved = fs.existsSync(destVersionDir) && !fs.existsSync(sourceVersionDir);
+
+  if (!moved) {
+    try {
+      if (fs.existsSync(destVersionDir) && !fs.existsSync(sourceVersionDir)) {
+        fs.renameSync(destVersionDir, sourceVersionDir);
+      }
+    } catch (error) {
+      // Reported by the message below; restoring is best-effort.
+    }
+
+    return {
+      ok: false,
+      blockers: [
+        "The spec folder did not end up in specs/completed/ as expected. The lifecycle was left unchanged."
+      ],
+      warnings: verdict.warnings
+    };
+  }
+
+  // The source feature folder is only removed when this was its last version. A released
+  // sibling version keeps its folder.
+  try {
+    if (fs.existsSync(sourceFeatureDir) && fs.readdirSync(sourceFeatureDir).length === 0) {
+      fs.rmdirSync(sourceFeatureDir);
+    }
+  } catch (error) {
+    // An empty folder left behind is untidy, not a false record.
+  }
+
+  // Only now, with the folder verified in place, is the record written.
+  const statePath = path.join(root, ".sdrive", "workflow-state.json");
+  const state = loadState(root);
+  const target = (state.features || []).find((f) => f.name === featureName);
+  const targetVersion = (target.versions || []).find((v) => v.id === version.id);
+
+  targetVersion.phase = "completed";
+  // Gates are deliberately NOT touched here. checkArchivable() already established that
+  // all four are approved, so writing them would be a no-op - and writing them anyway is
+  // how archive used to manufacture approvals that never happened.
+  targetVersion.history = targetVersion.history || [];
+  targetVersion.history.push({
+    event: "feature_archived",
+    by: options.actor || "",
+    from: location.stage,
+    version: targetVersion.id,
+    mergeCommit: options.mergeCommit || "",
+    timestamp: new Date().toISOString()
+  });
+
+  fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+
+  // Governance deliberately stays at .sdrive/governance/<feature>/<version>/ (flat).
+  // The dashboard reads that path, and validate-governance.js would treat a
+  // governance/completed/ folder as a feature named "completed". Archival is recorded
+  // by the version's phase and by the spec's location, not by moving governance.
+  return {
+    ok: true,
+    alreadyFinalized: false,
+    version: targetVersion.id,
+    from: location.stage,
+    governanceMoved: false,
+    warnings: verdict.warnings
+  };
+}
+
+module.exports = { checkArchivable, finalizeArchive };

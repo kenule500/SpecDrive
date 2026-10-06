@@ -247,7 +247,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | `sdrive diff` | Compare two spec files |
 | `sdrive openapi:generate` | Generate OpenAPI spec |
 | `sdrive dashboard` | Start web dashboard |
-| `sdrive reopen` | Reopen a completed feature (`--branch`, `--base`, `--stay`) |
+| `sdrive amend` | Correct a wrongly-closed record (`--reason`, `--branch`, `--base`, `--stay`) |
 | `sdrive verify` | Verify code vs plan |
 | `sdrive version:new` | Create new feature version |
 | `sdrive diff:version` | Compare versions |
@@ -486,7 +486,7 @@ A feature moves through three spec folders. Each transition has exactly one owne
 | → `specs/backlog/<feature>/<version>/` | `/sdrive:propose` | New specs are created in `backlog/` with `phase: backlog` |
 | `backlog/` → `ongoing/` | `/sdrive:apply` | Happens at the start of implementation; sets `phase: ongoing` |
 | `ongoing/` → `completed/` | `/sdrive:review` | Happens after merge and archive; sets `phase: completed` |
-| `completed/` → `ongoing/` | `sdrive reopen <feature>` | Manual reopen for further work |
+| `completed/` → `ongoing/` | `sdrive amend <feature> --reason "..."` | Corrective action on a wrongly-closed record |
 
 **Rules:**
 

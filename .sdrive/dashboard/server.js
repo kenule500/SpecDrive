@@ -890,6 +890,16 @@ const CLI_COMMANDS = [
     why: "Gives every feature the same organised home for its spec, plan, and tasks.",
     when: "Usually run for you by /sdrive:propose.",
     example: "sdrive create user-login" },
+  { command: "sdrive update-propose <feature>", description: "Validate an existing feature for extension (internal)", group: "Features",
+    what: "Checks the feature exists, is not already completed, and has a spec folder to extend.",
+    why: "Extension has preconditions — a shipped feature must be reopened before new requirements can be added.",
+    when: "Usually run for you by /sdrive:update-propose.",
+    example: "sdrive update-propose user-login" },
+  { command: "sdrive assign <feature> <username>", description: "Assign a team member as the owner of a feature", group: "Features",
+    what: "Records which team member owns a feature.",
+    why: "Ownership makes it obvious who is accountable for a feature's specs and gates.",
+    when: "When a feature changes hands, or when starting work in a team.",
+    example: "sdrive assign user-login alice" },
   { command: "sdrive status", description: "Show feature lifecycle state", group: "Features",
     what: "Prints where each feature currently stands.",
     why: "A quick way to see what is in progress, blocked, or done.",
@@ -900,11 +910,11 @@ const CLI_COMMANDS = [
     why: "Lets you evolve a shipped feature without erasing its history.",
     when: "When adding significant new scope to a completed feature.",
     example: "sdrive version:new user-login" },
-  { command: "sdrive reopen <feature>", description: "Reopen a completed feature (--branch, --base, --stay)", group: "Features",
-    what: "Moves a finished feature back into active work, then asks which branch the work should happen on and which branch to base it on.",
-    why: "Handles the reality that 'done' features sometimes need more work — and that archive deleted the feature branch.",
-    when: "When a completed feature needs changes.",
-    example: "sdrive reopen user-login" },
+  { command: "sdrive amend <feature> --reason \"...\"", description: "Reopen a wrongly-closed feature to correct its record (corrective action)", group: "Governance",
+    what: "Moves a closed version back into active work so missing evidence can be gathered, then asks which branch the work should happen on and which branch to base it on. The reason is required and recorded.",
+    why: "Some closures are simply wrong — a feature shipped without the tests its own acceptance criteria required. Amending that same version is what makes its record true; issuing a new version instead would attach v1's proofs to a version nobody shipped.",
+    when: "Only when a lifecycle was closed incorrectly. To change or extend a released feature, use sdrive version:new instead.",
+    example: "sdrive amend user-login --reason \"archived before tests were written\"" },
   { command: "sdrive diff:version <feature> <a> <b>", description: "Compare two versions of a feature", group: "Features",
     what: "Shows what changed between two versions of a feature.",
     why: "Makes it easy to review scope changes over time.",
@@ -926,6 +936,16 @@ const CLI_COMMANDS = [
     why: "Gates are how a human confirms each stage is genuinely ready to advance. Approving an unmet gate would falsify the governance record, so the check runs before anything is written.",
     when: "After reviewing a stage's output. The feature must be named explicitly.",
     example: "sdrive approve user-login specification" },
+  { command: "sdrive archive:check <feature>", description: "Report whether a feature may be archived (changes nothing)", group: "Governance",
+    what: "Re-verifies a feature's approvals and the evidence behind them, then reports whether it is safe to archive — without writing anything.",
+    why: "Lets you see exactly what is still outstanding before touching state, and gives /sdrive:archive --all a read-only pass.",
+    when: "Before archiving, or when a feature is refused.",
+    example: "sdrive archive:check user-login" },
+  { command: "sdrive archive:finalize <feature>", description: "Close a feature's lifecycle: move its spec to completed/ and mark the version completed", group: "Governance",
+    what: "Moves the feature's spec folder to specs/completed/ and marks that version completed — but only once all four gates are already approved and the evidence behind them is still present.",
+    why: "Archiving used to write the gates itself, so it could record an approval nobody granted. It now refuses instead of promoting, which means a feature that was never tested or reviewed cannot be recorded as archived.",
+    when: "After /sdrive:review has passed and the merge is done.",
+    example: "sdrive archive:finalize user-login" },
   { command: "sdrive diff <oldFile> <newFile>", description: "Show differences between two spec files", group: "Governance",
     what: "Highlights what changed between two documents.",
     why: "Speeds up review by focusing attention on the differences.",
@@ -1106,8 +1126,10 @@ const SLASH_DETAILS = {
     why: "This is where the plan becomes real, working software.",
     when: "After the plan is approved. Use --all to implement every ongoing feature, one branch each.",
     does: [
-      "Works through the task list in order",
+      "Bases the feature branch on the branch it will merge into, and reports any base that carries another feature's commits (CON-612)",
+      "Works through the task list in order, resuming from the first unchecked task",
       "Commits to the feature branch as tasks complete",
+      "Defers test-writing tasks to /sdrive:test",
       "Updates the governance task state as it goes"
     ],
     produces: [
@@ -1157,8 +1179,10 @@ const SLASH_DETAILS = {
     why: "The last quality gate before work is considered done. It does not merge or archive.",
     when: "When the feature is complete. Use --all to review every ongoing feature one after the other.",
     does: [
+      "Verifies every acceptance criterion has a linked, passing test",
       "Audits the code against the spec and acceptance criteria",
       "Checks quality, security, and governance compliance",
+      "Makes no Git or GitHub writes — no pull requests, no branch switching, no merging",
       "Issues a pass/fail verdict with findings"
     ],
     produces: [
@@ -1172,9 +1196,11 @@ const SLASH_DETAILS = {
     why: "Turns a passing review into shipped, archived work — specs move to completed/ and the branch is cleaned up.",
     when: "Only after /sdrive:review has passed. Use --all to archive every ongoing feature that passed review.",
     does: [
+      "Asks whether to merge at all, then confirms the target branch — never assumed",
+      "Refuses a branch that also carries another feature's commits, and prints the order to merge instead (CON-611)",
       "Merges the feature branch into the confirmed target branch",
       "Moves the spec from ongoing/ to completed/",
-      "Deletes the merged feature branch",
+      "Deletes the merged feature branch, only after the merge is confirmed",
       "Marks the feature complete in the workflow state"
     ],
     produces: [
@@ -1182,10 +1208,7 @@ const SLASH_DETAILS = {
       "A merge commit on main"
     ],
     reads: ["The passing review report"],
-    handsOff: "Nothing — the feature lifecycle ends here",
-    optional: true,
-    optionalNote:
-      "Optional — run after a passing review, when you are ready to ship and close out the feature."
+    handsOff: "Nothing — the feature lifecycle ends here"
   },
   "/sdrive:secure": {
     what: "Performs a security audit, threat modelling, and fixes.",
@@ -1321,11 +1344,6 @@ const OPTIONAL_COMMANDS = {
       command: "/sdrive:test",
       what: "Writes and runs the test suite for the feature.",
       when: "When development is done and you want coverage before review."
-    },
-    {
-      command: "/sdrive:archive",
-      what: "Merges an approved feature to the confirmed target branch and completes its lifecycle.",
-      when: "When the feature is totally done and /sdrive:review has passed."
     }
   ]
 };

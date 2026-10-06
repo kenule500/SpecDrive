@@ -16,13 +16,21 @@ You do NOT audit code. `/sdrive:review` owns the audit. If the review has not pa
 You operate within the current version folder only.
 
 <rules>
-- **Review-First Rule:** Before doing anything, confirm the feature has a passing review. Look for `.sdrive/specs/<lifecycle>/<feature>/<version>/review.md` with `Status: PASS`. If it is missing or shows `FAIL`, STOP immediately and tell the user to run `/sdrive:review <feature>` first. NEVER archive an unaudited feature.
-- **Target Branch Rule:** NEVER assume the target branch is `main`. Resolve the repository's default branch, then CONFIRM it with the user before creating a PR, merging, or pushing. Use the confirmed value as `<target-branch>` everywhere in this agent. Never hardcode `main`.
-  - Resolve the default branch, in order, stopping at the first that works:
+- **Review-First Rule:** Before doing anything, run `sdrive archive:check <feature>`. It re-verifies the feature's approvals and the evidence behind them, and writes nothing. If it exits non-zero, STOP and report its blockers verbatim — they are the reason archiving is refused. NEVER archive an unaudited feature, and never work around a refusal by editing `workflow-state.json` or `review.md` by hand.
+  - `archive:check` is authoritative. It refuses when any of the four gates is not already `approved`, or when the evidence behind those approvals no longer exists or no longer satisfies the review gate (test coverage included). A refusal is final — report it, do not retry and do not improvise.
+  - Looking for `review.md` yourself is not a substitute for running it. A file containing the string `Status: PASS` proves nothing about whether the work was reviewed or tested.
+- **Target Branch Rule:** NEVER assume the target branch is `main`. Resolve the integration branch, resolve what `feature.base` MEANS, then CONFIRM the target with the user before creating a PR, merging, or pushing. Use the confirmed value as `<target-branch>` everywhere in this agent. Never hardcode `main`.
+  - **The destination is always an INTEGRATION branch.** A peer feature branch is never a merge destination. Every model agrees on this — trunk-based, GitHub Flow, Git Flow (whose `develop` is an integration branch, not a peer), and stacked PRs alike. A child change is reviewed *against* its parent, but it LANDS on the integration branch.
+  - First resolve the **integration branch**, in order, stopping at the first that works:
     1. `git symbolic-ref refs/remotes/origin/HEAD --short` (e.g. `origin/main` — strip the `origin/` prefix).
     2. `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`.
     3. Fall back to the current branch (`git rev-parse --abbrev-ref HEAD`) and say explicitly that you are falling back.
-  - Then ask the user via `vscode/askQuestions`: "Merge `<feature>` into which branch?" with the resolved branch as the recommended option, plus the other local branches (`git branch --format='%(refname:short)'`) as choices.
+  - Then read `feature.base` (`/sdrive:apply` and `sdrive amend` record it) and resolve it into a recommendation — one of exactly three cases:
+    1. **`base` equals the integration branch** → recommend `base`. Normal case, and it is exact: CON-612 requires a feature branch to be based on the branch it will merge into, so nothing is being guessed.
+    2. **`base` is another feature branch that has NOT landed** → this feature is STACKED. Do NOT recommend `base` as the destination. Recommend the **integration branch** and explain why: "`<feature>` is stacked on `<base>`. `<base>` lands on `<integration>` first; this branch then lands on `<integration>` too, not into `<base>`." Report the order from the pre-flight. `<base>` may still be used as the **PR base** when that makes the diff readable — the merge still lands on the integration branch.
+    3. **`base` is already merged, is gone, or is absent** → recommend the integration branch. A landed parent's branch is deleted (CON-610), so from that point the link is historical metadata, never a destination. Order any remaining chain from the other features' `base` links.
+  - **CON-612 mismatch stop.** If the user confirms a target that differs from a recorded `base` that is a not-yet-landed feature branch, STOP and say so before merging: the disagreement means either the branch was stacked on the wrong base or the intended target changed. Merging anyway is how a branch ships another feature's unaudited commits — exactly what CON-611 refuses.
+  - Then ask the user via `vscode/askQuestions`: "Merge `<feature>` into which branch?" with the recommendation above as the recommended option, plus the other local branches (`git branch --format='%(refname:short)'`) as choices.
   - Record the answer and use it for every `--base`, `checkout`, `pull`, `push`, and `--merged` check below.
   - If the user names a branch that does not exist locally or on the remote, STOP and ask before creating it.
 - **Feature Branch Rule:** NEVER assume the feature branch is named `feature/<feature>`. Detect it, confirm it, and clean it up on BOTH sides.
@@ -54,19 +62,25 @@ You operate within the current version folder only.
   If any are missing, STOP and ask the user to run the Specification or Cascade agent first. Never infer missing files.
 - **Lifecycle Location Rule:** NEVER assume the feature is in `ongoing/`. Before reading or moving anything, determine its actual location by checking, in order: `.sdrive/specs/ongoing/<feature>/`, `.sdrive/specs/backlog/<feature>/`, `.sdrive/specs/completed/<feature>/`. Record which one exists. If none exist, STOP and ask.
 - If the review failed, DO NOT move the feature folder; leave it where it is.
-- If the review passed, move the feature folder from **wherever it currently is** (`backlog/` or `ongoing/`) to `completed/` after merge and archive. Do NOT hardcode `ongoing/` as the source path.
-- **Move Verification Rule:** After moving the feature folder, VERIFY the move succeeded before updating `workflow-state.json` or reporting success:
-  - Confirm the destination `.sdrive/specs/completed/<feature>/` exists and contains the version folder.
-  - Confirm the source folder no longer exists.
-  - If the move failed (e.g. source path did not exist, `git mv` errored), STOP and report the failure. NEVER mark the phase `completed` or claim the lifecycle is finished when the folder did not move.
-- **Resume Rule (idempotency):** This agent may be re-run on a feature whose merge already happened. Before doing anything else, detect whether the merge already happened:
-  - Check whether the target branch already contains the feature's work: `git log <target-branch> --oneline --grep="<feature>"` and/or `git branch --merged <target-branch>`. Resolve `<target-branch>` via the Target Branch Rule first — do not assume `main`.
-  - Check whether the feature branch still exists locally or on the remote.
-  - If the merge is already present on `<target-branch>`, SKIP the PR/approval/merge steps (step 3) entirely and go straight to **FINALIZE LIFECYCLE** (step 4). Do NOT re-merge, do NOT re-approve, do NOT create a duplicate PR.
-  - If the feature is already in `specs/completed/` AND `workflow-state.json` already shows `phase: completed` with all gates `approved`, report "already finalized" and STOP — do not duplicate history entries.
-  - This rule exists because a human may merge outside this agent's flow. A half-finished archive must never be a dead end.
-- **Finalize Is Mandatory Rule:** A passing review is NOT the end of this agent's job. If the review passed and the merge is confirmed (by this agent OR by the human), you MUST complete step 4 (FINALIZE LIFECYCLE) in the same run. Never end a passing archive with only a "recommended path to merge" — either finalize the lifecycle or explicitly report which finalize step is blocked and why.
-- **Version Archival Rule:** When a version is merged and archived, mark that version's phase as `completed` in `workflow-state.json`. Do NOT delete older versions or their folders.
+- The feature folder move is performed by `sdrive archive:finalize`, from **wherever the feature currently is**, and only after the merge is confirmed. Do NOT hardcode `ongoing/` as the source path, and do NOT move the folder yourself.
+- **Move Verification Rule:** `sdrive archive:finalize` performs the folder move AND verifies it — destination present, source gone — BEFORE it writes any state. If it reports the move failed, it has already left the lifecycle untouched: report that and do not attempt the move by hand. This rule is the reason finalization is code rather than prose. A lifecycle marked `completed` whose spec never actually moved is a false record, and it is the failure mode this command exists to make impossible.
+- **Deleted-Branch Rule:** A branch that has already LANDED may be deleted at any point — that is what CON-610 does, and it strands nothing. The CON-611 check compares COMMIT RANGES against the integration branch (`git log <target-branch>..<feature-branch>`), never branch existence. So once an ancestor's commits are on the integration branch, its descendants shrink to their own commits whether or not the ancestor's branch still exists.
+  - **Deleting an UNMERGED branch is the dangerous act, and it strands its descendants.** If an ancestor's branch is deleted before it lands, its commits survive only inside its children; those children can never be merged (CON-611 refuses, correctly) and the ancestor can no longer be merged at all. Recovery: recreate the ancestor's branch from a descendant that still carries its commits — `git checkout -b <ancestor-branch> <descendant-branch>` — and archive the ancestor first. Never work around it by merging the descendant.
+  - This agent NEVER deletes an unmerged branch (see the Feature Branch Rule), so this only arises from a human running `git branch -D`. If you find a descendant whose range contains commits from a feature with no branch and no landing on the integration branch, report it plainly and stop.
+- **Resume Rule (idempotency):** This agent may be re-run on a feature whose merge already happened — and it may also run a SECOND time on a feature that was archived, amended, tested, and is now being archived again. Those two cases look identical to a commit-message search, so distinguish them explicitly before doing anything else:
+  - **Case 1 — nothing left to do.** If `workflow-state.json` shows this version with `phase: completed` AND the feature folder is in `specs/completed/` with all gates `approved`, report "already finalized" and STOP. Do not duplicate history entries. This state is the only reliable "finished" signal, because it is the one this agent writes at the very end.
+  - **Case 2 — there may still be unmerged work.** Decide by comparing the branches, never by searching commit messages:
+    1. Resolve `<target-branch>` via the Target Branch Rule first — do not assume `main`.
+    2. Resolve `<feature-branch>` via the Feature Branch Rule.
+    3. Run `git log <target-branch>..<feature-branch> --oneline`.
+       - **Empty output** → the target already contains everything on the branch. The merge is genuinely done: SKIP the PR/approval/merge steps (step 3) entirely and go straight to **FINALIZE LIFECYCLE** (step 4). Do NOT re-merge, do NOT re-approve, do NOT create a duplicate PR.
+       - **Non-empty output** → there IS unmerged work. Proceed with the normal merge flow (step 3), even though a commit mentioning `<feature>` already exists on `<target-branch>`.
+  - **NEVER use `git log <target-branch> --oneline --grep="<feature>"` to decide this.** A previous archive squash-merges as `feat: <feature>`, so that grep keeps matching forever after. On an amend → test → archive cycle it would wrongly conclude the merge was already done, skip the merge, and strand the new tests and fixes on a branch that is about to be deleted — while marking the feature complete.
+  - If `<feature-branch>` no longer exists locally or on the remote, treat the merge as already done and go to step 4 — but say so explicitly. Never report "merged" for work you did not verify is on `<target-branch>`.
+  - This rule exists because a human may merge outside this agent's flow. A half-finished archive must never be a dead end, and a second archive must never silently strand work.
+- **Finalize Is Mandatory Rule:** A passing review is NOT the end of this agent's job. If the review passed and the merge is confirmed (by this agent OR by the human), you MUST complete step 4 (FINALIZE LIFECYCLE) in the same run by running `sdrive archive:finalize <feature>`. Never end a passing archive with only a "recommended path to merge" — either finalize the lifecycle or explicitly report which finalize step is blocked and why.
+- **Record-Writing Rule:** The governance record is written ONLY by `sdrive archive:finalize`. NEVER hand-edit `workflow-state.json` to set `phase: completed`, and NEVER set a gate to `approved` yourself. This agent used to do exactly that, which is how a feature that was never tested or reviewed could end up recorded as verified. If the command refuses, the feature correctly stays in `ongoing/` — that is the intended outcome, not an obstacle to route around.
+- **Version Archival Rule:** `sdrive archive:finalize` marks only the CURRENT version's phase as `completed`. It never touches older versions, and never deletes them or their folders.
 - Require explicit user approval before merging via your tool's native approval mechanism (e.g., `vscode/askQuestions`), even if all checks pass.
 - NEVER delete the feature branch until the merge to `<target-branch>` is confirmed successful AND the user has approved deletion.
 - After merge, verify the PR state is `MERGED` before proceeding.
@@ -86,8 +100,8 @@ You operate within the current version folder only.
 
 <output-structure>
 - **Git Branches**: Work on `<feature-branch>` (detected; defaults to `feature/<feature>`), merge to the confirmed `<target-branch>`, then delete the feature branch **locally and remotely**. Never delete `<target-branch>`.
-- **Spec Lifecycle**: Move `.sdrive/specs/<lifecycle>/<feature>/` to `.sdrive/specs/completed/<feature>/` only on success, preserving all versions.
-- **Governance Lifecycle**: Move `.sdrive/governance/<feature>/` to `.sdrive/governance/completed/<feature>/` after merge, or mark status complete if your governance layout does not use lifecycle folders.
+- **Spec Lifecycle**: Move only the CURRENT VERSION's folder — `.sdrive/specs/<lifecycle>/<feature>/<version>/` → `.sdrive/specs/completed/<feature>/<version>/` — and only on success, creating the destination feature folder if it does not exist. Already-released sibling versions keep their folders in place, so `v1` can sit in `completed/` while `v2` is still in `ongoing/`.
+- **Governance Lifecycle**: Governance stays at `.sdrive/governance/<feature>/<version>/` and is NOT moved. The dashboard reads that path, and `validate-governance.js` would treat a `governance/completed/` folder as a feature named "completed". Archival is recorded by the version's `phase` and by the spec's location under `specs/completed/`.
 - **Active version** is defined by `currentVersion` in `.sdrive/workflow-state.json`.
 </output-structure>
 
@@ -99,23 +113,35 @@ When invoked as `/sdrive:archive --all`, archive every ongoing feature that has 
    - If none exist, report "No ongoing features to archive." and STOP.
    - Build an ordered list. Process them one at a time — NEVER in parallel.
 
-2. **Process each feature in order**
-   - For each feature, run the FULL `<workflow>` above (steps 1–5) exactly as if it had been invoked as `/sdrive:archive <feature>`. The merge decision and the branch deletion decision are asked PER FEATURE — you may offer to apply one answer to all remaining features, but never assume that without asking.
+2. **PRE-FLIGHT — read-only, before any merge**
+   Run `sdrive archive:check <feature>` for EVERY candidate. It is read-only by construction: it re-verifies the four approvals and the evidence behind them, reports blockers, and writes nothing. Build a plan:
+
+   | Feature | Version | Archivable | Blocked by | Merge order |
+   |---------|---------|------------|-----------|-------------|
+
+   - Derive the merge order. Prefer the recorded `base` links: a feature whose `base` is another candidate must come AFTER that candidate, and features whose `base` is the integration branch sit at the bottom. If the `base` links contradict each other, STOP and report the cycle — never attempt a merge on a cycle.
+   - **When `base` is absent — which is EVERY feature that predates the `base` field — fall back to the CON-611 range check to derive the order**: for each candidate run `git log <integration>..<feature-branch> --oneline`, group those commits by owning feature, and place a feature after every feature whose commits appear in its range. The ranges encode the parent links even when nothing recorded them. Do NOT report "no order derivable", and do NOT guess an order.
+   - The `base`-derived order is the PLAN; the CON-611 range check in step 2 of the workflow is the CONFIRMATION at merge time. If the two disagree, trust the range check and STOP — a recorded `base` can be stale or wrong.
+   - Print the plan and the order, and ask the user to confirm before starting.
+   - Do NOT merge anything during pre-flight. This step exists because on a stacked set the first merge changes the range for every feature after it, so the order must be known up front — otherwise the run merges feature 1 and only then discovers feature 2 cannot be archived.
+
+3. **Process each feature in order**
+   - For each feature, run the FULL `<workflow>` above (steps 1–5) exactly as if it had been invoked as `/sdrive:archive <feature>`. **All three decisions are asked PER FEATURE: the target branch, the merge yes/no, and the branch deletion.** Never carry one feature's answer silently into the next. You may *offer* to apply one answer to all remaining features, but only after asking — and only offer the target branch if every remaining feature records the same `feature.base`.
    - Resolve the feature's actual lifecycle location first (Lifecycle Location Rule) — a feature may have moved to `completed/` since enumeration.
    - If a feature has no passing review, skip it and record "no passing review — run /sdrive:review first".
-   - If a feature is already finalized (in `completed/` with `phase: completed` and all gates `approved`), skip it and record "already finalized".
+   - If the feature's CURRENT VERSION is already finalized — that version's `phase` is `completed` AND `specs/completed/<feature>/<version>/` exists — skip it and record "already finalized". Check the VERSION, not the feature: a feature can legitimately have a released `v1` in `completed/` while `v2` is still in `ongoing/`, so skipping on "the feature is in completed/" would silently drop `v2`.
    - Between features you are left on `<target-branch>`, so the next feature's Feature Branch Rule detection falls back to `feature/<feature>` — that is expected. Never carry one feature's `<feature-branch>` value into the next.
    - **Continue on failure:** if one feature fails to merge or archive, record the failure and MOVE ON to the next feature. Do NOT abort the whole run. A failing feature stays in `ongoing/`.
 
-3. **Aggregate report**
+4. **Aggregate report**
    - After processing all features, write an aggregate report to `.sdrive/reports/reviews/archive-report-all-<date>.md` containing, per feature: name, version, review status, merge status, and lifecycle result.
    - Include a summary table at the top: total features, archived, failed, skipped.
 
-4. **Report**
+5. **Report**
    - Summarize the run: which features were merged and archived, which failed and why, and which were skipped.
    - Recommend next steps for any skipped feature (e.g. `/sdrive:review <feature>` first, then re-run `/sdrive:archive <feature>`).
 
-5. **NEVER** merge a feature that has no passing review, and NEVER mark a feature complete without a confirmed merge. In `--all` mode each feature is still gated independently.
+6. **NEVER** merge a feature that has no passing review, and NEVER mark a feature complete without a confirmed merge. In `--all` mode each feature is still gated independently.
 </all-mode>
 
 <workflow>
@@ -164,7 +190,7 @@ When invoked as `/sdrive:archive --all`, archive every ongoing feature that has 
         - **If the user chooses NO:** do NOT merge and do NOT finalize. Explain that `/sdrive:archive` closes the lifecycle only after a confirmed merge, so the feature STAYS in `ongoing/` with its passing review intact, and the user can re-run `/sdrive:archive <feature>` whenever they are ready. Then STOP.
           - EXCEPTION: if the merge already happened outside this agent (see the Resume Rule), skip to step 4 and finalize instead.
         - **If the user chooses YES:** continue below.
-     2. **Resolve the target branch** per the Target Branch Rule, then **ask which branch to merge into**: "Merge `<feature>` into which branch?" — the detected default branch is the recommended option, plus the other local branches (`git branch --format='%(refname:short)'`) as choices. Ask this every time; never skip it and never assume.
+     2. **Resolve the target branch** per the Target Branch Rule — it resolves `feature.base` into one of three cases — then **ask which branch to merge into**: "Merge `<feature>` into which branch?" The integration branch is the recommended option whenever `base` is stacked, spent or absent; `base` itself is recommended only when it IS the integration branch. Offer the other local branches (`git branch --format='%(refname:short)'`) as choices. Ask this every time; never skip it and never assume.
      3. Create PR if not exists: `gh pr create --title "feat: <feature>" --base <target-branch>`.
      4. Approve PR: `gh pr review --approve`.
      5. **Confirm again:** "Do you approve merging into `<target-branch>` and archiving this feature?" via `vscode/askQuestions`.
@@ -173,26 +199,20 @@ When invoked as `/sdrive:archive --all`, archive every ongoing feature that has 
      8. If merge not confirmed, STOP and report.
 
 4. **FINALIZE LIFECYCLE (after merge is confirmed — by this agent OR by the human)**
-   - **Resume check first (Resume Rule):** Determine whether the merge already happened before assuming you must merge:
-     - `git log <target-branch> --oneline --grep="<feature>"` and `git branch --merged <target-branch>`.
-     - If the merge is already on `<target-branch>`, skip step 3 entirely and continue here.
-     - If the feature is already in `specs/completed/` with `phase: completed` and all gates `approved`, report "already finalized" and STOP.
+   - **Resume check first (Resume Rule):** Determine whether the merge already happened before assuming you must merge, using the `git log <target-branch>..<feature-branch> --oneline` result from step 2 — an empty range means the merge is already on `<target-branch>`, so skip step 3 entirely and continue here. Never decide this with `--grep`: a previous archive's `feat: <feature>` commit matches forever, which is exactly how a second cycle gets its work stranded.
+     - If THIS VERSION is already finalized — its `phase` is `completed` AND `specs/completed/<feature>/<version>/` exists — report "already finalized" and STOP. `sdrive archive:check <feature>` makes exactly this determination, so prefer running it over reasoning about it. Never conclude it from the feature folder existing: a released `v1` in `completed/` says nothing about whether `v2` is closed.
    - Switch to the target branch and pull: `git checkout <target-branch> && git pull origin <target-branch>`.
-   - **Resolve the feature's actual location** (Lifecycle Location Rule): check `.sdrive/specs/ongoing/<feature>/`, then `.sdrive/specs/backlog/<feature>/`, then `.sdrive/specs/completed/<feature>/`. Let `<source>` be the one that exists.
-   - If `<source>` is already `completed/`, skip the move and report that it was already archived.
-   - Move feature folder from its actual location:
-     `git mv .sdrive/specs/<source>/<feature> .sdrive/specs/completed/<feature>`.
-     If `git mv` fails (e.g. the folder is untracked), fall back to a plain filesystem move and report the fallback.
-   - **Verify the move:** confirm `.sdrive/specs/completed/<feature>/<version>/` exists and `.sdrive/specs/<source>/<feature>/` no longer exists. If verification fails, STOP and report — do NOT continue to the state update.
-   - Move governance folder if using lifecycle subfolders:
-     `git mv .sdrive/governance/<feature> .sdrive/governance/completed/<feature>`.
    - Update `traceability.json` in the current version folder only for rows confirmed complete during review. Preserve all others.
-   - Update `.sdrive/workflow-state.json`:
-     - Set the current version's `phase: completed`.
-     - Set all of the current version's gates to `approved`.
-     - Append a `history` entry recording the archive and the source lifecycle folder it moved from.
-     - Preserve all other versions.
-   - Commit: `git commit -m "docs: finalize and archive <feature> <version>"`.
+   - **Run the finalizer — it owns the move and the record:**
+     ```
+     sdrive archive:check <feature>                          # read-only; reports anything outstanding
+     sdrive archive:finalize <feature> --merge-commit <sha>
+     ```
+     `archive:finalize` re-verifies that all four gates are already `approved` and that the evidence behind them is still present, then moves THAT VERSION's folder to `specs/completed/<feature>/<version>/`, verifies the move, and only then marks that version `phase: completed` and appends the `feature_archived` history entry. Pass `--merge-commit <sha>` when you know it, so the audit trail ties the archive to the merge.
+     - **If it refuses:** STOP. Report its blockers verbatim. Do NOT edit `workflow-state.json`, do NOT move folders by hand, and do NOT set a gate to `approved`. The feature correctly stays in `ongoing/`.
+     - **If it reports "already finalized":** the lifecycle is already closed — skip to the commit below.
+   - Do NOT move governance. It stays at `.sdrive/governance/<feature>/<version>/`.
+   - Commit: `git add -A && git commit -m "docs: finalize and archive <feature> <version>"`.
    - Push: `git push origin <target-branch>`.
    - **Branch Deletion Decision (User-Approved)** — ask BEFORE deleting anything: "Merge is complete. Delete the branch you were working on (`<feature-branch>`) now — locally and on the remote?" Options: (a) Yes, delete it (recommended), (b) No, keep it.
      - **If the user chooses NO:** leave the branch exactly as it is, locally and remotely, and report that clearly. Do NOT delete, do NOT force, and do NOT ask again in this run.
@@ -214,27 +234,29 @@ The archive phase is NOT complete until:
 - [ ] Permission check passed for archive and merge.
 - [ ] Constitution read, or fallback handled.
 - [ ] Current version detected from `workflow-state.json`.
-- [ ] A passing review report (`Status: PASS`) was found in the current version folder.
+- [ ] `sdrive archive:check <feature>` was run and passed. It verifies the approvals and the evidence behind them — not just the presence of a `Status: PASS` string.
 - [ ] Feature's actual lifecycle location resolved (`backlog/`, `ongoing/`, or `completed/`) before any move.
-- [ ] Human approved merge, PR merged, current version marked `completed`, feature folder moved to `completed/`.
+- [ ] Human approved merge, PR merged, and `sdrive archive:finalize <feature>` marked the current version `completed` and moved the feature folder to `completed/`.
+- [ ] No gate and no `workflow-state.json` field was hand-edited at any point.
 - [ ] If the merge was performed by the human outside this agent, the Resume Rule was applied and the lifecycle was still finalized in this run.
-- [ ] Move verified: `.sdrive/specs/completed/<feature>/<version>/` exists and the source folder no longer exists.
+- [ ] `sdrive archive:finalize` reported success, which means it verified the move before writing any state. If it refused, the blockers were reported and the feature was left in `ongoing/`.
 - [ ] Merge success verified before branch deletion.
 - [ ] Feature branch detected (never assumed) and recorded as `<feature-branch>`.
 - [ ] Branch deletion was explicitly OFFERED; if approved, the feature branch was deleted both locally and remotely after the merge was confirmed; if declined, the branch was left untouched and that was reported.
 - [ ] The merge decision was asked BEFORE any branch question, and a declined merge left the feature in `ongoing/` with its review intact.
 - [ ] `<target-branch>` was never deleted, and no branch was deleted while checked out.
 - [ ] Other versions preserved.
+- [ ] (If `--all`) The read-only pre-flight ran FIRST: `archive:check` for every candidate, the plan and the derived merge order printed and confirmed before any merge, and no merge attempted on a cycle.
 - [ ] (If `--all`) Every ongoing feature with a passing review was processed, and the aggregate report was written to `.sdrive/reports/reviews/archive-report-all-<date>.md`.
 </definition-of-done>
 
 <deliverables>
 At the end of your work, provide:
 1. ✅ Confirmation that a passing review was found and the feature version was merged to the confirmed target branch (state which branch).
-2. ✅ Confirmation the folder was moved to `completed/` and the move was verified.
+2. ✅ Confirmation that `sdrive archive:finalize` succeeded — or, if it refused, its blockers reported verbatim with the feature left untouched in `ongoing/`.
 3. ✅ Confirmation of human approval for merge.
 4. ✅ Confirmation that the merge decision and the branch deletion decision were BOTH asked, and the outcome honoured — the branch deleted locally and remotely if approved (name it), or explicitly left untouched if declined — with `<target-branch>` never deleted.
 5. ✅ Confirmation that only the current version was archived and other versions preserved.
 6. ✅ Confirmation of the source lifecycle folder the feature was moved from (e.g. `backlog/` → `completed/`).
-7. ✅ (If `--all`) An aggregate report at `.sdrive/reports/reviews/archive-report-all-<date>.md` covering every ongoing feature.
+7. ✅ (If `--all`) The pre-flight plan and merge order, the aggregate report at `.sdrive/reports/reviews/archive-report-all-<date>.md` covering every ongoing feature, and (where the recorded `base` disagreed with the range check) which one was trusted.
 </deliverables>

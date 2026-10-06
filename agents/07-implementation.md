@@ -30,7 +30,7 @@ You operate within the current version folder only.
   - `.sdrive/governance/<feature>/<version>/plan.json`
   - `.sdrive/governance/<feature>/<version>/tasks.json`
   - `.sdrive/governance/<feature>/<version>/traceability.json`
-- **Lifecycle Transition Rule:** If the feature still lives in `.sdrive/specs/backlog/<feature>/<version>/`, move it to `.sdrive/specs/ongoing/<feature>/` before implementing, and set the version's `phase` to `ongoing` in `.sdrive/workflow-state.json`. Implementation MUST NOT begin while the spec is still in `backlog/`. Never move a feature out of `completed/` — that is `sdrive reopen`'s job.
+- **Lifecycle Transition Rule:** If the feature still lives in `.sdrive/specs/backlog/<feature>/<version>/`, move it to `.sdrive/specs/ongoing/<feature>/` before implementing, and set the version's `phase` to `ongoing` in `.sdrive/workflow-state.json`. Implementation MUST NOT begin while the spec is still in `backlog/`. Never move a feature out of `completed/` — that is `sdrive amend`'s job (a corrective action on a wrongly-closed record), or `sdrive version:new` when the released version must be extended.
 - If any of these files are missing, STOP and ask the user to run the Specification or Cascade agent first. Never infer missing files.
 - NEVER merge to the target branch yourself — merging and archiving belong to `/sdrive:archive`. Work on the feature's OWN branch `feature/<feature>` (CON-606: one branch per feature).
 - STRICT SCOPE: NEVER implement code not explicitly covered by a task in `tasks.json` or `tasks.md`. If you see a better way that isn't in the plan, STOP and ask. Do not over-engineer.
@@ -108,11 +108,12 @@ You operate within the current version folder only.
      3. **Cancel** — stop if the user expected to work on something else.
 
    - **There is no "use whatever branch I am on" option.** A branch that is not this feature's own branch cannot be used for this feature.
-   - **Record the branch (MANDATORY).** Once the branch is created or resumed, write its name to `.sdrive/workflow-state.json` as `branch` on this feature:
+   - **Record the branch AND its base (MANDATORY).** Once the branch is created or resumed, write its name and the branch it was cut from to `.sdrive/workflow-state.json` on this feature:
      ```json
-     { "name": "<feature>", "branch": "<feature-branch>", "currentVersion": "v1", "versions": [ ... ] }
+     { "name": "<feature>", "branch": "<feature-branch>", "base": "<target-branch>", "currentVersion": "v1", "versions": [ ... ] }
      ```
-     `feature.branch` is the single source of truth. `/sdrive:review`, `/sdrive:secure`, `/sdrive:archive` and `sdrive reopen` MUST read it instead of guessing the name or hardcoding a branch.
+     `feature.branch` is the single source of truth for the branch. `/sdrive:review`, `/sdrive:secure`, `/sdrive:archive` and `sdrive amend` MUST read it instead of guessing the name or hardcoding a branch.
+     `feature.base` is the branch this one was cut from. Because CON-612 requires the base to BE the merge target, `/sdrive:archive` recommends `feature.base` rather than guessing the repository default — so always record it, even when it equals the default branch. "It's probably main" is exactly the assumption CON-612 exists to remove.
    - **If the user chooses to resume this feature's existing branch:**
      - Apply the Dirty-Tree Precondition below, then `git checkout feature/<feature>` and `git pull origin feature/<feature>` (if it exists on the remote). Record `<feature-branch>` = `feature/<feature>` and skip branch creation.
    - **If the user chooses to create the feature branch:** continue with the base-branch and branch-name steps below.
