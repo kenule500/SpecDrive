@@ -188,15 +188,515 @@ function detectExternalSpecSystems() {
   return detection;
 }
 
+// A monorepo keeps its real code roots in a workspace manifest, not in the fixed
+// codeRoots list above. Reading that manifest is the difference between finding
+// `server/` and missing `client/` entirely - and a partial inventory silently
+// poisons everything built on it later (constitution, retroactive specs).
+function readWorkspacePatterns() {
+  const patterns = [];
+  const sources = [];
+
+  const add = (list, source) => {
+    const usable = list.filter((p) => typeof p === "string" && p.trim() !== "");
+    if (usable.length > 0) sources.push(source);
+    for (const pattern of usable) {
+      if (!patterns.includes(pattern)) patterns.push(pattern);
+    }
+  };
+
+  // pnpm-workspace.yaml. Only the `packages:` list is parsed, which keeps a YAML
+  // dependency out of a script that needs exactly one field from the file.
+  const pnpmPath = path.join(projectRoot, "pnpm-workspace.yaml");
+  if (fs.existsSync(pnpmPath)) {
+    const found = [];
+    let inPackages = false;
+    for (const raw of fs.readFileSync(pnpmPath, "utf8").split(/\r?\n/)) {
+      const line = raw.replace(/#.*$/, "");
+      if (/^\s*packages\s*:/.test(line)) {
+        inPackages = true;
+        continue;
+      }
+      if (!inPackages) continue;
+
+      const item = line.match(/^\s*-\s*(.+?)\s*$/);
+      if (item) {
+        found.push(item[1].replace(/^['"]|['"]$/g, ""));
+        continue;
+      }
+
+      // A non-indented, non-blank line means the packages block has ended.
+      if (line.trim() !== "" && !/^\s/.test(line)) inPackages = false;
+    }
+    add(found, "pnpm-workspace.yaml");
+  }
+
+  // package.json#workspaces, which is either an array or { packages: [...] }
+  const manifestPath = path.join(projectRoot, "package.json");
+  if (fs.existsSync(manifestPath)) {
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      const workspaces = manifest.workspaces;
+      const list = Array.isArray(workspaces)
+        ? workspaces
+        : workspaces && Array.isArray(workspaces.packages)
+          ? workspaces.packages
+          : [];
+      add(list, "package.json#workspaces");
+    } catch {
+      // A malformed package.json is the project's problem, not the scan's. The
+      // rest of the inventory is still worth producing.
+    }
+  }
+
+  // lerna.json#packages
+  const lernaPath = path.join(projectRoot, "lerna.json");
+  if (fs.existsSync(lernaPath)) {
+    try {
+      const lerna = JSON.parse(fs.readFileSync(lernaPath, "utf8"));
+      add(Array.isArray(lerna.packages) ? lerna.packages : [], "lerna.json");
+    } catch {
+      // Same reasoning as above.
+    }
+  }
+
+  // turbo.json is a SIGNAL only: Turborepo delegates package discovery to the
+  // package manager and keeps no package list of its own to read.
+  const signals = [];
+  for (const signal of ["turbo.json", "nx.json", "rush.json"]) {
+    if (fs.existsSync(path.join(projectRoot, signal))) signals.push(signal);
+  }
+
+  return { patterns, sources, signals };
+}
+
+function expandWorkspacePattern(pattern) {
+  const normalized = pattern
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/\/+$/, "");
+  if (normalized === "") return [];
+
+  // A literal path names a package directly - no globbing needed.
+  if (!normalized.includes("*")) {
+    const full = path.join(projectRoot, normalized);
+    return fs.existsSync(full) && fs.statSync(full).isDirectory() ? [normalized] : [];
+  }
+
+  const base = normalized.slice(0, normalized.indexOf("*")).replace(/\/+$/, "");
+  const baseDir = path.join(projectRoot, base === "" ? "." : base);
+  if (!fs.existsSync(baseDir) || !fs.statSync(baseDir).isDirectory()) return [];
+
+  const deep = normalized.includes("**");
+  const results = [];
+
+  const walk = (dir, relDir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
+
+      const rel = relDir === "" ? entry.name : `${relDir}/${entry.name}`;
+      const full = path.join(dir, entry.name);
+
+      // Inside a workspace, a package is a directory with its own manifest.
+      if (fs.existsSync(path.join(full, "package.json")) && !results.includes(rel)) {
+        results.push(rel);
+      }
+
+      if (deep) walk(full, rel);
+    }
+  };
+
+  walk(baseDir, base);
+  return results;
+}
+
+function detectWorkspaces() {
+  const { patterns, sources, signals } = readWorkspacePatterns();
+
+  const packages = [];
+  for (const pattern of patterns) {
+    for (const found of expandWorkspacePattern(pattern)) {
+      if (!packages.includes(found)) packages.push(found);
+    }
+  }
+  packages.sort();
+
+  return {
+    detected: patterns.length > 0,
+    source: sources.length > 0 ? sources.join(", ") : null,
+    patterns,
+    packages,
+    signals
+  };
+}
+
+// ---------- PROJECT BRIEF ----------
+// A new SpecDrive project shows empty dashboard panels until a product plan
+// exists, which reads as though SpecDrive knows nothing about the project. But
+// something IS known: the README says what the app is for, and when it says
+// nothing useful the manifests still say what the app is built with.
+//
+// The brief is DERIVED, and it says so. It is written to product/overview.md in
+// the exact shape the dashboard parses, marked as a draft, and only when that file
+// does not already exist. It is deliberately NOT a product plan: only
+// /sdrive:product-plan writes one, and that flow reads this file, preserves it, and
+// proposes a merge rather than treating it as finished.
+const README_CANDIDATES = [
+  "README.md",
+  "readme.md",
+  "Readme.md",
+  "README.MD",
+  "README.markdown",
+  "README.rst"
+];
+
+// Recognised dependencies, mapped to the name a person would use. Anything not on
+// this list is left out rather than guessed at.
+const TECH_LABELS = {
+  next: "Next.js",
+  react: "React",
+  vue: "Vue",
+  nuxt: "Nuxt",
+  svelte: "Svelte",
+  express: "Express",
+  fastify: "Fastify",
+  "@nestjs/core": "NestJS",
+  hono: "Hono",
+  koa: "Koa",
+  typescript: "TypeScript",
+  vite: "Vite",
+  webpack: "Webpack",
+  esbuild: "esbuild",
+  turbo: "Turborepo",
+  tailwindcss: "Tailwind CSS",
+  prisma: "Prisma",
+  mongoose: "Mongoose",
+  "drizzle-orm": "Drizzle",
+  sequelize: "Sequelize",
+  mongodb: "MongoDB",
+  pg: "PostgreSQL",
+  mysql2: "MySQL",
+  ioredis: "Redis",
+  redis: "Redis",
+  vitest: "Vitest",
+  jest: "Jest",
+  mocha: "Mocha",
+  playwright: "Playwright",
+  cypress: "Cypress",
+  zod: "Zod",
+  graphql: "GraphQL",
+  "socket.io": "Socket.IO",
+  stripe: "Stripe"
+};
+
+// A manifest sitting in the repo is the surest statement of language it can make.
+const LANGUAGE_MARKERS = [
+  ["tsconfig.json", "TypeScript"],
+  ["go.mod", "Go"],
+  ["Cargo.toml", "Rust"],
+  ["pyproject.toml", "Python"],
+  ["requirements.txt", "Python"],
+  ["Gemfile", "Ruby"],
+  ["pom.xml", "Java"],
+  ["build.gradle", "Java"],
+  ["composer.json", "PHP"]
+];
+
+function readReadme() {
+  for (const name of README_CANDIDATES) {
+    const full = path.join(projectRoot, name);
+    if (!fs.existsSync(full)) continue;
+    try {
+      return { name, text: fs.readFileSync(full, "utf8") };
+    } catch (error) {
+      return null;
+    }
+  }
+  return null;
+}
+
+// A README line worth quoting as a description. Headings, badges, images, HTML,
+// list items and rules say nothing about what the app is, and a very short line is
+// usually a label rather than a sentence.
+function isDescriptiveProse(line) {
+  const value = line.trim();
+  if (value.length < 30) return false;
+  if (/^#{1,6}\s/.test(value)) return false;
+  if (/^([-*+]|\d+\.)\s/.test(value)) return false;
+  if (/^[>|]/.test(value)) return false;
+  if (/^</.test(value)) return false;
+  if (/!\[/.test(value)) return false;
+  if (/^=+$/.test(value) || /^-+$/.test(value)) return false;
+  return true;
+}
+
+function bulletValue(line) {
+  const match = line.match(/^\s*[-*+]\s+(.*)$/);
+  if (!match) return "";
+  return match[1].replace(/\*\*/g, "").replace(/`/g, "").trim();
+}
+
+// Bullets under the first heading whose text contains one of `needles`.
+function sectionBullets(text, needles) {
+  const found = [];
+  let capturing = false;
+
+  for (const line of text.split(/\r?\n/)) {
+    const heading = line.match(/^#{1,6}\s+(.*)$/);
+    if (heading) {
+      const key = heading[1].toLowerCase();
+      capturing = needles.some((needle) => key.includes(needle));
+      continue;
+    }
+    if (!capturing) continue;
+    const value = bulletValue(line);
+    if (value && value.length <= 200) found.push(value);
+  }
+
+  return found.slice(0, 6);
+}
+
+// The opening paragraph, reassembled from its wrapped lines. Taking only the first
+// matching line would cut a sentence in half at whatever column the README happens
+// to wrap at.
+function firstParagraph(lines) {
+  const start = lines.findIndex(isDescriptiveProse);
+  if (start < 0) return "";
+
+  const paragraph = [];
+  for (const line of lines.slice(start)) {
+    if (!line.trim()) break;
+    if (/^#{1,6}\s/.test(line)) break;
+    if (/^([-*+]|\d+\.)\s/.test(line)) break;
+    paragraph.push(line.trim());
+  }
+  return paragraph.join(" ");
+}
+
+function extractReadmeBrief(readme) {
+  const lines = readme.text.split(/\r?\n/);
+  const titleIndex = lines.findIndex((line) => /^#\s+\S/.test(line));
+  const title = titleIndex >= 0 ? lines[titleIndex].replace(/^#\s+/, "").trim() : "";
+
+  const description = firstParagraph(lines.slice(titleIndex + 1));
+
+  const goals = sectionBullets(readme.text, [
+    "what it does",
+    "features",
+    "goals",
+    "overview",
+    "capabilities"
+  ]);
+  const targetUsers = sectionBullets(readme.text, [
+    "users",
+    "audience",
+    "personas",
+    "customers"
+  ]);
+
+  // A README of just a title and badges says nothing; let the code scan answer.
+  if (!description && goals.length === 0 && targetUsers.length === 0) return null;
+
+  return {
+    derivedFrom: "readme",
+    readmePath: readme.name,
+    title,
+    description: description.trim(),
+    goals,
+    targetUsers,
+    architecture: []
+  };
+}
+
+function detectTechStack(inventory) {
+  const found = [];
+
+  for (const [file, language] of LANGUAGE_MARKERS) {
+    if (fs.existsSync(path.join(projectRoot, file)) && !found.includes(language)) {
+      found.push(language);
+    }
+  }
+
+  const manifestPath = path.join(projectRoot, "package.json");
+  if (fs.existsSync(manifestPath)) {
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      const deps = { ...(manifest.dependencies || {}), ...(manifest.devDependencies || {}) };
+      for (const name of Object.keys(deps)) {
+        const label = TECH_LABELS[name];
+        if (label && !found.includes(label)) found.push(label);
+      }
+      if (manifest.packageManager) {
+        found.push(manifest.packageManager.split("@")[0]);
+      }
+    } catch (error) {
+      // A malformed manifest is reported by the scan elsewhere; the brief carries
+      // on with whatever the other markers told it.
+    }
+  }
+
+  if (inventory.workspaces?.detected) {
+    found.push(`monorepo (${inventory.workspaces.packages.length} packages)`);
+  }
+
+  return found.slice(0, 10);
+}
+
+// README first, because it is the only file that was written to explain the
+// product. Fall back to the manifests when it does not explain anything.
+function buildProjectBrief(inventory) {
+  const readme = readReadme();
+  const fromReadme = readme ? extractReadmeBrief(readme) : null;
+
+  if (fromReadme) {
+    fromReadme.architecture = detectTechStack(inventory);
+    return fromReadme;
+  }
+
+  const architecture = detectTechStack(inventory);
+  let title = "";
+  const manifestPath = path.join(projectRoot, "package.json");
+  if (fs.existsSync(manifestPath)) {
+    try {
+      title = JSON.parse(fs.readFileSync(manifestPath, "utf8")).name || "";
+    } catch (error) {
+      title = "";
+    }
+  }
+
+  // Nothing to say at all: report that honestly rather than writing an empty brief.
+  if (!title && architecture.length === 0) {
+    return {
+      derivedFrom: "none",
+      readmePath: readme ? readme.name : null,
+      title: "",
+      description: "",
+      goals: [],
+      targetUsers: [],
+      architecture: []
+    };
+  }
+
+  return {
+    derivedFrom: "code-scan",
+    readmePath: readme ? readme.name : null,
+    title,
+    description: "",
+    goals: [],
+    targetUsers: [],
+    architecture
+  };
+}
+
+function renderBriefMarkdown(brief) {
+  const origin = brief.derivedFrom === "readme" ? brief.readmePath : "the code scan";
+  const lines = [];
+
+  lines.push(`# ${brief.title || path.basename(projectRoot)}`);
+  lines.push("");
+  lines.push(`Status: Draft (derived from ${origin})`);
+  lines.push("");
+  lines.push("> **This is a draft, not a product plan.**");
+  lines.push("> The onboarding scan wrote it from what was already in the repository. Nobody");
+  lines.push("> reviewed it and nothing here was confirmed. Run `/sdrive:product-plan` to");
+  lines.push("> replace it with a plan you have actually approved - that flow reads this file");
+  lines.push("> and proposes a merge rather than discarding it.");
+  lines.push("");
+
+  if (brief.description) {
+    lines.push("## Vision");
+    lines.push("");
+    lines.push(brief.description);
+    lines.push("");
+  }
+
+  if (brief.goals.length > 0) {
+    lines.push("## Goals");
+    lines.push("");
+    brief.goals.forEach((goal) => lines.push(`- ${goal}`));
+    lines.push("");
+  }
+
+  if (brief.targetUsers.length > 0) {
+    lines.push("## Target Users");
+    lines.push("");
+    lines.push("| Segment | Description | Need |");
+    lines.push("| --- | --- | --- |");
+    brief.targetUsers.forEach((user) => lines.push(`| ${user} | from ${brief.readmePath} |  |`));
+    lines.push("");
+  }
+
+  if (brief.architecture.length > 0) {
+    lines.push("## Existing Architecture");
+    lines.push("");
+    brief.architecture.forEach((item) => lines.push(`- ${item}`));
+    lines.push("");
+  }
+
+  lines.push("## Open Questions");
+  lines.push("");
+  lines.push("- Was the vision above accurate, or is it only the opening paragraph of the README?");
+  lines.push(
+    brief.targetUsers.length > 0
+      ? "- Are those the right segments, and what does each one actually need?"
+      : "- Who are the target users? Nothing in the repository names them."
+  );
+  lines.push(
+    brief.goals.length > 0
+      ? "- Which of the goals above matter most, and what is deliberately out of scope?"
+      : "- What is this product for, and what is deliberately out of scope?"
+  );
+  lines.push("");
+
+  return lines.join("\n");
+}
+
+// Writes product/overview.md ONLY when nothing is there. An existing product plan
+// is the user's own work and is never touched.
+function writeProductBrief(brief) {
+  if (!brief || brief.derivedFrom === "none") {
+    return { written: false, reason: "nothing to report" };
+  }
+
+  const dir = path.join(sdriveRoot, "product");
+  const target = path.join(dir, "overview.md");
+
+  if (fs.existsSync(target)) {
+    return { written: false, reason: "product/overview.md already exists" };
+  }
+
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(target, renderBriefMarkdown(brief));
+  return { written: true, path: "product/overview.md" };
+}
+
 function buildInventory() {
+  // Detected first, because the fixed codeRoots list cannot know what a monorepo
+  // calls its packages.
+  const workspaces = detectWorkspaces();
+
+  const codeRootPaths = [...DETECT_FILES.codeRoots];
+  for (const pkg of workspaces.packages) {
+    if (!codeRootPaths.includes(pkg)) codeRootPaths.push(pkg);
+  }
+
   const inventory = {
     projectRoot,
     scannedAt: new Date().toISOString(),
     mode: "brownfield",
+    workspaces,
     sections: {
       manifests: scanSection(DETECT_FILES.manifests),
       docs: scanSection(DETECT_FILES.docs),
-      codeRoots: scanSection(DETECT_FILES.codeRoots),
+      codeRoots: scanSection(codeRootPaths),
       ci: scanSection(DETECT_FILES.ci),
       tests: scanSection(DETECT_FILES.tests),
       configs: scanSection(DETECT_FILES.configs),
@@ -228,6 +728,9 @@ function buildInventory() {
       inventory.missing.push(item.path);
     }
   }
+
+  // Derived last, because it reports on what the sections above actually found.
+  inventory.projectBrief = buildProjectBrief(inventory);
 
   return inventory;
 }
@@ -261,6 +764,63 @@ function buildReport(inventory) {
     lines.push("");
   }
 
+  // Monorepo workspaces. In a monorepo these ARE the code roots; the fixed list
+  // in DETECT_FILES can only ever guess at them.
+  const ws = inventory.workspaces || {};
+  if (ws.detected || (ws.signals && ws.signals.length > 0)) {
+    lines.push("## Monorepo Workspaces");
+
+    if (ws.detected) {
+      lines.push(`- Source: ${ws.source}`);
+      lines.push(`- Patterns: ${ws.patterns.join(", ")}`);
+      lines.push(`- Packages (${ws.packages.length}):`);
+      if (ws.packages.length === 0) {
+        lines.push("  - (patterns matched no package manifest)");
+      } else {
+        ws.packages.forEach((pkg) => lines.push(`  - ${pkg}`));
+      }
+    } else {
+      lines.push("- No workspace package list found.");
+    }
+
+    if (ws.signals && ws.signals.length > 0) {
+      lines.push(`- Monorepo signal: ${ws.signals.join(", ")} (carries no package list of its own)`);
+    }
+
+    lines.push("");
+  }
+
+  lines.push("## Project Brief");
+
+  const brief = inventory.projectBrief || {};
+  if (brief.derivedFrom === "readme") {
+    lines.push(`- Source: ${brief.readmePath}`);
+  } else if (brief.derivedFrom === "code-scan") {
+    lines.push(`- Source: code scan (${brief.readmePath || "no README"})`);
+  } else {
+    lines.push("- Nothing to report.");
+  }
+  if (brief.title) lines.push(`- Title: ${brief.title}`);
+  if (brief.description) lines.push(`- Description: ${brief.description}`);
+  if (brief.goals && brief.goals.length > 0) {
+    lines.push(`- Goals (${brief.goals.length}):`);
+    brief.goals.forEach((goal) => lines.push(`  - ${goal}`));
+  }
+  if (brief.targetUsers && brief.targetUsers.length > 0) {
+    lines.push(`- Target users (${brief.targetUsers.length}):`);
+    brief.targetUsers.forEach((user) => lines.push(`  - ${user}`));
+  }
+  if (brief.architecture && brief.architecture.length > 0) {
+    lines.push(`- Tech stack: ${brief.architecture.join(", ")}`);
+  }
+  lines.push("");
+  lines.push("> This brief is DERIVED from the repository, not confirmed by anyone. It is");
+  lines.push("> written to `.sdrive/product/overview.md` as a draft, and only when that file");
+  lines.push("> does not already exist. Run `/sdrive:product-plan` to replace it with an");
+  lines.push("> approved plan. If the README says nothing useful, the brief falls back to the");
+  lines.push("> code scan and will be thinner - that gap is real, not an error.");
+  lines.push("");
+
   lines.push("## Present");
   inventory.present.forEach((p) => lines.push(`- ✅ ${p}`));
   lines.push("");
@@ -287,6 +847,10 @@ function main() {
   const report = buildReport(inventory);
   fs.writeFileSync(reportPath, report);
 
+  // The dashboard reads product/overview.md, so without this its panels stay blank
+  // on a freshly onboarded project. Never overwrites an existing product plan.
+  const briefResult = writeProductBrief(inventory.projectBrief);
+
   const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
   const workflowState = fs.existsSync(workflowStatePath)
     ? JSON.parse(fs.readFileSync(workflowStatePath, "utf8"))
@@ -306,6 +870,25 @@ function main() {
   console.log(`Present:  ${inventory.present.length}`);
   console.log(`Missing:  ${inventory.missing.length}`);
   console.log(`Deferred: ${inventory.deferred.length}`);
+
+  const brief = inventory.projectBrief || {};
+  if (briefResult.written) {
+    console.log("");
+    console.log(`📝 Draft product brief written: ${briefResult.path}`);
+    console.log(`   Derived from ${brief.derivedFrom === "readme" ? brief.readmePath : "the code scan"}.`);
+    console.log("   It is a draft, not an approved product plan. Run /sdrive:product-plan to replace it.");
+  } else if (brief.derivedFrom && brief.derivedFrom !== "none") {
+    console.log("");
+    console.log(`📝 Draft product brief NOT written: ${briefResult.reason}`);
+  }
+
+  if (inventory.workspaces?.detected) {
+    console.log("");
+    console.log(
+      `📦 Monorepo: ${inventory.workspaces.packages.length} workspace package(s) from ${inventory.workspaces.source}`
+    );
+    inventory.workspaces.packages.forEach((pkg) => console.log(`   - ${pkg}`));
+  }
 
   const ext = inventory.detectedSystems || {};
   if (ext.openspec?.detected || ext.speckit?.detected) {

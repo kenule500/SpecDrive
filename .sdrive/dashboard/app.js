@@ -389,10 +389,29 @@ function renderOverviewHero(summary, git, productType) {
 }
 
 /* KPI strip — the headline numbers, presented as a single unified band. */
+// A drafted brief is NOT an approved plan. The onboarding scan writes a product
+// brief derived from the README, so the page must never report that as approved.
+function isDraftPlan(summary) {
+  return /draft/i.test(summary?.status || "");
+}
+
+function productStatusSub(summary) {
+  if (!summary?.title) return "no product plan";
+  return isDraftPlan(summary) ? "draft, not confirmed" : "product plan approved";
+}
+
+function productStatusTone(summary) {
+  if (!summary?.status) return "slate";
+  return isDraftPlan(summary) ? "slate" : "green";
+}
+
 function renderOverviewKpis(onboarding, git, summary) {
   const goals = summary?.goals || [];
   const users = summary?.targetUsers || [];
   const arch = summary?.architecture || [];
+  // Everything below comes from a draft the scan derived, so "confirmed" would be
+  // a claim nobody made.
+  const draft = isDraftPlan(summary);
 
   const verified = onboarding?.verifiedFeatures || [];
   const retro = onboarding?.retroactiveFeatures || [];
@@ -403,14 +422,14 @@ function renderOverviewKpis(onboarding, git, summary) {
     {
       label: "Product Status",
       value: summary?.status || "—",
-      sub: summary?.title ? "product plan approved" : "no product plan",
-      tone: summary?.status ? "green" : "slate",
+      sub: productStatusSub(summary),
+      tone: productStatusTone(summary),
       icon: "◈"
     },
     {
       label: "Primary Goals",
       value: String(goals.length),
-      sub: goals.length ? "confirmed" : "none recorded",
+      sub: goals.length ? (draft ? "from README, unconfirmed" : "confirmed") : "none recorded",
       tone: "blue",
       icon: "✦"
     },
@@ -424,7 +443,7 @@ function renderOverviewKpis(onboarding, git, summary) {
     {
       label: "Tech Stack",
       value: String(arch.length),
-      sub: arch.length ? "layers documented" : "none recorded",
+      sub: arch.length ? (draft ? "from manifests, unconfirmed" : "layers documented") : "none recorded",
       tone: "slate",
       icon: "⌘"
     },
@@ -496,7 +515,7 @@ function renderProductPlanPanel(summary) {
     <section class="ov-panel">
       <header class="ov-panel-head">
         <span class="ov-panel-icon">◇</span>
-        <h3>Product Plan</h3>
+        <h3>${isDraftPlan(summary) ? "Product Brief (draft)" : "Product Plan"}</h3>
       </header>
       <div class="ov-panel-body">
         ${summary.problem ? `<div class="ov-callout"><span class="ov-callout-label">Problem</span><p>${escapeHtml(summary.problem)}</p></div>` : ""}

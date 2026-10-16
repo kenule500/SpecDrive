@@ -114,6 +114,8 @@ Create or update the following structure as needed, and only with user approval:
      - If the user declines, use the existing inventory.
    - Read `.sdrive/onboarding/inventory.json`.
    - Read `.sdrive/onboarding/report.md`.
+   - Read `inventory.workspaces`. In a monorepo the workspace packages ARE the code roots, and the scan has already merged them into `inventory.sections.codeRoots`. Treat every listed package as a first-class part of the project: never describe the repository as though only its top-level directories exist, and never conclude a package is absent because it is not in the fixed detection list.
+   - If `inventory.workspaces.detected` is false but `inventory.workspaces.signals` is non-empty (`turbo.json`, `nx.json`, `rush.json`), the repo looks like a monorepo but no package list was found. Ask the user which directories are the packages rather than guessing.
    - Check `inventory.detectedSystems` for external spec systems:
      - `openspec` → detected OpenSpec project
      - `speckit` → detected Spec-Kit project

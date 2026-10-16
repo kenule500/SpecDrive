@@ -407,6 +407,38 @@ The Onboarding Agent will:
 8. Optionally migrate OpenSpec or Spec-Kit specs
 9. Record onboarding state in `workflow-state.json`
 
+### Monorepos
+
+The scan reads the workspace manifest, so a monorepo's packages are treated as first-class code roots instead of being missed by a fixed directory list. Detected packages are merged into the scan's code roots and listed in `report.md` under **Monorepo Workspaces**.
+
+| Manifest | Read from |
+|----------|-----------|
+| `pnpm-workspace.yaml` | `packages:` |
+| `package.json` | `workspaces` — either an array or `{ "packages": [...] }` |
+| `lerna.json` | `packages` |
+
+Only the `packages:` list is parsed from `pnpm-workspace.yaml`. Other keys that also contain lists — `publicHoistPattern:`, `overrides:`, `allowBuilds:` — are ignored, so their entries never leak in as packages.
+
+`turbo.json`, `nx.json`, and `rush.json` are treated as **signals only**. Turborepo and Nx delegate package discovery to the package manager, so they confirm a repository is a monorepo but do not name its packages. When a signal is present and no package list is found, the agent asks which directories are the packages rather than guessing.
+
+### The project brief
+
+A freshly onboarded project used to show an empty dashboard, which read as though SpecDrive knew nothing about it. The scan now derives a **project brief** so the Overview has something true to show:
+
+1. It reads `README.md` — the only file written to explain the product — taking the title, the opening paragraph (rejoined across its wrapped lines), bullets under a features/goals heading, and bullets under a users/audience heading.
+2. If the README is missing or says nothing useful (a title and badges only), it falls back to a **code scan**: language markers such as `tsconfig.json` or `go.mod`, the dependencies in `package.json`, and the detected workspace packages.
+3. It writes the result to `.sdrive/product/overview.md`, **only when that file does not already exist**.
+
+The brief is derived, and the file says so on its first line:
+
+```text
+Status: Draft (derived from README.md)
+```
+
+The dashboard reads that word and labels the page to match — **Product Brief (draft)**, goals marked *from README, unconfirmed*, tech stack *from manifests, unconfirmed*. It never reports a derived brief as an approved product plan, and it never says "approved" until someone approves one.
+
+Running `/sdrive:product-plan` reads the draft, preserves it, and proposes a merge rather than discarding it. If your project already has a `product/overview.md`, the scan leaves it completely untouched.
+
 ### What onboarding does NOT do
 
 - Does not overwrite existing files
