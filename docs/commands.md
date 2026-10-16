@@ -29,7 +29,9 @@ SpecDrive has two types of commands:
 | `sdrive hooks:install` | Install pre-commit validation hook |
 | `sdrive diff <old> <new>` | Show differences between two spec files |
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
-| `sdrive dashboard` | Start local web dashboard |
+| `sdrive dashboard` | Start local web dashboard (also auto-started by `init` / `onboard` in a terminal) |
+| `sdrive archive:check <feature>` | Report whether a feature may be archived, and why not. Reads only — changes nothing |
+| `sdrive archive:finalize <feature> [--merge-commit <sha>]` | Record a completed archive. Refuses unless all four gates are already approved |
 | `sdrive amend <feature> --reason "..."` | Correct a wrongly-closed record — moves that version back to `ongoing/` (corrective action; new scope uses `sdrive version:new`) |
 | `sdrive verify <feature>` | Verify code matches plan.json |
 | `sdrive version:new <feature>` | Create a new version of a feature |
@@ -374,6 +376,15 @@ sdrive dashboard
 If `4747` is already in use, it automatically falls back to the next free port
 (`4748`, `4749`, …) and prints the URL it chose. Override the starting port with
 the `SDRIVE_PORT` environment variable.
+
+`sdrive init` and `sdrive onboard` **start the dashboard for you** when they finish, so a new project has something to look at immediately. Press `Ctrl+C` to stop it and get your prompt back — that is the normal way to stop a server, and it is reported as "Dashboard stopped", never as a failure.
+
+| Flag / variable | Effect |
+|-----------------|--------|
+| `--no-dashboard` | Skip the auto-start on `sdrive init` and `sdrive onboard` |
+| `SDRIVE_NO_DASHBOARD=1` | Skip the auto-start everywhere, including inside scripts |
+
+The auto-start is skipped by itself when there is no interactive terminal. A script or CI run would otherwise block forever on a server that never exits, so in that case the command prints how to start it manually instead.
 
 Open `http://localhost:4747` to view:
 

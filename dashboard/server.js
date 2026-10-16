@@ -23,7 +23,7 @@ function git(args) {
 function apiGitInfo() {
   const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
   if (!branch) {
-    return { available: false };
+    return { available: false, branching: apiBranching() };
   }
 
   const commit = git(["rev-parse", "--short", "HEAD"]);
@@ -70,7 +70,178 @@ function apiGitInfo() {
     dirty,
     mergedFrom: mergedFrom || null,
     ahead: ahead ? parseInt(ahead, 10) : 0,
-    behind: behind ? parseInt(behind, 10) : 0
+    behind: behind ? parseInt(behind, 10) : 0,
+    branching: apiBranching()
+  };
+}
+
+// Which integration branch features land on, and the branching model that implies.
+//
+// This is DERIVED, never stored. The default branch is read from the repository and
+// each landing target is read from the `base` recorded on that feature in
+// workflow-state.json. There is no config field and no setting to change, so showing
+// this cannot alter behaviour: it is a read-out of the setup a project already has,
+// not a switch that enables one.
+//
+// Two rules keep the label honest:
+//   1. The CURRENT branch is never used as the integration branch. Sitting on a
+//      feature branch is the normal state of a developer checkout, and treating it
+//      as "where features land" would invert the meaning of the read-out.
+//   2. A base that is another feature's branch is a STACK, not an integration branch,
+//      so it is reported separately rather than counted as a landing target.
+function resolveDefaultBranch() {
+  const originHead = (git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) || "")
+    .replace(/^origin\//, "");
+  if (originHead && originHead !== "HEAD") {
+    return { name: originHead, source: "origin/HEAD" };
+  }
+
+  // origin/HEAD is only populated once the remote is known and `remote set-head` has
+  // run, so fall back to what the remote actually has, then to a local conventional
+  // name. `develop` is only accepted from the remote, where its existence is a real
+  // signal rather than an ambiguous local coincidence.
+  for (const candidate of ["main", "master", "trunk", "develop"]) {
+    if (git(["rev-parse", "--verify", "--quiet", `refs/remotes/origin/${candidate}`])) {
+      return { name: candidate, source: `origin/${candidate}` };
+    }
+  }
+  for (const candidate of ["main", "master", "trunk"]) {
+    if (git(["rev-parse", "--verify", "--quiet", `refs/heads/${candidate}`])) {
+      return { name: candidate, source: `local ${candidate}` };
+    }
+  }
+  return { name: null, source: null };
+}
+
+function apiBranching() {
+  const { name: defaultBranch, source: defaultBranchSource } = resolveDefaultBranch();
+  const currentBranch = git(["rev-parse", "--abbrev-ref", "HEAD"]) || null;
+
+  const state = loadJson(path.join(sdriveRoot, "workflow-state.json"), { features: [] });
+  const features = Array.isArray(state.features) ? state.features : [];
+
+  // A feature's branch is a stack parent when a peer points its base at it.
+  const featureBranches = new Set(
+    features.map((f) => (typeof f.branch === "string" ? f.branch.trim() : "")).filter(Boolean)
+  );
+
+  const bases = [];
+  const integration = [];
+  const stacked = [];
+  let stackedCount = 0;
+  let unrecordedCount = 0;
+
+  for (const feature of features) {
+    const base = typeof feature.base === "string" ? feature.base.trim() : "";
+    if (!base) {
+      unrecordedCount += 1;
+      continue;
+    }
+    if (!bases.includes(base)) bases.push(base);
+
+    if (featureBranches.has(base)) {
+      stackedCount += 1;
+      if (!stacked.includes(base)) stacked.push(base);
+    } else if (!integration.includes(base)) {
+      integration.push(base);
+    }
+  }
+
+  const { label, detail } = describeBranchingModel({
+    defaultBranch, integration, stackedCount, unrecordedCount,
+    hasFeatureBranches: featureBranches.size > 0
+  });
+
+  return {
+    defaultBranch,
+    defaultBranchSource,
+    currentBranch,
+    bases,
+    integration,
+    stacked,
+    stackedCount,
+    unrecordedCount,
+    label,
+    detail
+  };
+}
+
+// Exactly ONE model is named. Two models in one label read as if a project were
+// running both at once, which is never true.
+function describeBranchingModel(info) {
+  const { defaultBranch, integration, stackedCount, unrecordedCount, hasFeatureBranches } = info;
+
+  const stackNote = stackedCount
+    ? ` ${stackedCount} feature(s) are stacked on a peer branch rather than landing on an integration branch directly.`
+    : "";
+  const pendingNote = unrecordedCount
+    ? ` ${unrecordedCount} feature(s) have not started and have recorded no base yet.`
+    : "";
+
+  if (!defaultBranch) {
+    return {
+      label: "Unknown",
+      detail: "No default branch could be resolved from this repository." + stackNote
+    };
+  }
+
+  if (integration.length === 0) {
+    if (stackedCount > 0) {
+      return {
+        label: "Stacked features",
+        detail:
+          `Every started feature is based on a peer's branch rather than on ${defaultBranch}. The chain lands ` +
+          `on ${defaultBranch} once the bottom of the stack lands.`
+      };
+    }
+    return {
+      label: "Not started",
+      detail: `The default branch is ${defaultBranch}, but no started feature has recorded a landing target yet.`
+    };
+  }
+
+  if (integration.length > 1) {
+    return {
+      label: "Per-feature targets",
+      detail:
+        `Started features land on more than one branch (${integration.join(", ")}). SpecDrive reads each ` +
+        `feature's target from its own recorded base, so there is no single integration branch.` + stackNote + pendingNote
+    };
+  }
+
+  const only = integration[0];
+
+  if (only === "develop") {
+    return {
+      label: "Git Flow",
+      detail: `Started features land on ${only}; releases go to ${defaultBranch}.` + stackNote
+    };
+  }
+
+  if (only !== defaultBranch) {
+    return {
+      label: "Custom",
+      detail: `Started features land on ${only}, which is not the default branch (${defaultBranch}).` + stackNote
+    };
+  }
+
+  if (!hasFeatureBranches) {
+    return {
+      label: "Trunk-based",
+      detail:
+        `Started features land on ${defaultBranch} and no feature has recorded a branch of its own, so work ` +
+        `appears to go straight to the trunk. If this project predates branch recording, the branches may ` +
+        `exist without having been recorded.` + stackNote
+    };
+  }
+
+  return {
+    label: "GitHub Flow",
+    detail:
+      `Started features land on the default branch ${defaultBranch}, one branch per feature. Trunk-based ` +
+      `development with short-lived branches resolves to this identical shape, so the branch name is the ` +
+      `reliable fact and GitHub Flow is reported whenever features have branches of their own - which is ` +
+      `also the shape SpecDrive enforces (CON-606).` + stackNote
   };
 }
 

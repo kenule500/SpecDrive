@@ -52,6 +52,43 @@ function isDuplicateVerdict(blocker) {
   );
 }
 
+// Is this feature STACKED on another in-flight feature?
+//
+// Determined entirely from the records, so it needs no git call and gives the same
+// answer every time: a feature is stacked when its recorded `base` is ANOTHER FEATURE'S
+// own branch (`feature.branch` of a peer) and that peer has not landed yet.
+//
+// `base` naming something that is not any feature's branch - `main`, `develop`,
+// `release/1.0` - is an integration branch. That is the normal case, not stacking, and
+// this is why the test is "is it a peer's branch" rather than "does it equal main":
+// a Git Flow project merges into `develop`, and calling that stacked would be wrong.
+function findStackingBlocker(state, feature) {
+  const base = feature.base;
+
+  if (!base) return null;
+
+  const peer = (state.features || []).find(
+    (other) => other.name !== feature.name && other.branch === base
+  );
+
+  if (!peer) return null;
+
+  const peerVersions = peer.versions || [];
+  const peerVersion =
+    peerVersions.find((v) => v.id === peer.currentVersion) || peerVersions[0];
+
+  if (peerVersion && peerVersion.phase === "completed") {
+    // The parent has landed, so this is historical metadata - not a live blocker.
+    return null;
+  }
+
+  return (
+    `"${feature.name}" is STACKED on "${peer.name}" - its branch "${base}" has not landed. ` +
+    `Archive "${peer.name}" first. This feature then lands on the integration branch, never into "${base}"; ` +
+    `merging it now would ship "${peer.name}"'s unaudited commits (CON-611).`
+  );
+}
+
 // Read-only verdict. Never writes anything, so it is safe to run over every feature.
 function checkArchivable(root, featureName) {
   const blockers = [];
@@ -150,6 +187,15 @@ function checkArchivable(root, featureName) {
     .forEach((blocker) => blockers.push(`Evidence changed since approval: ${blocker}`));
 
   requirements.warnings.forEach((warning) => warnings.push(warning));
+
+  // Ordering, not evidence: a stacked feature has perfectly good approvals and still
+  // cannot be merged yet. Reported as a blocker because the merge is part of archiving,
+  // and its wording says ORDER so it is not mistaken for missing evidence.
+  const stacking = findStackingBlocker(state, feature);
+
+  if (stacking) {
+    blockers.push(stacking);
+  }
 
   return {
     ok: blockers.length === 0,

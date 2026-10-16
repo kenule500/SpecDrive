@@ -263,6 +263,8 @@ function renderGitInfo(git) {
   const sidebar = document.getElementById("sidebar-git");
   const chip = document.getElementById("topbar-git");
 
+  renderBranchingModel(git && git.branching);
+
   if (!git || !git.available) {
     if (sidebar) sidebar.textContent = "Not a git repository";
     if (chip) chip.textContent = "No git";
@@ -289,6 +291,44 @@ function renderGitInfo(git) {
     `;
     chip.title = `${git.subject || ""}${git.mergedFrom ? `\nMerged from: ${git.mergedFrom}` : ""}`;
   }
+}
+
+/* ============================================================
+   BRANCHING MODEL
+   ============================================================ */
+// Read-out only. The integration branch is resolved from the repository and each
+// feature's landing target comes from the `base` recorded on it. Nothing here is a
+// setting, so this display cannot change how a feature is archived - it describes
+// the setup the project already has.
+function renderBranchingModel(branching) {
+  const el = document.getElementById("sidebar-branching");
+  if (!el) return;
+
+  if (!branching || !branching.label) {
+    el.innerHTML = "";
+    el.removeAttribute("title");
+    return;
+  }
+
+  // The concrete branch is the fact; the model name is the hint. When features land
+  // on more than one branch there is no single integration branch to show.
+  const target = branching.integration.length
+    ? branching.integration.join(", ")
+    : branching.defaultBranch || "no default branch";
+
+  const stack = branching.stackedCount && branching.label !== "Stacked features"
+    ? `<div class="branching-stack">${branching.stackedCount} stacked on a peer branch</div>`
+    : "";
+
+  el.innerHTML = `
+    <div class="branching-model">${escapeHtml(branching.label)}</div>
+    <div class="branching-targets">lands on ${escapeHtml(target)}</div>
+    ${stack}
+  `;
+
+  el.title = branching.defaultBranchSource
+    ? `${branching.detail}\n\nDefault branch resolved from ${branching.defaultBranchSource}.`
+    : branching.detail;
 }
 
 /* ============================================================

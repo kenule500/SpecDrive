@@ -246,7 +246,9 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | `sdrive hooks:install` | Install pre-commit hook |
 | `sdrive diff` | Compare two spec files |
 | `sdrive openapi:generate` | Generate OpenAPI spec |
-| `sdrive dashboard` | Start web dashboard |
+| `sdrive dashboard` | Start web dashboard (also auto-started by `init` / `onboard` in a terminal) |
+| `sdrive archive:check <feature>` | Report whether a feature may be archived, and why not. Reads only |
+| `sdrive archive:finalize <feature>` | Record a completed archive. Refuses unless all four gates are already approved |
 | `sdrive amend` | Correct a wrongly-closed record (`--reason`, `--branch`, `--base`, `--stay`) |
 | `sdrive verify` | Verify code vs plan |
 | `sdrive version:new` | Create new feature version |
@@ -665,6 +667,11 @@ sdrive diff:version user-login v1 v2
 ```bash
 sdrive dashboard
 ```
+
+`sdrive init` and `sdrive onboard` start it automatically when run in a terminal.
+Skip that with `--no-dashboard` or `SDRIVE_NO_DASHBOARD=1`. The auto-start is also
+skipped by itself when there is no interactive terminal, so scripts and CI never
+block on a server that does not exit.
 
 ---
 

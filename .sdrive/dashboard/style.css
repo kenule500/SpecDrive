@@ -344,6 +344,40 @@ body {
   line-height: 1.6;
 }
 
+/* Read-only branching-model read-out. Derived from the repository and each
+   feature's recorded base; there is no setting behind it. */
+.sidebar-branching {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--sidebar-text-2);
+  word-break: break-all;
+}
+
+.sidebar-branching:empty {
+  display: none;
+}
+
+.sidebar-footer-block + .sidebar-footer-block {
+  margin-top: 14px;
+}
+
+.branching-model {
+  font-weight: 600;
+  color: var(--sidebar-text);
+}
+
+.branching-targets {
+  margin-top: 3px;
+  font-family: var(--mono);
+  color: var(--sidebar-text-2);
+}
+
+.branching-stack {
+  margin-top: 3px;
+  font-style: italic;
+  color: var(--sidebar-text-3);
+}
+
 .sidebar-git .git-branch-name {
   color: var(--sidebar-active-text);
   font-weight: 600;

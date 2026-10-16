@@ -284,6 +284,9 @@ View dashboard:
 sdrive dashboard
 ```
 
+`sdrive init` already starts it for you at the end, if you ran it in a terminal —
+press `Ctrl+C` when you are done. Use `--no-dashboard` to skip that.
+
 ---
 
 ## Commands Reference

@@ -456,11 +456,25 @@ program
   .command("init")
   .description("Initialize SpecDrive structure and tool adapters")
   .option("--tools <list>", "Configure AI tools non-interactively. Use all, none, or a comma-separated list")
+  .option("--no-dashboard", "Skip starting the web dashboard after init")
   .action((options) => {
     printInitWelcome();
 
     const projectRoot = process.cwd();
     const sdriveRoot = path.join(projectRoot, ".sdrive");
+
+    // Every successful exit from `init` funnels through here, so the dashboard
+    // auto-launch cannot be forgotten on one of the four completion paths.
+    const finishInit = () => {
+      console.log("\n✅ SpecDrive initialized successfully.");
+
+      if (options.dashboard === false) {
+        console.log("💡 Dashboard skipped (--no-dashboard). Start it with: sdrive dashboard");
+        return;
+      }
+
+      launchDashboard();
+    };
 
     const dirs = [
       path.join(sdriveRoot, "agents"),
@@ -578,7 +592,7 @@ program
 
     if (!fs.existsSync(toolsPath)) {
       console.log("\n⚠️  tools.json not found. Skipping tool selection.");
-      console.log("\n✅ SpecDrive initialized successfully.");
+      finishInit();
       return;
     }
 
@@ -605,7 +619,7 @@ program
 
       autoWireMcp(selectedTools);
 
-      console.log("\n✅ SpecDrive initialized successfully.");
+      finishInit();
     };
 
     // Resolves a --tools value (all, none, or comma-separated names) to tool objects.
@@ -641,7 +655,7 @@ program
 
       if (selectedTools.length === 0) {
         console.log("\n⚠️  No tools selected. Skipping adapter generation.");
-        console.log("\n✅ SpecDrive initialized successfully.");
+        finishInit();
         return;
       }
 
@@ -1445,20 +1459,95 @@ program
   });
 
 // ---------- DASHBOARD ----------
+// The dashboard is a server, so it runs until the user stops it. Ctrl+C is a
+// normal way to stop it, not a failure: execSync reports it as a throw carrying
+// signal SIGINT, and printing "failed to start" there would simply be untrue.
+function runDashboardForeground(scriptPath) {
+  try {
+    execSync(`node "${scriptPath}"`, { stdio: "inherit" });
+    return { ok: true, stoppedByUser: false };
+  } catch (error) {
+    // Ctrl+C is a normal way to stop a server, not a crash, and each platform
+    // reports it differently:
+    //   - POSIX surfaces a signal (SIGINT/SIGTERM) with a null status.
+    //   - Windows has no signals; the process dies with 130, or with
+    //     0xC000013A (STATUS_CONTROL_C_EXIT) under PowerShell/cmd. That code is
+    //     handed back SIGNED by shells (-1073741510) but UNSIGNED by Node's
+    //     execSync (3221225786), so the comparison is made on the unsigned
+    //     32-bit value and cares about neither form.
+    // A genuine crash exits with some other numeric status, so it still reaches
+    // the caller as a failure.
+    const CTRL_C_STATUS = 0xc000013a;
+    const stopped =
+      error.signal ||
+      error.status === 130 ||
+      (error.status >>> 0) === CTRL_C_STATUS ||
+      error.status === null;
+
+    return stopped ? { ok: true, stoppedByUser: true } : { ok: false, error };
+  }
+}
+
+function dashboardScriptPath() {
+  const scriptPath = path.join(process.cwd(), ".sdrive", "dashboard", "server.js");
+  return fs.existsSync(scriptPath) ? scriptPath : null;
+}
+
+// Auto-launch after `init` / `onboard` so a new project has something to look at
+// immediately. A server that never exits is the wrong default in the wrong
+// context, so this refuses to start without an interactive terminal (a script or
+// CI run would hang forever) and honours SDRIVE_NO_DASHBOARD.
+function launchDashboard() {
+  const disabled =
+    process.env.SDRIVE_NO_DASHBOARD === "1" || process.env.SDRIVE_NO_DASHBOARD === "true";
+
+  if (disabled) {
+    console.log("💡 Dashboard skipped (SDRIVE_NO_DASHBOARD is set). Start it with: sdrive dashboard");
+    return;
+  }
+
+  if (!process.stdout.isTTY) {
+    console.log("💡 Dashboard not started (no interactive terminal). Start it with: sdrive dashboard");
+    return;
+  }
+
+  const scriptPath = dashboardScriptPath();
+  if (!scriptPath) {
+    console.log("💡 Dashboard not found in .sdrive/dashboard/. Start it with: sdrive dashboard");
+    return;
+  }
+
+  console.log("\n📊 Starting the SpecDrive dashboard in this terminal.");
+  console.log("   Press Ctrl+C when you are done to get your prompt back.\n");
+
+  const result = runDashboardForeground(scriptPath);
+
+  if (result.stoppedByUser) {
+    console.log("\n📊 Dashboard stopped.");
+  } else if (!result.ok) {
+    console.error("⚠️  Dashboard exited unexpectedly. Run `sdrive dashboard` to retry.");
+  }
+}
+
 program
   .command("dashboard")
   .description("Start SpecDrive web dashboard")
   .action(() => {
-    const scriptPath = path.join(process.cwd(), ".sdrive", "dashboard", "server.js");
+    const scriptPath = dashboardScriptPath();
 
-    if (!fs.existsSync(scriptPath)) {
+    if (!scriptPath) {
       console.error("❌ Dashboard not found. Run `sdrive init` first.");
       process.exit(1);
     }
 
-    try {
-      execSync(`node "${scriptPath}"`, { stdio: "inherit" });
-    } catch (error) {
+    const result = runDashboardForeground(scriptPath);
+
+    if (result.stoppedByUser) {
+      console.log("\n📊 Dashboard stopped.");
+      return;
+    }
+
+    if (!result.ok) {
       console.error("❌ Dashboard failed to start.");
       process.exit(1);
     }
@@ -2058,7 +2147,8 @@ program
 program
   .command("onboard")
   .description("Scan an existing project for onboarding (usually run automatically by /sdrive:onboard)")
-  .action(() => {
+  .option("--no-dashboard", "Skip starting the web dashboard after the scan")
+  .action((options) => {
     requirePermission("onboard");
 
     const projectRoot = process.cwd();
@@ -2096,6 +2186,13 @@ program
       console.log("📋 The scan is complete.");
       console.log("   You can now run `/sdrive:onboard` in your AI tool,");
       console.log("   or the agent will run this scan for you if needed.");
+
+      if (options.dashboard === false) {
+        console.log("💡 Dashboard skipped (--no-dashboard). Start it with: sdrive dashboard");
+        return;
+      }
+
+      launchDashboard();
     } catch (error) {
       console.error("❌ Onboarding scan failed.");
       process.exit(1);

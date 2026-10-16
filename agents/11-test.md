@@ -60,7 +60,13 @@ You operate within the current version folder only.
   - Do not change the wording, bold markers, or punctuation.
 - Report file path is `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md`.
 - **Artifact Location Rule:** ALL files you create — reports, logs, captured test output, coverage data — MUST be written under `.sdrive/`. NEVER write artifacts to the project root or any source folder.
-- **No Shell Redirection Rule:** NEVER use `>`, `>>`, `Tee-Object`, or `Out-File` to capture test output into files. Read the command's stdout/stderr directly from the tool result. Do NOT create `test.log`, `test2.log`, `*-help.log`, or any incrementing log files. To read a command's usage text, run it and read the tool result — do NOT redirect `--help` output to a file.
+- **Test-Output Rule (token economy):** A full run's raw output is thousands of lines and adds nothing the summary does not. Pulling it into context is the single largest avoidable cost in this workflow, so:
+  - Run the suite with the framework's compact reporter (`--reporter=dot` for Vitest/Jest, or the equivalent) so the tool result stays small.
+  - If the framework can emit a machine-readable report to a file, prefer that (`--reporter=json --outputFile=...`).
+  - Read only the SUMMARY lines: totals, the names of failures, and any error lines. Open the raw log only to explain one specific failure.
+  - NEVER paste a whole run into your reply or into the report file.
+- **Exit-Code Rule:** Decide pass or fail from the command's EXIT CODE. Never call a run green, or infer a count, from output you read only partially — a truncated read is not a result.
+- **No Shell Redirection Rule:** The ONE permitted redirection target is `.sdrive/reports/tests/raw/<feature>-<version>-<date>.log`, overwritten each run. NEVER write logs to the project root or any source folder, and NEVER create incrementing files (`test.log`, `test2.log`, `*-help.log`). To read a command's usage text, run it and read the tool result — do NOT redirect `--help` output to a file.
 - You are tool-agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool.
 </rules>
 
@@ -156,13 +162,10 @@ When invoked as `/sdrive:test --all`, test every ongoing feature sequentially.
    - Do not write tests for private/internal code unless required by an AC.
 
 5. **RUN TESTS**
-   - Run the test suite using `execute`.
-   - Capture the command's stdout/stderr **directly from the tool result**. Do NOT use shell redirection (`>`, `>>`, `Tee-Object`, `Out-File`, `2>&1 >`) to write log files.
-   - NEVER create log files in the project root or any source folder. If you must persist raw output, write it to `.sdrive/reports/tests/raw/<feature>-<version>-<date>.log`.
-   - Capture:
-     - Per-test pass/fail
-     - Total counts
-     - Any errors
+   - Run the suite using `execute` with the compact reporter and the raw-log path from the Test-Output Rule.
+   - **Decide the verdict from the EXIT CODE** — `0` means green, anything else means red. Never infer it from a partial read.
+   - From the summary, capture ONLY: totals (`passed / failed / skipped`), the names of failing tests, and any error lines. Do NOT paste the full run into your reply.
+   - To explain a specific failure, open `.sdrive/reports/tests/raw/<feature>-<version>-<date>.log` and read just that region — do not re-read the whole file.
    - If tests fail due to production code bugs, STOP and report. Do not modify production code.
 
 6. **UPDATE TRACEABILITY**

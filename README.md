@@ -202,6 +202,31 @@ Preview changes first with a dry run:
 sdrive update --dry-run
 ```
 
+### Upgrading an existing project
+
+Two hard gates were added. Both **refuse rather than warn**, so a project that already exists can hit them unexpectedly after an upgrade:
+
+**1. `sdrive approve <feature> review` now requires real coverage.** It used to accept a `review.md` containing `Status: PASS`. It now reads `traceability.json` and refuses if any acceptance criterion has no passing test:
+
+```text
+Cannot approve review:
+  - 19 of 20 acceptance criteria have no passing test (AC-002, AC-003, ...) - run `/sdrive:test <feature>` first
+```
+
+*Fix:* run `/sdrive:test <feature>` so every AC in `spec.json` has a linked test with `status: complete`, then approve again.
+
+**2. `sdrive archive:finalize` no longer promotes gates.** Archiving used to write all four gates to `approved` itself, which manufactured approvals nobody gave. It now refuses unless all four gates are **already** approved, and it re-checks that the evidence behind each approval is unchanged:
+
+```text
+Cannot archive:
+  - Gate not approved: implementation
+  - Evidence changed since approval: traceability
+```
+
+*Fix:* approve the gates that are genuinely outstanding, or investigate the evidence change. There is no bypass — this is the guarantee that a lifecycle can only ever close on approvals that already exist.
+
+`sdrive update` refreshes `.sdrive/agents/` and `.sdrive/dashboard/`, so the agent-side rules arrive with it. The code-level refusals arrive with the CLI itself.
+
 ---
 
 ## Where to Run Commands
@@ -261,7 +286,7 @@ Optional: If you have an app idea but no product roadmap yet, run `/sdrive:produ
 /sdrive:archive
 ```
 
-> **Tip:** At any point, run `sdrive dashboard` to open the local web dashboard — a visual view of your specs, features, gates, team, and activity. See [Web Dashboard](#web-dashboard).
+> **Tip:** `sdrive init` starts the web dashboard for you when it finishes, in the same terminal — press `Ctrl+C` when you are done to get your prompt back. Skip it with `--no-dashboard`, or start it later with `sdrive dashboard`. See [Web Dashboard](#web-dashboard).
 
 ---
 
@@ -281,6 +306,16 @@ Then open:
 http://localhost:4747
 ```
 
+`sdrive init` and `sdrive onboard` **start it for you** when they finish, so a new project has something to look at immediately. Press `Ctrl+C` to stop it and get your prompt back — that is the normal way to stop a server, and it is reported as "Dashboard stopped", never as an error.
+
+| Flag / variable | Effect |
+|-----------------|--------|
+| `--no-dashboard` | Skip the auto-start on `sdrive init` and `sdrive onboard` |
+| `SDRIVE_NO_DASHBOARD=1` | Skip the auto-start everywhere, including inside scripts |
+| `SDRIVE_PORT` | Change the starting port (default `4747`) |
+
+The auto-start is deliberately **skipped when there is no interactive terminal**. A script or CI run would otherwise block forever on a server that never exits, so in that case the command prints how to start it manually instead.
+
 ### What It Shows
 
 - Onboarding status (greenfield, brownfield partial, brownfield complete)
@@ -298,6 +333,9 @@ http://localhost:4747
 - Test coverage per version
 - Team members and roles
 - Recent audit activity
+- **The branching model in use**, at the bottom of the sidebar — derived from the repository and each feature's recorded `base`, never stored (see [Branching models](#branching-models))
+
+The sidebar footer also shows the current branch, its latest commit, and the branch it was most recently merged from, and clicking the topbar chip shows the full commit subject.
 
 ### Feature Detail Page
 
@@ -552,7 +590,8 @@ Final audit and pass/fail verdict. Does **not** merge or archive.
 
 **What it does:**
 
-- Verifies coverage: every AC has a linked, existing, passing test
+- Verifies coverage: every AC in `spec.json` has a linked test in `traceability.json` with `status: complete`
+- **The same check is enforced in code.** `sdrive approve <feature> review` reads `traceability.json` and exits non-zero if any AC has no passing test. A rule written in an agent prompt cannot refuse anything; only the CLI can, which is why this one lives in the CLI
 - Runs spec-to-code verification
 - Audits code against spec and traceability
 - Writes a `review.md` report with `Status: PASS` or `Status: FAIL`
@@ -577,13 +616,15 @@ Merges an approved feature to the confirmed target branch and completes its life
 
 **What it does:**
 
-- Requires a passing `review.md` for the current version (Review-First Rule)
+- Runs `sdrive archive:check <feature>` first — a read-only pre-flight that re-verifies every approval and the evidence behind it, and reports blockers without writing anything
+- Resolves the target branch and then confirms it with you. The destination is always an **integration branch**; a peer feature branch is never a merge destination
+- Refuses to merge a branch that carries another in-flight feature's commits (CON-611)
+- Requires a passing review for the current version (Review-First Rule)
 - Requires human merge approval
-- Merges the current version and marks it as `completed`
-- Moves the feature folder from `ongoing/` to `completed/`
-- Preserves older versions
-- Updates governance and workflow state, then cleans up the branch
-- Verifies permission before and after merge
+- Merges the current version
+- **Writes no record itself.** `sdrive archive:finalize` does, and it moves only the *current version's* folder to `completed/`, sets `phase: completed`, and never promotes a gate — an outstanding gate is a refusal, not a shortcut
+- Preserves older versions and sibling releases
+- Verifies the move succeeded before writing, then cleans up the branch
 
 **When to use:**
 
@@ -613,7 +654,7 @@ The command enumerates every feature in `specs/ongoing/`, processes them **seque
 | `/sdrive:apply --all` | Implements every ongoing feature, one branch each. Does **not** merge. |
 | `/sdrive:test --all` | Writes and runs tests for every ongoing feature. |
 | `/sdrive:review --all` | Reviews every ongoing feature one after the other. Never clears a feature that fails review for archive. |
-| `/sdrive:archive --all` | Archives every ongoing feature that has passed review. |
+| `/sdrive:archive --all` | Archives every ongoing feature that has passed review. Runs a read-only pre-flight over every candidate before merging anything, then still asks the three decisions (target branch, merge yes/no, delete branch) separately for each feature. |
 | `/sdrive:secure --all` | Runs the security audit against every ongoing feature. |
 | `/sdrive:performance --all` | Optimises every ongoing feature. |
 | `/sdrive:debug --all` | Sweeps every ongoing feature for defects. |
@@ -815,6 +856,8 @@ Audits and manages AI skills.
 | `sdrive config:validate` | Validate `.sdrive/config.json` |
 | `sdrive status` | Show feature lifecycle state |
 | `sdrive approve <feature> <gate>` | Approve a workflow gate (verifies the stage is genuinely complete) |
+| `sdrive archive:check <feature>` | Report whether a feature may be archived, and why not. Reads only — changes nothing |
+| `sdrive archive:finalize <feature> [--merge-commit <sha>]` | Record a completed archive. Refuses unless all four gates are already approved |
 | `sdrive create <feature>` | Create feature scaffold (internal) |
 | `sdrive team:add <username> <role>` | Add a new team member |
 | `sdrive team:remove <username>` | Remove a team member |
@@ -972,6 +1015,33 @@ One branch per feature is mandatory. The constitution encodes this as **CON-606 
 | **CON-612** | Base a feature branch on the branch it will merge into — `git log <target>..<base>` must be empty. Stacking on another in-flight feature branch is reported with its consequences and must be confirmed, never silent. Dependent work uses `sdrive version:new`, not a stacked feature |
 
 `/sdrive:apply` always creates or resumes the feature's **own** branch. Resuming the same feature's existing branch is still one-branch-per-feature. `/sdrive:archive` asks which branch to merge into (detected, never assumed), then asks separately whether to delete the feature branch.
+
+#### Branching models
+
+SpecDrive does not require a particular branching model, and it has **no setting** for one. A model is a consequence of two facts it reads every time it needs them:
+
+1. **The integration branch** — where features land. Resolved from the repository: `refs/remotes/origin/HEAD`, then a conventional remote-tracking branch (`main`, `master`, `trunk`, `develop`), then the current branch. It is never assumed to be `main`, and the current-branch fallback is refused outright if that branch is a feature's own branch.
+2. **Each feature's `base`** — the branch that feature was based on, recorded on the feature in `.sdrive/workflow-state.json` when `/sdrive:apply` or `sdrive amend` creates its branch.
+
+Everything else follows from those two:
+
+| Model | What SpecDrive sees | Where work lands |
+|-------|--------------------|------------------|
+| **Trunk-based** | one integration branch, and no feature records a branch of its own | the integration branch |
+| **GitHub Flow** | one integration branch, one branch of its own per feature | the integration branch |
+| **Git Flow** | integration branch is `develop`, `main` receives releases | `develop` |
+| **Stacked features** | every feature's `base` is another feature's branch | the integration branch — the parent is the **review base**, not the destination |
+| **Custom / per-feature targets** | features record different non-peer bases | each feature's own recorded base |
+
+> **One model is named at a time — never two.** Showing "GitHub Flow / trunk-based" would read as if a project ran both at once, which is never true. A single label is derived from the two observable facts above, so the read-out never has to hedge.
+>
+> Trunk-based development with short-lived branches and GitHub Flow produce the identical shape. GitHub Flow is reported whenever a started feature has a branch of its own — which is the shape SpecDrive itself enforces (CON-606). **Trunk-based** is reported only when no feature records a branch at all, so work is visibly going straight to the trunk.
+
+**The dashboard shows which one you are on.** The bottom of the sidebar has a **Branching** read-out: the resolved model, the branch features actually land on, and a count of features stacked on a peer branch (hover it for the full reasoning). It is derived on every request and nothing is stored, so there is nothing to configure, nothing to migrate, and no way for it to change how a feature is archived.
+
+**Stacking is supported, but never silent.** Pointing a feature's `base` at another in-flight feature branch is allowed — that is normal for dependent work. What SpecDrive refuses to do is *pretend the parent is the destination*. `sdrive archive:check <feature>` reports it as a blocker (CON-611): merging the child before the parent lands would ship the parent's unaudited commits.
+
+**A base link is historical metadata, not a live destination.** Once a parent lands, its branch is deleted (CON-610), so a child that was stacked on it then lands on the integration branch directly.
 
 ---
 

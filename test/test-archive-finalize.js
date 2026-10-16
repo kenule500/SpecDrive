@@ -143,6 +143,34 @@ function newRepo(options) {
   return seedFeature(root, options);
 }
 
+// Sets `base` on the seeded feature and, optionally, adds a peer feature whose branch
+// is that base.
+function withBase(root, base, peer) {
+  const state = readState(root);
+  const primary = state.features[0];
+  primary.base = base;
+  primary.branch = `feature/${FEATURE}`;
+
+  if (peer) {
+    state.features.push({
+      name: peer.name,
+      currentVersion: "v1",
+      branch: peer.branch,
+      versions: [
+        {
+          id: "v1",
+          phase: peer.phase || "ongoing",
+          currentStep: "review",
+          gates: { ...ALL_APPROVED },
+          history: []
+        }
+      ]
+    });
+  }
+
+  fs.writeFileSync(statePath(root), JSON.stringify(state, null, 2));
+}
+
 console.log("=== archive finalization tests ===\n");
 
 // ---------------------------------------------------------------------------
@@ -302,6 +330,57 @@ console.log("=== archive finalization tests ===\n");
 
   check("REFUSES an unknown feature", r.status !== 0, r.output);
   check("  ...rather than doing nothing quietly", /not in workflow-state\.json/.test(r.output), r.output);
+}
+
+// ---------------------------------------------------------------------------
+// 10 - ordering: a STACKED feature cannot be archived, even with perfect evidence
+// ---------------------------------------------------------------------------
+{
+  const root = newRepo();
+  withBase(root, "feature/parent-feature", {
+    name: "parent-feature",
+    branch: "feature/parent-feature",
+    phase: "ongoing"
+  });
+
+  const r = run(root, ["archive:finalize", FEATURE]);
+
+  check("REFUSES a feature stacked on an unlanded peer", r.status !== 0, r.output);
+  check("  ...naming the parent", /STACKED on "parent-feature"/.test(r.output), r.output);
+  check("  ...citing CON-611", /CON-611/.test(r.output), r.output);
+  check("  ...saying it is ORDER, not missing evidence", /has not landed/.test(r.output), r.output);
+  check("  ...and writing nothing", version(root).phase === "ongoing", version(root).phase);
+
+  const checkOnly = run(root, ["archive:check", FEATURE]);
+  check("archive:check reports the same blocker", /STACKED/.test(checkOnly.output), checkOnly.output);
+}
+
+// ---------------------------------------------------------------------------
+// 11 - once the parent lands, the link is history and archiving proceeds
+// ---------------------------------------------------------------------------
+{
+  const root = newRepo();
+  withBase(root, "feature/parent-feature", {
+    name: "parent-feature",
+    branch: "feature/parent-feature",
+    phase: "completed"
+  });
+
+  const r = run(root, ["archive:finalize", FEATURE]);
+  check("allows archiving once the parent has landed", r.status === 0, r.output);
+  check("  ...without mentioning stacking", !/STACKED/.test(r.output), r.output);
+}
+
+// ---------------------------------------------------------------------------
+// 12 - an integration base is NOT stacking (Git Flow's develop must not trip this)
+// ---------------------------------------------------------------------------
+{
+  const root = newRepo();
+  withBase(root, "develop", null);
+
+  const r = run(root, ["archive:finalize", FEATURE]);
+  check("allows archiving when base is an integration branch", r.status === 0, r.output);
+  check("  ...and does not call it stacked", !/STACKED/.test(r.output), r.output);
 }
 
 const failed = results.filter((r) => !r.pass);
