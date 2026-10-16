@@ -539,6 +539,13 @@ program
 
     mergeBundledSlashCommands(packageRoot, sdriveRoot);
 
+    // Must exist before any shipped .js under .sdrive/ is ever run - see the note
+    // on ensureCommonJsScope(). Without it an ESM project cannot start the
+    // dashboard at all.
+    if (ensureCommonJsScope(sdriveRoot)) {
+      console.log("  Created: .sdrive/package.json (keeps .sdrive/ CommonJS)");
+    }
+
     const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
     if (!fs.existsSync(workflowStatePath)) {
       fs.writeFileSync(workflowStatePath, JSON.stringify({ features: [] }, null, 2));
@@ -757,6 +764,14 @@ program
       console.log(line);
       pruned.forEach((rel) => console.log(`      - removed ${rel}`));
     });
+
+    // Repairs projects initialised before this marker existed. Existing ESM projects
+    // are exactly the ones broken by its absence, so update has to add it.
+    if (!options.dryRun && ensureCommonJsScope(sdriveRoot)) {
+      console.log("  ✅ Created: .sdrive/package.json (keeps .sdrive/ CommonJS)");
+    } else if (options.dryRun && !fs.existsSync(path.join(sdriveRoot, "package.json"))) {
+      console.log("  Would create: .sdrive/package.json (keeps .sdrive/ CommonJS)");
+    }
 
     // The logo is served by the dashboard, so keep it in sync too.
     const logoSource = path.join(packageRoot, "logo.png");
@@ -1489,8 +1504,35 @@ function runDashboardForeground(scriptPath) {
 }
 
 function dashboardScriptPath() {
-  const scriptPath = path.join(process.cwd(), ".sdrive", "dashboard", "server.js");
-  return fs.existsSync(scriptPath) ? scriptPath : null;
+  const sdriveRoot = path.join(process.cwd(), ".sdrive");
+  const scriptPath = path.join(sdriveRoot, "dashboard", "server.js");
+  if (!fs.existsSync(scriptPath)) return null;
+
+  // Projects initialised before this marker existed still lack it, so repair it
+  // here: this is the exact point where its absence breaks the dashboard.
+  if (ensureCommonJsScope(sdriveRoot)) {
+    console.log("  Repaired: .sdrive/package.json (keeps .sdrive/ CommonJS)");
+  }
+
+  return scriptPath;
+}
+
+// Node decides CommonJS vs ESM per FILE, by walking up from that file to the
+// nearest package.json. Every file SpecDrive ships under .sdrive/ is CommonJS,
+// so in a project whose package.json declares "type": "module" - normal for Vite,
+// Next.js with ESM, and Bun - Node treats them as ESM and the dashboard dies with:
+//
+//   ReferenceError: require is not defined in ES module scope
+//
+// A package.json at the root of .sdrive/ makes that directory its own CommonJS
+// scope, which fixes every shipped file at once without renaming any of them.
+// It is a marker, not a package: no name, no version, nothing installable.
+function ensureCommonJsScope(sdriveRoot) {
+  const scopePath = path.join(sdriveRoot, "package.json");
+  if (fs.existsSync(scopePath)) return false;
+
+  fs.writeFileSync(scopePath, JSON.stringify({ type: "commonjs" }, null, 2));
+  return true;
 }
 
 // Auto-launch after `init` / `onboard` so a new project has something to look at

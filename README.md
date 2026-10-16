@@ -227,6 +227,20 @@ Cannot archive:
 
 `sdrive update` refreshes `.sdrive/agents/` and `.sdrive/dashboard/`, so the agent-side rules arrive with it. The code-level refusals arrive with the CLI itself.
 
+#### Projects that declare `"type": "module"`
+
+If your `package.json` declares `"type": "module"` — common with Vite, Bun, and ESM Next.js setups — versions before 0.1.35 could not start the dashboard:
+
+```text
+ReferenceError: require is not defined in ES module scope, you can use import instead
+```
+
+Node decides CommonJS vs ESM **per file**, by walking up from that file to the nearest `package.json`. Every file SpecDrive ships under `.sdrive/` is CommonJS, so your project's `"type": "module"` was applied to them as well. The dashboard failed first only because it is usually the first one you run: `.sdrive/mcp/server.js` and every script in `.sdrive/scripts/` were affected too.
+
+**Fix:** run `sdrive update`. It writes `.sdrive/package.json` containing `{ "type": "commonjs" }`, which makes `.sdrive/` its own CommonJS scope and repairs every shipped file at once. Nothing is renamed and nothing else changes. `sdrive init` writes the same marker, so new projects are unaffected.
+
+`npm pack` note for anyone auditing a release: a local tarball checksum can differ from CI's even when the contents are identical, because a Windows working tree may hold CRLF while the committed blobs are LF. Compare file contents after normalizing line endings rather than comparing tarball hashes.
+
 ---
 
 ## Where to Run Commands
@@ -1071,6 +1085,7 @@ Everything else follows from those two:
 ├── templates/            # Starter templates
 ├── constitution.md       # Governance source of truth
 ├── config.json           # Default template + settings
+├── package.json          # Marker: keeps .sdrive/ CommonJS (see Upgrading)
 ├── team.json             # Team roles and rules
 └── workflow-state.json   # Feature lifecycle state (per-version + onboarding)
 ```
