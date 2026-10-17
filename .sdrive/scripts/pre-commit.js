@@ -7,6 +7,18 @@ const projectRoot = process.cwd();
 const validatorPath = path.join(projectRoot, ".sdrive", "scripts", "validate-governance.js");
 const verifyPath = path.join(projectRoot, ".sdrive", "scripts", "verify.js");
 
+// Gate state is read through commands/gates.js, never re-compared here. The hook and the
+// CLI must agree about what "approved" means; a divergent copy in this file could block a
+// commit for a gate the CLI considers cleared, or let an unapproved one through.
+function gateAccessors() {
+  try {
+    return require(path.join(projectRoot, ".sdrive", "commands", "gates.js"));
+  } catch (error) {
+    console.warn(`⚠️  Could not load .sdrive/commands/gates.js (${error.message}). Gate checks skipped.`);
+    return null;
+  }
+}
+
 // Only features that actually claim to be implemented are worth verifying.
 //
 // Previously this returned EVERY feature, so a feature that was still being
@@ -32,6 +44,7 @@ function getVerifiableFeatures() {
 
   const verifiable = [];
   const skipped = [];
+  const gatesApi = gateAccessors();
 
   for (const feature of state.features || []) {
     const versions = feature.versions || [];
@@ -48,18 +61,17 @@ function getVerifiableFeatures() {
       continue;
     }
 
-    const gates = version.gates || {};
-    const gateValues = Object.values(gates);
-
-    if (gateValues.length > 0 && gateValues.every((s) => s === "approved")) {
+    if (gatesApi && gatesApi.allGatesApproved(version)) {
       skipped.push({ name: feature.name, reason: "all gates already approved" });
       continue;
     }
 
-    if (gates.implementation !== "approved") {
+    if (!gatesApi || !gatesApi.isGateApprovedFor(version, "implementation")) {
       skipped.push({
         name: feature.name,
-        reason: `implementation gate is "${gates.implementation || "pending"}"`
+        reason: `implementation gate is "${
+          gatesApi ? gatesApi.gateStatusFor(version, "implementation") : "unreadable"
+        }"`
       });
       continue;
     }

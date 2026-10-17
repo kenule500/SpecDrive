@@ -57,6 +57,25 @@ sdrive init --tools all
 sdrive init --tools none
 ```
 
+### The dashboard
+
+`sdrive init` starts the dashboard for you in the same terminal when it finishes, so
+there is something to look at immediately. Press `Ctrl+C` when you are done to get
+your prompt back — that is the normal way to stop a server, and it is reported as
+"Dashboard stopped", never as an error.
+
+It gives you a visual view of your specs, features, approval gates, team, and
+activity, plus a **Project Health** score with the one action most worth doing next.
+Start it any time later with:
+
+```bash
+sdrive dashboard
+```
+
+Skip the auto-start with `--no-dashboard`, or set `SDRIVE_NO_DASHBOARD=1` to skip it
+everywhere, including inside scripts. It is also skipped automatically when there is
+no interactive terminal, so a CI run never blocks on a server that does not exit.
+
 ### Updating Later
 
 After upgrading the CLI, refresh your project's framework files:

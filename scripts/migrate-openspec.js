@@ -20,6 +20,20 @@ function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
+// The stored gate value belongs to commands/gates.js. A migration that spelled it out
+// here would produce records the CLI stops recognising the day that value gains a shape,
+// and it would do so silently - the migrated state would simply look unapproved.
+function approvedGateValue() {
+  const gatesModulePath = path.join(sdriveRoot, "commands", "gates.js");
+
+  if (!fs.existsSync(gatesModulePath)) {
+    console.error("❌ .sdrive/commands/gates.js is missing. Run `sdrive init` before migrating.");
+    process.exit(1);
+  }
+
+  return require(gatesModulePath).GATE_APPROVED;
+}
+
 function readFile(filePath) {
   try {
     return fs.readFileSync(filePath, "utf8");
@@ -251,6 +265,8 @@ function updateWorkflowState(migrated) {
     const existing = state.features.find((f) => f.name === item.feature);
 
     if (!existing) {
+      const approved = approvedGateValue();
+
       state.features.push({
         name: item.feature,
         currentVersion: "v1",
@@ -260,10 +276,10 @@ function updateWorkflowState(migrated) {
             phase: item.lifecycle === "completed" ? "completed" : "ongoing",
             currentStep: "review",
             gates: {
-              specification: item.lifecycle === "completed" ? "approved" : "pending",
-              planning: item.lifecycle === "completed" ? "approved" : "pending",
-              implementation: item.lifecycle === "completed" ? "approved" : "pending",
-              review: item.lifecycle === "completed" ? "approved" : "pending"
+              specification: item.lifecycle === "completed" ? approved : "pending",
+              planning: item.lifecycle === "completed" ? approved : "pending",
+              implementation: item.lifecycle === "completed" ? approved : "pending",
+              review: item.lifecycle === "completed" ? approved : "pending"
             },
             history: [
               {

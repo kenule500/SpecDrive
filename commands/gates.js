@@ -40,6 +40,38 @@ function getFeature(featureName) {
   return findFeature(getWorkflowState(), featureName);
 }
 
+// ---------- GATE STATE: THE ONLY WAY TO READ A GATE ----------
+//
+// A gate's stored value is a schema detail, not something callers should compare
+// themselves. Before these accessors existed, "is this approved?" was open-coded in
+// ten places across six files: archive, router, pre-commit, the approve command, and
+// two dashboard endpoints. Every copy is a silent break waiting to happen - the day a
+// gate record grows a shape (e.g. { status, by, at }) the copies that nobody updated
+// start refusing valid approvals without throwing. Read gates through here.
+
+const GATE_APPROVED = "approved";
+
+function gateStatusFor(version, gate) {
+  if (!version) {
+    return "pending";
+  }
+
+  return (version.gates && version.gates[gate]) || "pending";
+}
+
+function isGateApprovedFor(version, gate) {
+  return gateStatusFor(version, gate) === GATE_APPROVED;
+}
+
+// "Every recorded gate is approved". Deliberately false when nothing is recorded:
+// "no gates yet" is not the same claim as "all gates cleared".
+function allGatesApproved(version) {
+  const gates = (version && version.gates) || {};
+  const names = Object.keys(gates);
+
+  return names.length > 0 && names.every((gate) => gateStatusFor(version, gate) === GATE_APPROVED);
+}
+
 function gateStatus(featureName, gate) {
   const feature = getFeature(featureName);
 
@@ -53,7 +85,7 @@ function gateStatus(featureName, gate) {
     return "unknown";
   }
 
-  return (version.gates && version.gates[gate]) || "pending";
+  return gateStatusFor(version, gate);
 }
 
 function approveGate(featureName, gate) {
@@ -76,7 +108,7 @@ function approveGate(featureName, gate) {
   }
 
   version.gates = version.gates || {};
-  version.gates[gate] = "approved";
+  version.gates[gate] = GATE_APPROVED;
 
   version.history = version.history || [];
   version.history.push({
@@ -90,7 +122,7 @@ function approveGate(featureName, gate) {
 }
 
 function isGateApproved(featureName, gate) {
-  return gateStatus(featureName, gate) === "approved";
+  return gateStatus(featureName, gate) === GATE_APPROVED;
 }
 
 // ---------- GATE REQUIREMENT VERIFICATION ----------
@@ -252,9 +284,9 @@ function checkGateRequirements(root, feature, version, gate) {
   for (let i = 0; i < gateIndex; i += 1) {
     const earlier = GATE_ORDER[i];
 
-    if (gates[earlier] !== "approved") {
+    if (!isGateApprovedFor(version, earlier)) {
       blockers.push(
-        `Prerequisite gate "${earlier}" is "${gates[earlier] || "pending"}", not "approved".`
+        `Prerequisite gate "${earlier}" is "${gateStatusFor(version, earlier)}", not "approved".`
       );
     }
   }
@@ -406,11 +438,21 @@ function checkGateRequirements(root, feature, version, gate) {
     );
   } else if (current === "in_progress") {
     warnings.push(`Gate "${gate}" is currently "in_progress".`);
-  } else if (current === "approved") {
+  } else if (isGateApprovedFor(version, gate)) {
     warnings.push(`Gate "${gate}" is already approved.`);
   }
 
-  return { ok: blockers.length === 0, blockers, warnings, location, current, tasks };
+  // `approved` is returned so callers never have to re-test the stored string. `current`
+  // keeps its original "undefined when unset" shape for existing readers.
+  return {
+    ok: blockers.length === 0,
+    blockers,
+    warnings,
+    location,
+    current,
+    approved: isGateApprovedFor(version, gate),
+    tasks
+  };
 }
 
 module.exports = {
@@ -419,6 +461,10 @@ module.exports = {
   resolveVersion,
   findFeature,
   getFeature,
+  GATE_APPROVED,
+  gateStatusFor,
+  isGateApprovedFor,
+  allGatesApproved,
   gateStatus,
   approveGate,
   isGateApproved,

@@ -18,7 +18,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const { GATE_ORDER, SPEC_STAGES, findSpecLocation, checkGateRequirements } = require("./gates");
+const { GATE_ORDER, GATE_APPROVED, SPEC_STAGES, findSpecLocation, checkGateRequirements, resolveVersion, isGateApprovedFor, gateStatusFor } = require("./gates");
 
 function readJson(file) {
   try {
@@ -30,14 +30,6 @@ function readJson(file) {
 
 function loadState(root) {
   return readJson(path.join(root, ".sdrive", "workflow-state.json"));
-}
-
-function resolveVersion(feature) {
-  if (!feature || !Array.isArray(feature.versions) || feature.versions.length === 0) {
-    return null;
-  }
-
-  return feature.versions.find((v) => v.id === feature.currentVersion) || feature.versions[0];
 }
 
 // checkGateRequirements() repeats a few verdicts this module already reaches on its own
@@ -167,13 +159,13 @@ function checkArchivable(root, featureName) {
   }
 
   // Every gate must ALREADY be approved. This command records a closure; it does not
-  // grant approvals. If a gate is outstanding, that is the refusal.
-  const gates = version.gates || {};
-  const outstanding = GATE_ORDER.filter((gate) => gates[gate] !== "approved");
+  // grant approvals. If a gate is outstanding, that is the refusal. The test goes through
+  // the shared accessor so this checker and `sdrive approve` cannot disagree.
+  const outstanding = GATE_ORDER.filter((gate) => !isGateApprovedFor(version, gate));
 
   outstanding.forEach((gate) => {
     blockers.push(
-      `Gate "${gate}" is "${gates[gate] || "pending"}", not "approved" - run \`sdrive approve ${featureName} ${gate}\` first.`
+      `Gate "${gate}" is "${gateStatusFor(version, gate)}", not "${GATE_APPROVED}" - run \`sdrive approve ${featureName} ${gate}\` first.`
     );
   });
 

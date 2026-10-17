@@ -1106,6 +1106,7 @@ program
 
     const {
       GATE_ORDER,
+      GATE_APPROVED,
       checkGateRequirements,
       findFeature,
       resolveVersion
@@ -1153,7 +1154,7 @@ program
 
     // Verify BEFORE writing anything. A gate may only be approved when the work
     // it certifies actually exists.
-    const { ok, blockers, warnings, current } = checkGateRequirements(
+    const { ok, blockers, warnings, current, approved } = checkGateRequirements(
       projectRoot,
       feature,
       version,
@@ -1171,14 +1172,16 @@ program
       process.exit(1);
     }
 
-    if (current === "approved") {
+    if (approved) {
       console.log(`\n✅ Gate "${gate}" is already approved for "${featureName}" version "${version.id}". Nothing changed.\n`);
       return;
     }
 
     const actor = currentActor();
 
-    version.gates[gate] = "approved";
+    // The stored value is the schema's business. Naming it here would recreate the
+    // duplication this command was just moved off of, one line lower down.
+    version.gates[gate] = GATE_APPROVED;
     version.history = version.history || [];
     version.history.push({
       event: `${gate}_approved`,
@@ -1198,7 +1201,7 @@ program
     });
 
     console.log(`\n✅ Gate "${gate}" approved for feature "${feature.name}" version "${version.id}".`);
-    console.log(`   "${current || "pending"}" → "approved"`);
+    console.log(`   "${current || "pending"}" → "${GATE_APPROVED}"`);
     console.log("");
   });
 

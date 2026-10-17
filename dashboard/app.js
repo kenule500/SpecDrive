@@ -285,7 +285,7 @@ function renderGitInfo(git) {
         ? ` Â· â†‘${git.ahead} â†“${git.behind}`
         : "";
     chip.innerHTML = `
-      <span class="dot ${git.dirty ? "dirty" : ""}"></span>
+      <span class="dot ${git.dirty === true ? "dirty" : git.dirty === null ? "unknown" : ""}"></span>
       <span class="branch">${escapeHtml(git.branch)}</span>
       <span>${escapeHtml(git.commit)}${sync}</span>
     `;
@@ -420,9 +420,15 @@ function renderHealthCard(health) {
         <div class="health-blockers-label">${health.blockers.length} live version(s) cannot be archived</div>
         <ul class="health-evidence">
           ${health.blockers
-            .map(
-              (entry) =>
-                `<li><strong>${escapeHtml(entry.feature)}</strong> - ${escapeHtml(entry.blockers[0] || "")}</li>`
+            .map((entry) =>
+              (entry.blockers || [])
+                .map(
+                  (blocker, index) =>
+                    `<li>${
+                      index === 0 ? `<strong>${escapeHtml(entry.feature)}</strong> - ` : ""
+                    }${escapeHtml(blocker)}</li>`
+                )
+                .join("")
             )
             .join("")}
         </ul>
@@ -688,7 +694,17 @@ function renderRepositoryPanel(git) {
     { label: "Branch", value: git?.branch || "—" },
     { label: "Commit", value: git?.commit || "—" },
     { label: "Merged From", value: git?.mergedFrom || "—" },
-    { label: "Working Tree", value: git?.dirty ? "Uncommitted changes" : "Clean" }
+    // Three states, not two: git may have been unable to answer at all, and "Clean"
+    // would be a claim nobody verified.
+    {
+      label: "Working Tree",
+      value:
+        git?.dirty === true
+          ? "Uncommitted changes"
+          : git?.dirty === false
+            ? "Clean"
+            : "Not checked"
+    }
   ];
 
   return `
@@ -1470,6 +1486,7 @@ async function renderDetailSpecs() {
   }
 
   setupSpecSearch();
+  setupSpecFileLinks();
 }
 
 function currentSpecDoc() {
@@ -1492,8 +1509,296 @@ function selectSpecDoc(id) {
   const md = document.getElementById("spec-markdown");
   if (md) md.innerHTML = renderMarkdown(doc.content);
 
-  // Re-apply the active search to the newly rendered document.
+  // Re-apply the active search to the newly rendered document, and re-bind the path
+  // links that the re-render just replaced.
   runSpecSearch();
+  setupSpecFileLinks();
+}
+
+/* ============================================================
+   SPEC FILES — CLICKABLE PATH REFERENCES + FILE MODAL
+   Inline code in a rendered spec is shown in the accent colour, and much of it is
+   a real path. Making those clickable lets you read the file a requirement refers
+   to without leaving the dashboard. Only path-shaped, space-free text is offered:
+   fenced blocks are skipped, and so are slash commands and absolute paths.
+
+   The modal is large on purpose (85% x 90%) - these are documents, not tooltips -
+   and it carries the same find-in-document behaviour as the Spec Files view:
+   highlight every match, step through them, report the count.
+   ============================================================ */
+const SPEC_PATH_SHAPE = /^[\w.@()[\],+-]+(?:[/\\][\w.@()[\],+-]+)+$/;
+
+function looksLikePathReference(text) {
+  const value = text.trim();
+  if (!value || value.length > 240) return false;
+  if (/\s/.test(value)) return false;
+  if (value.startsWith("/") || value.startsWith("~")) return false;
+  if (/^[a-z]+:\/\//i.test(value)) return false;
+  return SPEC_PATH_SHAPE.test(value);
+}
+
+async function setupSpecFileLinks() {
+  const md = document.getElementById("spec-markdown");
+  if (!md) return;
+
+  const candidates = Array.from(md.querySelectorAll("code")).filter(
+    (code) =>
+      !code.closest(".spec-code") &&
+      !code.dataset.fileLink &&
+      looksLikePathReference(code.textContent)
+  );
+  if (!candidates.length) return;
+
+  // Only real files get the underline. A spec is full of path-SHAPED tokens that
+  // are not files at all (`bg-muted/30`, `--shadow-sm/md`), and marking those
+  // clickable is a lie the reader pays for with a "no such file" click.
+  const exists = await Promise.all(
+    candidates.map((code) =>
+      fetchJson(`/api/file?check=1&path=${encodeURIComponent(code.textContent.trim())}`)
+        .then((result) => Boolean(result && result.found))
+        .catch(() => false)
+    )
+  );
+
+  candidates.forEach((code, index) => {
+    // A different document may have rendered while we were awaiting.
+    if (!exists[index] || !md.contains(code)) return;
+
+    code.dataset.fileLink = "1";
+    code.classList.add("spec-file-link");
+    code.setAttribute("role", "button");
+    code.setAttribute("tabindex", "0");
+    code.title = `Open ${code.textContent.trim()}`;
+
+    const open = () => openFileModal(code.textContent.trim());
+    code.addEventListener("click", open);
+    code.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        open();
+      }
+    });
+  });
+}
+
+let fileModalMatches = [];
+let fileModalIndex = -1;
+let fileModalContent = "";
+
+function ensureFileModal() {
+  let overlay = document.getElementById("file-modal");
+  if (overlay) return overlay;
+
+  overlay = document.createElement("div");
+  overlay.id = "file-modal";
+  overlay.className = "file-modal";
+  overlay.innerHTML = `
+    <div class="file-modal-backdrop" data-file-modal-close></div>
+    <div class="file-modal-panel" role="dialog" aria-modal="true" aria-labelledby="file-modal-path">
+      <header class="file-modal-head">
+        <code class="file-modal-path" id="file-modal-path"></code>
+        <span class="file-modal-meta" id="file-modal-meta"></span>
+        <div class="file-modal-actions">
+          <button class="spec-copy-btn" id="file-modal-copy" type="button">Copy</button>
+          <button class="file-modal-close" id="file-modal-close" type="button" aria-label="Close file">×</button>
+        </div>
+      </header>
+      <div class="spec-search">
+        <div class="spec-search-field">
+          <input type="text" id="file-modal-search" class="spec-search-input" placeholder="Search in file" autocomplete="off" spellcheck="false" aria-label="Search in file" />
+          <span class="spec-search-count" id="file-modal-count"></span>
+          <button class="spec-search-nav" id="file-modal-prev" type="button" title="Previous match" disabled>‹</button>
+          <button class="spec-search-nav" id="file-modal-next" type="button" title="Next match" disabled>›</button>
+          <button class="spec-search-close" id="file-modal-clear" type="button" title="Clear search" hidden>×</button>
+        </div>
+      </div>
+      <div class="file-modal-body" id="file-modal-body"></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector("#file-modal-close").addEventListener("click", closeFileModal);
+  overlay.querySelectorAll("[data-file-modal-close]").forEach((el) => {
+    el.addEventListener("click", closeFileModal);
+  });
+
+  const copyBtn = overlay.querySelector("#file-modal-copy");
+  copyBtn.addEventListener("click", () => {
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(fileModalContent).then(() => {
+      copyBtn.textContent = "Copied!";
+      setTimeout(() => (copyBtn.textContent = "Copy"), 900);
+    });
+  });
+
+  const input = overlay.querySelector("#file-modal-search");
+  input.addEventListener("input", runFileModalSearch);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      stepFileModalMatch(event.shiftKey ? -1 : 1);
+    }
+    if (event.key === "Escape") closeFileModal();
+  });
+
+  overlay.querySelector("#file-modal-prev").addEventListener("click", () => stepFileModalMatch(-1));
+  overlay.querySelector("#file-modal-next").addEventListener("click", () => stepFileModalMatch(1));
+  overlay.querySelector("#file-modal-clear").addEventListener("click", () => {
+    input.value = "";
+    runFileModalSearch();
+    input.focus();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && document.getElementById("file-modal")) closeFileModal();
+  });
+
+  return overlay;
+}
+
+function closeFileModal() {
+  const overlay = document.getElementById("file-modal");
+  if (overlay) overlay.remove();
+  fileModalMatches = [];
+  fileModalIndex = -1;
+}
+
+function updateFileModalCount() {
+  const count = document.getElementById("file-modal-count");
+  const input = document.getElementById("file-modal-search");
+  if (!count || !input) return;
+
+  if (input.value.trim().length < 2) {
+    count.textContent = "";
+    return;
+  }
+  if (!fileModalMatches.length) {
+    count.textContent = "no matches";
+    return;
+  }
+  count.textContent = `${fileModalIndex + 1} of ${fileModalMatches.length}`;
+}
+
+function stripFileModalMarks() {
+  const body = document.getElementById("file-modal-body");
+  if (!body) return;
+
+  body.querySelectorAll("mark.spec-hit").forEach((mark) => {
+    const parent = mark.parentNode;
+    parent.replaceChild(document.createTextNode(mark.textContent), mark);
+    parent.normalize();
+  });
+}
+
+function runFileModalSearch() {
+  const body = document.getElementById("file-modal-body");
+  const input = document.getElementById("file-modal-search");
+  const clear = document.getElementById("file-modal-clear");
+  const prev = document.getElementById("file-modal-prev");
+  const next = document.getElementById("file-modal-next");
+  if (!body || !input) return;
+
+  stripFileModalMarks();
+  fileModalMatches = [];
+  fileModalIndex = -1;
+
+  const query = input.value.trim();
+  if (clear) clear.hidden = query.length === 0;
+
+  if (query.length >= 2) {
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, null);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+
+    const needle = query.toLowerCase();
+    for (const node of nodes) {
+      const text = node.nodeValue;
+      const lower = text.toLowerCase();
+      let at = lower.indexOf(needle);
+      if (at === -1) continue;
+
+      const frag = document.createDocumentFragment();
+      let cursor = 0;
+      while (at !== -1) {
+        if (at > cursor) frag.appendChild(document.createTextNode(text.slice(cursor, at)));
+        const mark = document.createElement("mark");
+        mark.className = "spec-hit";
+        mark.textContent = text.slice(at, at + query.length);
+        frag.appendChild(mark);
+        fileModalMatches.push(mark);
+        cursor = at + query.length;
+        at = lower.indexOf(needle, cursor);
+      }
+      if (cursor < text.length) frag.appendChild(document.createTextNode(text.slice(cursor)));
+      node.parentNode.replaceChild(frag, node);
+    }
+  }
+
+  const has = fileModalMatches.length > 0;
+  if (prev) prev.disabled = !has;
+  if (next) next.disabled = !has;
+
+  if (has) {
+    fileModalIndex = 0;
+    fileModalMatches[0].classList.add("active");
+    fileModalMatches[0].scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
+  updateFileModalCount();
+}
+
+function stepFileModalMatch(direction) {
+  if (!fileModalMatches.length) return;
+
+  fileModalMatches.forEach((mark) => mark.classList.remove("active"));
+  fileModalIndex =
+    (fileModalIndex + direction + fileModalMatches.length) % fileModalMatches.length;
+
+  const active = fileModalMatches[fileModalIndex];
+  active.classList.add("active");
+  active.scrollIntoView({ block: "center", behavior: "smooth" });
+  updateFileModalCount();
+}
+
+async function openFileModal(relPath) {
+  const overlay = ensureFileModal();
+  const pathEl = overlay.querySelector("#file-modal-path");
+  const metaEl = overlay.querySelector("#file-modal-meta");
+  const body = overlay.querySelector("#file-modal-body");
+  const input = overlay.querySelector("#file-modal-search");
+
+  pathEl.textContent = relPath;
+  metaEl.textContent = "loading…";
+  body.innerHTML = `<div class="panel-loading">Loading…</div>`;
+  input.value = "";
+  fileModalMatches = [];
+  fileModalIndex = -1;
+  updateFileModalCount();
+
+  const data = await fetchJson(`/api/file?path=${encodeURIComponent(relPath)}`);
+
+  if (!data || !data.found) {
+    metaEl.textContent = "";
+    body.innerHTML = `<div class="panel-loading">Cannot open <code>${escapeHtml(relPath)}</code>: ${escapeHtml(
+      (data && data.reason) || "not found"
+    )}</div>`;
+    return;
+  }
+
+  if (data.binary) {
+    metaEl.textContent = `${data.bytes} bytes`;
+    body.innerHTML = `<div class="panel-loading">Binary file - nothing to display.</div>`;
+    return;
+  }
+
+  fileModalContent = data.content;
+  metaEl.textContent = `${data.lines} lines · ${data.bytes} bytes${data.truncated ? " · truncated" : ""}`;
+
+  body.innerHTML = data.markdown
+    ? `<article class="spec-markdown">${renderMarkdown(data.content)}</article>`
+    : `<pre>${escapeHtml(data.content)}</pre>`;
+
+  input.focus();
 }
 
 /* ============================================================
@@ -2953,30 +3258,60 @@ function syncTopbarHeight() {
 
 // Fetch everything the shell needs and paint it. Kept separate from main() so the
 // live refresh can re-run exactly this without re-binding any events.
+//
+// Each panel paints as its own payload lands. This used to be a single Promise.all, so
+// the slowest endpoint held every panel on "Loading…" even though the other five had
+// already answered - and /api/git-info shells out to git a dozen times, which is seconds
+// on a machine where git itself is slow. A failed request now leaves its own panel
+// untouched rather than replacing it with a claim the server never made.
 async function loadAndRenderShell() {
-  const [onboarding, product, git, project, productType, health] = await Promise.all([
-    fetchJson("/api/onboarding"),
-    fetchJson("/api/product"),
-    fetchJson("/api/git-info"),
-    fetchJson("/api/project-info"),
-    fetchJson("/api/product-type"),
-    fetchJson("/api/health")
-  ]);
+  const data = { onboarding: null, product: null, git: null, project: null, productType: null, health: null };
+  const loaded = new Set();
 
-  renderProjectInfo(project);
-  renderGitInfo(git);
+  const paintHeader = () => {
+    if (loaded.has("project")) renderProjectInfo(data.project);
+    if (loaded.has("git")) renderGitInfo(data.git);
+  };
 
-  const overviewContainer = document.getElementById("overview-panel");
-  if (overviewContainer) {
-    overviewContainer.innerHTML = "";
-    overviewContainer.appendChild(renderOverview(onboarding, git, product, productType, health));
-  }
+  const paintOverview = () => {
+    const container = document.getElementById("overview-panel");
+    if (!container) return;
+    if (!["onboarding", "product", "git", "health"].some((key) => loaded.has(key))) return;
+    container.innerHTML = "";
+    container.appendChild(renderOverview(data.onboarding, data.git, data.product, data.productType, data.health));
+  };
 
-  const productContainer = document.getElementById("product-panel");
-  if (productContainer) {
-    productContainer.innerHTML = "";
-    productContainer.appendChild(renderProduct(product, productType));
-  }
+  const paintProduct = () => {
+    // Nothing to say until the plan has actually been read: rendering the "no plan"
+    // empty state for a failed request would state something the server never said.
+    if (!loaded.has("product")) return;
+    const container = document.getElementById("product-panel");
+    if (!container) return;
+    container.innerHTML = "";
+    container.appendChild(renderProduct(data.product, data.productType));
+  };
+
+  const jobs = [
+    ["onboarding", "/api/onboarding", paintOverview],
+    ["product", "/api/product", () => { paintProduct(); paintOverview(); }],
+    ["git", "/api/git-info", () => { paintHeader(); paintOverview(); }],
+    ["project", "/api/project-info", paintHeader],
+    ["productType", "/api/product-type", () => { paintProduct(); paintOverview(); }],
+    ["health", "/api/health", paintOverview]
+  ];
+
+  await Promise.all(
+    jobs.map(async ([key, endpoint, afterPaint]) => {
+      try {
+        data[key] = await fetchJson(endpoint);
+        loaded.add(key);
+      } catch (error) {
+        console.warn(`Could not load ${endpoint}: ${error.message}`);
+      } finally {
+        if (loaded.has(key)) afterPaint();
+      }
+    })
+  );
 }
 
 // The dashboard used to show stale data until a manual refresh. Polling the real

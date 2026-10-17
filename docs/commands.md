@@ -398,6 +398,7 @@ Open `http://localhost:4747` to view:
 - Test coverage per version
 - Team members
 - Recent activity
+- Project health, with the one action most worth doing next
 
 The dashboard also supports filters:
 
@@ -406,6 +407,42 @@ The dashboard also supports filters:
 - Filter by verification status
 - Filter by test coverage
 - Show current version only
+
+#### Project health
+
+The health score is auditable rather than decorative. Each component reports the
+evidence behind it, and the panel shows which components it could score:
+
+| Component | Weight | Reads |
+| --- | --- | --- |
+| Gate progress | 30 | Approved gates across live features |
+| Traceability coverage | 25 | Requirement → code links that resolve |
+| Verification | 15 | Features with no drift in their latest report |
+| Archivable | 15 | Features that would pass `sdrive archive:check` now |
+| Freshness | 15 | Days since the last audit event, decaying over 14 days |
+
+Unscorable components are dropped from the denominator and shown as "not scored"
+rather than counted as zero. The suggested next action is validated with the same
+`checkGateRequirements` the CLI uses, so the dashboard never recommends an approval
+that would be refused.
+
+#### Reading spec files in place
+
+File paths in spec documents become clickable when they resolve to a real file in
+the project. Clicking opens a modal (85% of the window width, 90% of its height)
+with a find bar that highlights every match and steps through them.
+
+Existence is verified before a path becomes a link, so prose, CSS class names, and
+package specifiers stay as plain text. The endpoint behind it reads only: it refuses
+paths outside the project root, secret-shaped names (`.env*`, `*.pem`, `*.key`,
+`secrets.json`, `.npmrc`, `.git/`, and anything matching `secret`, `credential`, or
+`private-key`), files over 512 KB, and binary files.
+
+#### Live refresh
+
+The page polls a cheap `/api/stamp` fingerprint every five seconds and re-renders
+only the panels whose data changed. Polling pauses while the tab is hidden and
+catches up when it becomes visible again.
 
 ---
 
@@ -523,7 +560,7 @@ Extends an **existing** feature specification with new requirements, user storie
 
 **When to use:**
 
-- When adding requirements to a feature that already exists
+- When a feature proposal needs changes before the feature is archived
 - When a released feature must be changed — run `sdrive version:new <feature>`. That creates a new version under `ongoing/` and leaves the released version and its record untouched. Use `sdrive amend <feature> --reason "..."` only when the *closure itself* was wrong (for example it was archived before its tests were written), since amending updates the same version's record
 
 **What it does NOT do:**
@@ -717,6 +754,44 @@ user-login-with-email-and-password
 ---
 
 ## Feature Lifecycle
+
+SpecDrive has **two entry points** and **one iteration lifecycle** after them. Everything else is optional.
+
+### Greenfield — a brand-new project
+
+An empty folder, or a fresh scaffold with no plan in place yet.
+
+```text
+/sdrive:constitution
+/sdrive:product-plan
+```
+
+`/sdrive:product-plan` is **optional**. Run it when you have an idea but no written plan, or an empty repo. If you already know what you are building, go straight from the constitution to `/sdrive:propose`.
+
+### Brownfield — an existing codebase
+
+The code already exists and development is well past the early stages.
+
+```text
+/sdrive:onboard
+/sdrive:constitution
+```
+
+`/sdrive:onboard` inventories what is there and never overwrites or deletes anything.
+
+### The iteration lifecycle (both paths)
+
+Every feature follows the same five steps. Run any of them without a feature name and SpecDrive asks whether you mean **all ongoing features** or one from a detected list.
+
+```text
+/sdrive:propose "<feature>"    # spec, plan, tasks, traceability
+/sdrive:apply "<feature>"      # implementation
+/sdrive:test "<feature>"       # write and run the tests
+/sdrive:review "<feature>"     # audit, then sign the review gate
+/sdrive:archive "<feature>"    # merge to the integration branch, close the version
+```
+
+### Spec folders and who moves a feature between them
 
 A feature moves through three spec folders. Each transition has exactly one owner:
 

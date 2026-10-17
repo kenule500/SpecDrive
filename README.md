@@ -370,6 +370,7 @@ The auto-start is deliberately **skipped when there is no interactive terminal**
 - Team members and roles
 - Recent audit activity
 - **The branching model in use**, at the bottom of the sidebar — derived from the repository and each feature's recorded `base`, never stored (see [Branching models](#branching-models))
+- **Project health** — a scored, auditable read-out of where the project actually stands (see [Project Health](#project-health))
 
 The sidebar footer also shows the current branch, its latest commit, and the branch it was most recently merged from, and clicking the topbar chip shows the full commit subject.
 
@@ -395,6 +396,55 @@ The dashboard includes a filter bar:
 - Filter by test coverage
 - Show current version only
 
+### Project Health
+
+The overview page carries a health score. It is not a vanity number: every
+point is traceable to something the CLI could also tell you, and the panel shows
+the evidence for each component.
+
+| Component | Weight | What it reads |
+| --- | --- | --- |
+| Gate progress | 30 | How many of the four gates are approved across live features |
+| Traceability coverage | 25 | Requirement → code links that resolve to real files |
+| Verification | 15 | Features whose latest verification report has no drift |
+| Archivable | 15 | Features that would pass `sdrive archive:check` right now |
+| Freshness | 15 | Days since the last recorded audit event (decays over 14 days) |
+
+Two rules keep the score honest:
+
+- **It rescales over the components it could actually score.** If a project has
+  nothing to verify, verification is left out of the denominator instead of
+  silently costing you 15 points. A component that cannot be scored reports
+  `not scored`, never `0`.
+- **The suggested next action is checked before it is shown.** The panel only
+  recommends an approval when `checkGateRequirements` would accept it, so it
+  never tells you to run a command that will refuse.
+
+### Reading spec files in place
+
+Paths that appear in spec documents — in the Spec Files tab and in the rendered
+Markdown — are clickable when they point at a file that actually exists in your
+project. Clicking opens the file in a modal sized to 85% of the window width and
+90% of its height, with a find bar that highlights every match and steps through
+them (`Enter` / `Shift+Enter`).
+
+Existence is checked before a path is made clickable, so prose, CSS class names,
+and package specifiers like `next/image` stay as plain text. Nine of the 158
+path-shaped strings in a typical large spec are real files; the other 149 are not,
+and the dashboard does not pretend otherwise.
+
+The file endpoint behind this refuses anything outside the project root, refuses
+secret-shaped names (`.env*`, `*.pem`, `*.key`, `secrets.json`, `.npmrc`, `.git/`,
+and any path matching `secret`, `credential`, or `private-key`), refuses files over
+512 KB, and refuses binary files. It only ever reads — it cannot write.
+
+### Live refresh
+
+The dashboard polls a cheap `/api/stamp` fingerprint (state files plus the trees
+under `.sdrive/`) every five seconds and reloads the affected panel only when the
+fingerprint changed. Polling pauses while the tab is hidden and catches up on
+`visibilitychange`, so a dashboard left open in a background tab costs nothing.
+
 ### Notes
 
 - The dashboard runs locally, starting on port `4747`
@@ -404,6 +454,12 @@ The dashboard includes a filter bar:
 - Override the starting port with the `SDRIVE_PORT` environment variable
 - It reads directly from `.sdrive/`
 - No data leaves your machine
+- The panel you land on paints as soon as its data arrives; slow panels (git
+  history, verification reports) do not hold up the rest of the page
+- Git is asked with a short timeout and never blocks the server. When a probe
+  cannot be answered, the dashboard says **"Not checked"** rather than guessing —
+  a failed `git status` is not the same fact as a clean tree, and it is never
+  presented as one
 
 ---
 

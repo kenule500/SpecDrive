@@ -165,7 +165,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | 6 | Documentation | `/sdrive:docs` | Generate docs |
 | 7 | Implementation | `/sdrive:apply` | Write production code; move feature `backlog/` → `ongoing/` |
 | 8 | Performance | `/sdrive:performance` | Benchmark + optimize |
-| 9 | Review & Complete | `/sdrive:review` | Audit + merge; move feature `ongoing/` → `completed/` |
+| 9 | Review & Complete | `/sdrive:review` | Audit the feature and sign the review gate; `/sdrive:archive` performs the merge and the move to `completed/` |
 | 10 | Security | `/sdrive:secure` | Security audit |
 | 11 | Test | `/sdrive:test` | Write tests |
 | 12 | Product Plan | `/sdrive:product-plan` | Optionally create a product overview, conceptual mockup, design-system plan, roadmap, milestones, and backlog |
@@ -481,19 +481,33 @@ The Onboarding Agent runs `node .sdrive/scripts/onboard.js` internally if the in
 
 ## 19. The Feature Lifecycle
 
+SpecDrive has **two entry points** and **one iteration lifecycle** after them.
+
+**Greenfield** (an empty folder or a fresh scaffold with no plan): `/sdrive:constitution`, then optionally `/sdrive:product-plan`. The product plan is optional — run it when there is an idea but no written plan; otherwise go straight to `/sdrive:propose`.
+
+**Brownfield** (an existing codebase): `/sdrive:onboard`, then `/sdrive:constitution`.
+
+**The iteration lifecycle**, identical for both paths:
+
+```text
+/sdrive:propose "<feature>"    -> /sdrive:apply "<feature>"  -> /sdrive:test "<feature>"
+                               -> /sdrive:review "<feature>" -> /sdrive:archive "<feature>"
+```
+
 A feature moves through three spec folders. Each transition has exactly one owner:
 
 | Transition | Owner | Notes |
 |------------|-------|-------|
 | → `specs/backlog/<feature>/<version>/` | `/sdrive:propose` | New specs are created in `backlog/` with `phase: backlog` |
 | `backlog/` → `ongoing/` | `/sdrive:apply` | Happens at the start of implementation; sets `phase: ongoing` |
-| `ongoing/` → `completed/` | `/sdrive:review` | Happens after merge and archive; sets `phase: completed` |
+| `ongoing/` → `completed/` | `/sdrive:archive` | `sdrive archive:finalize` is the only writer; sets `phase: completed` |
 | `completed/` → `ongoing/` | `sdrive amend <feature> --reason "..."` | Corrective action on a wrongly-closed record |
 
 **Rules:**
 
 - `/sdrive:apply` MUST NOT begin implementation while the spec is still in `backlog/`.
 - If the feature is in neither `backlog/` nor `ongoing/`, the agent stops and asks.
+- `/sdrive:review` signs the review gate. It does **not** move the feature or write the completion record — `/sdrive:archive` does, and it refuses unless all four gates are already approved.
 - `/sdrive:review` leaves the feature in `ongoing/` if the audit fails.
 - `governance/` is **not** lifecycle-partitioned — governance files live at `.sdrive/governance/<feature>/<version>/` regardless of the spec's lifecycle folder.
 

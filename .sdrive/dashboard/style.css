@@ -495,6 +495,11 @@ body {
   background: var(--amber);
 }
 
+/* git could not be asked, so the dot must not claim either state. */
+.git-chip .dot.unknown {
+  background: var(--border-strong);
+}
+
 .git-chip .branch {
   color: var(--accent);
   font-weight: 600;
@@ -3079,6 +3084,105 @@ body.drawer-open {
   margin-bottom: 4px;
   font-size: 11.5px;
   font-weight: 600;
+  color: var(--text);
+}
+
+/* ---- Clickable path references + file modal ---- */
+.spec-file-link {
+  cursor: pointer;
+  border-bottom: 1px dashed currentColor;
+}
+
+.spec-file-link:hover {
+  background: rgba(79, 70, 229, 0.16);
+}
+
+.file-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.62);
+}
+
+/* 85% x 90% on purpose: these are documents, not tooltips. */
+.file-modal-panel {
+  position: relative;
+  width: 85vw;
+  height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.file-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.file-modal-path {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.file-modal-meta {
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.file-modal-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-modal-close {
+  padding: 2px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.file-modal-close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.file-modal-body {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 16px;
+}
+
+.file-modal-body pre {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
   color: var(--text);
 }
 

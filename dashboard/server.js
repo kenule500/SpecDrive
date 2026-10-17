@@ -3,62 +3,123 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { execFileSync } = require("child_process");
+const { execFile } = require("child_process");
 
 const projectRoot = process.cwd();
 const sdriveRoot = path.join(projectRoot, ".sdrive");
 
-function git(args) {
-  try {
-    return execFileSync("git", args, {
-      cwd: projectRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
-    }).trim();
-  } catch (error) {
-    return "";
-  }
+// git runs asynchronously on purpose. execFileSync blocks the event loop, and this
+// machine spawns git in 1-2 seconds, so building the header froze the entire server -
+// it could not serve the HTML, an image, or another API call until every probe finished.
+//
+// The memo keeps a single page load from paying for the same answer repeatedly (the
+// branch is asked for three times, origin/HEAD twice) and shares one in-flight spawn
+// between callers instead of racing duplicates.
+const GIT_TIMEOUT_MS = 5000;
+const GIT_CACHE_TTL_MS = 10000;
+const gitCache = new Map();
+
+// Resolves to { ok, out }.
+//
+// A failed probe is NOT an empty answer. Resolving "" on error made a timed-out
+// `git status` indistinguishable from a clean tree, and because the empty answer was
+// cached, the dashboard confidently reported "Clean" while 76 files were modified.
+// The caller now gets to tell those two facts apart.
+function runGit(args) {
+  return new Promise((resolve) => {
+    execFile(
+      "git",
+      args,
+      { cwd: projectRoot, encoding: "utf8", timeout: GIT_TIMEOUT_MS, windowsHide: true },
+      (error, stdout) => resolve({ ok: !error, out: error ? "" : String(stdout).trim() })
+    );
+  });
 }
 
-function apiGitInfo() {
-  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (!branch) {
-    return { available: false, branching: apiBranching() };
+// Cached probe. Successful answers are reused for a few seconds; failures are returned
+// to the caller but dropped from the memo straight away, so one slow spawn cannot
+// poison every request for the next ten seconds.
+async function gitProbe(args) {
+  const key = args.join("\u0000");
+  const cached = gitCache.get(key);
+
+  if (cached && Date.now() - cached.at < GIT_CACHE_TTL_MS) {
+    return cached.promise;
   }
 
-  const commit = git(["rev-parse", "--short", "HEAD"]);
-  const subject = git(["log", "-1", "--pretty=%s"]);
-  const author = git(["log", "-1", "--pretty=%an"]);
-  const committedAt = git(["log", "-1", "--pretty=%cI"]);
-  const dirty = git(["status", "--porcelain"]).length > 0;
+  const promise = runGit(args);
+  gitCache.set(key, { at: Date.now(), promise });
+  promise.then((result) => {
+    if (!result.ok) gitCache.delete(key);
+  });
+  return promise;
+}
+
+// String form, for the many probes where "nothing to report" and "failed" lead to the
+// same place. Use gitProbe directly wherever the difference changes what the UI says.
+async function git(args) {
+  return (await gitProbe(args)).out;
+}
+
+async function apiGitInfo() {
+  const branch = await git(["rev-parse", "--abbrev-ref", "HEAD"]);
+  if (!branch) {
+    return { available: false, branching: await apiBranching() };
+  }
+
+  // One spawn for the four commit facts. They always describe the same commit, so
+  // asking separately was four process launches with no extra information.
+  //
+  // These four questions are also independent of one another, so they run at the same
+  // time. Sequentially they cost the sum of four git launches; concurrently they cost
+  // the slowest one. That matters because spawning git can take seconds on Windows.
+  // `rev-list` returns "" when there is no upstream, which is handled below.
+  const [logLine, statusProbe, upstream, counts] = await Promise.all([
+    git(["log", "-1", "--pretty=%h%x1f%s%x1f%an%x1f%cI"]),
+    gitProbe(["status", "--porcelain"]),
+    git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]),
+    git(["rev-list", "--left-right", "--count", "@{upstream}...HEAD"])
+  ]);
+
+  const [commit = "", subject = "", author = "", committedAt = ""] = logLine.split("\u001f");
+
+  // null means "git could not be asked", which is not the same as false ("clean").
+  const dirty = statusProbe.ok ? statusProbe.out.length > 0 : null;
 
   // Determine the branch this one was merged from / branched off.
   // Prefer the upstream tracking branch, then the default branch, then the
   // most recent merged-in branch recorded in the reflog.
   let mergedFrom = "";
-  const upstream = git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]);
+  let ahead = 0;
+  let behind = 0;
+
   if (upstream && upstream !== branch) {
     mergedFrom = upstream.replace(/^origin\//, "");
   }
 
+  if (upstream) {
+    // --left-right gives "<upstream-only> <HEAD-only>", i.e. behind then ahead.
+    const [left, right] = counts.split(/\s+/);
+    behind = parseInt(left, 10) || 0;
+    ahead = parseInt(right, 10) || 0;
+  }
+
+  const branching = await apiBranching({ currentBranch: branch });
+
   if (!mergedFrom) {
-    const defaultBranch = git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
-      .replace(/^origin\//, "");
+    const defaultBranch = branching.defaultBranch;
     if (defaultBranch && defaultBranch !== branch) {
       mergedFrom = defaultBranch;
     }
   }
 
   if (!mergedFrom) {
-    const reflog = git(["reflog", "--grep-reflog=merge", "--pretty=%gs", "-n", "1"]);
+    const reflog = await git(["reflog", "--grep-reflog=merge", "--pretty=%gs", "-n", "1"]);
     const match = reflog.match(/merge\s+([^:]+):/);
     if (match) {
       mergedFrom = match[1].trim();
     }
   }
-
-  const ahead = git(["rev-list", "--count", "@{upstream}..HEAD"]);
-  const behind = git(["rev-list", "--count", "HEAD..@{upstream}"]);
 
   return {
     available: true,
@@ -69,9 +130,9 @@ function apiGitInfo() {
     committedAt,
     dirty,
     mergedFrom: mergedFrom || null,
-    ahead: ahead ? parseInt(ahead, 10) : 0,
-    behind: behind ? parseInt(behind, 10) : 0,
-    branching: apiBranching()
+    ahead,
+    behind,
+    branching
   };
 }
 
@@ -89,8 +150,8 @@ function apiGitInfo() {
 //      as "where features land" would invert the meaning of the read-out.
 //   2. A base that is another feature's branch is a STACK, not an integration branch,
 //      so it is reported separately rather than counted as a landing target.
-function resolveDefaultBranch() {
-  const originHead = (git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) || "")
+async function resolveDefaultBranch() {
+  const originHead = (await git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) || "")
     .replace(/^origin\//, "");
   if (originHead && originHead !== "HEAD") {
     return { name: originHead, source: "origin/HEAD" };
@@ -100,22 +161,46 @@ function resolveDefaultBranch() {
   // run, so fall back to what the remote actually has, then to a local conventional
   // name. `develop` is only accepted from the remote, where its existence is a real
   // signal rather than an ambiguous local coincidence.
+  //
+  // One for-each-ref instead of a rev-parse probe per candidate: seven probes is seven
+  // process launches for one answer.
+  const refs = await git([
+    "for-each-ref",
+    "--format=%(refname:short)",
+    "refs/remotes/origin",
+    "refs/heads"
+  ]);
+  const known = new Set(refs.split("\n").map((line) => line.trim()).filter(Boolean));
+
   for (const candidate of ["main", "master", "trunk", "develop"]) {
-    if (git(["rev-parse", "--verify", "--quiet", `refs/remotes/origin/${candidate}`])) {
+    if (known.has(`origin/${candidate}`)) {
       return { name: candidate, source: `origin/${candidate}` };
     }
   }
+
   for (const candidate of ["main", "master", "trunk"]) {
-    if (git(["rev-parse", "--verify", "--quiet", `refs/heads/${candidate}`])) {
+    if (known.has(candidate)) {
       return { name: candidate, source: `local ${candidate}` };
     }
   }
+
   return { name: null, source: null };
 }
 
-function apiBranching() {
-  const { name: defaultBranch, source: defaultBranchSource } = resolveDefaultBranch();
-  const currentBranch = git(["rev-parse", "--abbrev-ref", "HEAD"]) || null;
+async function apiBranching(context = {}) {
+  // Resolving the default branch and detecting the current one touch no shared
+  // state, so both go out together rather than one after the other.
+  const [resolved, detectedBranch] = await Promise.all([
+    context.defaultBranch
+      ? { name: context.defaultBranch, source: context.defaultBranchSource || null }
+      : resolveDefaultBranch(),
+    context.currentBranch !== undefined
+      ? context.currentBranch
+      : git(["rev-parse", "--abbrev-ref", "HEAD"])
+  ]);
+
+  const { name: defaultBranch, source: defaultBranchSource } = resolved;
+  const currentBranch = detectedBranch || null;
 
   const state = loadJson(path.join(sdriveRoot, "workflow-state.json"), { features: [] });
   const features = Array.isArray(state.features) ? state.features : [];
@@ -247,13 +332,19 @@ function describeBranchingModel(info) {
 
 // List every local branch with its tip commit, author, and merge status so the
 // Team & Branch page can show the full branch landscape alongside members.
-function apiBranches() {
-  const current = git(["rev-parse", "--abbrev-ref", "HEAD"]);
-  const raw = git([
-    "for-each-ref",
-    "--sort=-committerdate",
-    "--format=%(refname:short)%09%(objectname:short)%09%(committerdate:iso-strict)%09%(authorname)%09%(subject)",
-    "refs/heads"
+async function apiBranches() {
+  // The current branch, the branch list, and origin/HEAD are three unrelated reads, so
+  // they are issued together. Only the merge check has to wait, because it needs the
+  // default branch name first.
+  const [current, raw, originHead] = await Promise.all([
+    git(["rev-parse", "--abbrev-ref", "HEAD"]),
+    git([
+      "for-each-ref",
+      "--sort=-committerdate",
+      "--format=%(refname:short)%09%(objectname:short)%09%(committerdate:iso-strict)%09%(authorname)%09%(subject)",
+      "refs/heads"
+    ]),
+    git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
   ]);
 
   if (!raw) {
@@ -261,9 +352,8 @@ function apiBranches() {
   }
 
   // Branches already merged into the default branch (main/master).
-  const defaultBranch = (git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) || "")
-    .replace(/^origin\//, "") || "main";
-  const mergedRaw = git(["branch", "--merged", defaultBranch, "--format=%(refname:short)"]);
+  const defaultBranch = (originHead || "").replace(/^origin\//, "") || "main";
+  const mergedRaw = await git(["branch", "--merged", defaultBranch, "--format=%(refname:short)"]);
   const mergedSet = new Set(
     mergedRaw.split("\n").map((b) => b.trim()).filter(Boolean)
   );
@@ -876,6 +966,84 @@ function apiSpecFiles(feature, version) {
   return { feature, version, stage, docs };
 }
 
+// ---------- FILE VIEWER ----------
+// Serves one file so a path referenced inside a spec can be opened without leaving
+// the dashboard. Two guards here are not optional:
+//
+//   1. The resolved path must stay INSIDE the project. A spec can contain any text,
+//      and resolving without this check would let it read the whole drive.
+//   2. Secret-shaped files are refused by NAME, before anything is read. This
+//      dashboard only listens on localhost, but "local" is not a reason to page
+//      through a .env.
+const FILE_DENY_PATTERNS = [
+  /(^|[\\/])\.env(\.[^\\/]*)?$/i,
+  /\.[Pp][Ee][Mm]$/,
+  /\.key$/i,
+  /(^|[\\/])secrets?\.json$/i,
+  /(^|[\\/])id_(rsa|ed25519)/i,
+  /(^|[\\/])\.npmrc$/i,
+  /(^|[\\/])\.git[\\/]/i
+];
+const FILE_MAX_BYTES = 512 * 1024;
+
+function apiFile(requestedPath, checkOnly) {
+  const requested = String(requestedPath || "").trim();
+  if (!requested) return { found: false, reason: "no path given" };
+
+  if (FILE_DENY_PATTERNS.some((pattern) => pattern.test(requested))) {
+    return { found: false, reason: "refused: this looks like a secret or internal file" };
+  }
+  if (/secret|credential|private[-_]?key/i.test(requested)) {
+    return { found: false, reason: "refused: this looks like a secret or internal file" };
+  }
+
+  const root = path.resolve(projectRoot);
+  const resolved = path.resolve(root, requested);
+
+  // Compare with a trailing separator so `/project-evil` cannot pass as `/project`.
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+    return { found: false, reason: "outside the project" };
+  }
+
+  let stat;
+  try {
+    stat = fs.statSync(resolved);
+  } catch (error) {
+    return { found: false, reason: "no such file" };
+  }
+  if (!stat.isFile()) return { found: false, reason: "not a file" };
+
+  // Existence-only mode: the client uses this to decide whether a path-shaped
+  // token in a spec is really a file before offering it as clickable.
+  if (checkOnly) return { found: true, path: requested, exists: true };
+
+  let buffer;
+  try {
+    buffer = fs.readFileSync(resolved);
+  } catch (error) {
+    return { found: false, reason: "unreadable" };
+  }
+
+  // A NUL byte near the start is the cheapest reliable binary test there is.
+  if (buffer.subarray(0, 8192).includes(0)) {
+    return { found: true, path: requested, binary: true, bytes: stat.size, content: "" };
+  }
+
+  const truncated = buffer.length > FILE_MAX_BYTES;
+  const content = buffer.subarray(0, FILE_MAX_BYTES).toString("utf8");
+
+  return {
+    found: true,
+    path: requested,
+    binary: false,
+    bytes: stat.size,
+    truncated,
+    lines: content.split(/\r?\n/).length,
+    markdown: /\.(md|markdown)$/i.test(requested),
+    content
+  };
+}
+
 function serveStatic(res, filePath, contentType) {
   if (!fs.existsSync(filePath)) {
     res.writeHead(404);
@@ -959,14 +1127,33 @@ function liveVersions(state) {
   return live;
 }
 
+// Resolve a rules module from the copy that ships alongside this dashboard.
+//
+// __dirname is either <project>/.sdrive/dashboard or <package>/dashboard, and in both
+// cases its sibling commands/ is the version-matched rules layer - the one that was
+// released together with this file. Reading from sdriveRoot alone could pick up a stale
+// project copy that predates an accessor and quietly score every gate as unapproved, so
+// the sibling copy wins and the project copy is the fallback for older layouts.
+function requireRules(relative) {
+  const candidates = [path.join(__dirname, "..", relative), path.join(sdriveRoot, relative)];
+
+  for (const candidate of candidates) {
+    try {
+      return require(candidate);
+    } catch (error) {
+      // Try the next candidate; the caller decides what a missing module means.
+    }
+  }
+
+  return null;
+}
+
 // Reuses commands/archive.js instead of reimplementing the rules, so this score and
 // `sdrive archive:check` can never disagree about whether something is stuck.
 function archivableChecker() {
-  try {
-    return require(path.join(sdriveRoot, "commands", "archive.js")).checkArchivable;
-  } catch (error) {
-    return null;
-  }
+  const archive = requireRules(path.join("commands", "archive.js"));
+
+  return archive && typeof archive.checkArchivable === "function" ? archive.checkArchivable : null;
 }
 
 function eventTime(event) {
@@ -978,11 +1165,29 @@ function eventTime(event) {
 // Same reasoning as archivableChecker: reuse the real checker so the page can never
 // suggest an approval that `sdrive approve` would refuse.
 function gateChecker() {
-  try {
-    return require(path.join(sdriveRoot, "commands", "gates.js")).checkGateRequirements;
-  } catch (error) {
+  const gates = requireRules(path.join("commands", "gates.js"));
+
+  return gates && typeof gates.checkGateRequirements === "function" ? gates.checkGateRequirements : null;
+}
+
+// Gate status is READ through commands/gates.js. Comparing `gates[gate] === "approved"`
+// here was a second implementation of the rule, and the one endpoint that used it would
+// have kept reporting stale results the moment the gate record changed shape.
+//
+// The accessors must be present, not merely the file: an older copy that loads fine but
+// lacks them would throw on every health request instead of degrading to "unreadable".
+function gateAccessors() {
+  const gates = requireRules(path.join("commands", "gates.js"));
+
+  if (
+    !gates ||
+    typeof gates.isGateApprovedFor !== "function" ||
+    typeof gates.gateStatusFor !== "function"
+  ) {
     return null;
   }
+
+  return gates;
 }
 
 function apiHealth() {
@@ -991,6 +1196,7 @@ function apiHealth() {
   const events = loadJson(path.join(sdriveRoot, "audit-log.json"), { events: [] }).events || [];
   const checkArchivable = archivableChecker();
   const checkGateRequirements = gateChecker();
+  const gatesApi = gateAccessors();
 
   if (live.length === 0) {
     return {
@@ -1007,7 +1213,9 @@ function apiHealth() {
   const gatesMissing = [];
   for (const { feature, version } of live) {
     for (const gate of HEALTH_GATES) {
-      if ((version.gates || {})[gate] === "approved") {
+      // Unreadable gate state counts as unapproved: never credit work that cannot be
+      // verified, and never claim a gate the CLI would not report as approved.
+      if (gatesApi && gatesApi.isGateApprovedFor(version, gate)) {
         gatesApproved += 1;
       } else {
         gatesMissing.push(`${feature.name} · ${gate}`);
@@ -1034,11 +1242,29 @@ function apiHealth() {
   let verifiedCount = 0;
   const unverified = [];
   for (const { feature, version } of live) {
-    if (apiVerification(feature.name, version.id).status === "pass") {
+    const verification = apiVerification(feature.name, version.id);
+    if (verification.status === "pass") {
       verifiedCount += 1;
-    } else {
-      unverified.push(feature.name);
+      continue;
     }
+
+    // Name the drift, not just the count. "WARN - 9 extra" with no list is a dead
+    // end, and the items are already sitting in verification.json.
+    const summary = verification.summary || {};
+    const counts = ["missing", "renamed", "extra"]
+      .filter((kind) => (summary[kind] || 0) > 0)
+      .map((kind) => `${summary[kind]} ${kind}`);
+    const names = ["missing", "renamed", "extra"]
+      .flatMap((kind) => (verification.items && verification.items[kind]) || [])
+      .map((item) => item.name || item.file || "")
+      .filter(Boolean)
+      .slice(0, 4);
+
+    unverified.push(
+      `${feature.name}: ${verification.status}${
+        counts.length ? ` (${counts.join(", ")})` : ""
+      }${names.length ? ` - ${names.join(", ")}` : ""}`
+    );
   }
 
   // ---- 4. Blockers, straight from the archive checker ----
@@ -1100,7 +1326,7 @@ function apiHealth() {
       earned: verifiedCount,
       max: live.length,
       detail: `${verifiedCount} of ${live.length} live versions pass verification`,
-      evidence: unverified.map((name) => `${name}: not passing`),
+      evidence: unverified,
       evidenceMore: 0
     },
     {
@@ -1188,7 +1414,9 @@ function apiHealth() {
       });
     }
 
-    const pending = HEALTH_GATES.filter((gate) => (version.gates || {})[gate] !== "approved");
+    const pending = HEALTH_GATES.filter(
+      (gate) => !(gatesApi && gatesApi.isGateApprovedFor(version, gate))
+    );
     if (pending.length > 0 && untested === 0) {
       // Only suggest an approval the real checker would accept. Recommending a
       // command that then refuses is worse than recommending nothing.
@@ -1924,7 +2152,25 @@ function apiCommands() {
   return { slash, cli: CLI_COMMANDS, workflows: PRODUCT_WORKFLOWS, optionalCommands: OPTIONAL_COMMANDS };
 }
 
-function handleRequest(req, res) {
+async function handleRequest(req, res) {
+  try {
+    return await routeRequest(req, res);
+  } catch (error) {
+    // One failing endpoint must not take the whole dashboard down. The page polls
+    // several endpoints on a timer, so a single bad read would otherwise leave every
+    // open tab connected to nothing.
+    console.error(`❌ ${req.method} ${req.url} failed: ${error.message}`);
+
+    if (res.headersSent) {
+      return res.end();
+    }
+
+    res.writeHead(500, { "Content-Type": "application/json" });
+    return res.end(JSON.stringify({ error: error.message }));
+  }
+}
+
+async function routeRequest(req, res) {
   const url = req.url;
 
   // Skill logos are binary assets, so they are served before the JSON API block
@@ -1935,7 +2181,11 @@ function handleRequest(req, res) {
   }
 
   if (url.startsWith("/api/")) {
-    res.writeHead(200, { "Content-Type": "application/json" });
+    // Status and content-type are SET here, not written. writeHead() flushes the
+    // headers immediately, so the 404 fallthrough below threw ERR_HTTP_HEADERS_SENT
+    // and terminated the process on any unrecognised /api/ path.
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
 
     if (url === "/api/workflow-state") {
       return res.end(JSON.stringify(apiWorkflowState()));
@@ -1995,11 +2245,11 @@ function handleRequest(req, res) {
     }
 
     if (url === "/api/git-info") {
-      return res.end(JSON.stringify(apiGitInfo()));
+      return res.end(JSON.stringify(await apiGitInfo()));
     }
 
     if (url === "/api/branches") {
-      return res.end(JSON.stringify(apiBranches()));
+      return res.end(JSON.stringify(await apiBranches()));
     }
 
     if (url === "/api/project-info") {
@@ -2016,6 +2266,13 @@ function handleRequest(req, res) {
 
     if (url === "/api/health") {
       return res.end(JSON.stringify(apiHealth()));
+    }
+
+    if (url.startsWith("/api/file")) {
+      const params = new URL(url, "http://localhost").searchParams;
+      return res.end(
+        JSON.stringify(apiFile(params.get("path"), params.get("check") === "1"))
+      );
     }
 
     if (url === "/api/commands") {
