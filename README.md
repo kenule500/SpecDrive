@@ -30,7 +30,7 @@ It adds:
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Where to Run Commands](#where-to-run-commands)
-- [Quickstart](#quickstart)
+- [Lifecycle](#lifecycle)
 - [Web Dashboard](#web-dashboard)
 - [Onboarding an Existing Project](#onboarding-an-existing-project)
 - [Migrating from OpenSpec or Spec-Kit](#migrating-from-openspec-or-spec-kit)
@@ -254,53 +254,75 @@ Node decides CommonJS vs ESM **per file**, by walking up from that file to the n
 
 ---
 
-## Quickstart
+## Lifecycle
 
-1. Initialize the project:
+SpecDrive has **two entry points** and **one iteration lifecycle** after them. Everything else is optional.
+
+### Step 0 — Install and initialise (both paths)
 
 ```bash
+npm install -g specdrive-cli@latest
 sdrive init
 ```
 
-2. Create your constitution:
+`sdrive init` creates `.sdrive/`, wires your AI tools, and starts the dashboard in the same terminal — press `Ctrl+C` when you are done to get your prompt back.
+
+### Greenfield — a brand-new project
+
+Use this when you are starting from an empty folder, or a fresh scaffold with no plan in place yet.
 
 ```text
 /sdrive:constitution
+/sdrive:product-plan
 ```
 
-Optional: If you have an app idea but no product roadmap yet, run `/sdrive:product-plan` to draft a conceptual app overview and approved backlog. Skip it if you already have a plan.
+`/sdrive:product-plan` is **optional**. Run it when you have an idea but no written plan, or an empty repo. If you already know what you are building, go straight from the constitution to `/sdrive:propose`.
 
-3. Propose a feature:
+### Brownfield — an existing codebase
+
+Use this when the code already exists and development is well past the early stages.
 
 ```text
-/sdrive:propose "User login with email and password"
+/sdrive:onboard
+/sdrive:constitution
 ```
 
-4. Implement:
+`/sdrive:onboard` inventories what is there and never overwrites or deletes anything. If it detects OpenSpec or Spec Kit in the repo, it can bring those specs across and leaves the originals in place.
+
+### The iteration lifecycle (both paths)
+
+Once setup is done, every feature follows the same five steps. The name in quotes is the feature; run any of them without a name and SpecDrive asks whether you mean **all ongoing features** or one from a detected list.
 
 ```text
-/sdrive:apply
+/sdrive:propose "<feature>"    # spec, plan, tasks, traceability
+/sdrive:apply "<feature>"      # implementation
+/sdrive:test "<feature>"       # write and run the tests
+/sdrive:review "<feature>"     # audit, then sign the review gate
+/sdrive:archive "<feature>"    # merge to the integration branch, close the version
 ```
 
-5. Write tests:
+### Optional commands
 
-```text
-/sdrive:test user-login
-```
+These are not part of the core workflow. Run them when the need arises.
 
-6. Review:
+| Command | When to use it |
+|---------|----------------|
+| `/sdrive:update-propose "<feature>" <change>` | When a feature proposal needs changes before the feature is archived |
+| `/sdrive:sync "<feature>"` | After a migration, or whenever the spec and the code drift apart |
+| `/sdrive:debug "<feature>"` | When something is visibly wrong — a broken layout, a failing endpoint, a console error |
+| `/sdrive:docs "<feature>"` | When you want documentation that matches the code |
+| `/sdrive:performance "<feature>"` | When performance or SEO matters — before a release or after a slowdown |
+| `/sdrive:secure "<feature>"` | Before shipping anything that touches auth, data, or payments |
 
-```text
-/sdrive:review
-```
+### After a feature is archived
 
-7. Archive (merge to the confirmed target branch and complete the lifecycle):
+Archiving closes the version and deletes the feature branch. To go further:
 
-```text
-/sdrive:archive
-```
-
-> **Tip:** `sdrive init` starts the web dashboard for you when it finishes, in the same terminal — press `Ctrl+C` when you are done to get your prompt back. Skip it with `--no-dashboard`, or start it later with `sdrive dashboard`. See [Web Dashboard](#web-dashboard).
+| Situation | Command |
+|-----------|---------|
+| The closure was wrong (for example it shipped before its tests were written) | `sdrive amend "<feature>" --reason "..."` |
+| The scope genuinely changed | `sdrive version:new "<feature>"` |
+| A defect in already-shipped code | A `fix/<ticket>` or `hotfix/<ticket>` branch — it is a separate work unit, not an amendment |
 
 ---
 
@@ -560,6 +582,8 @@ Creates the feature specification, traceability matrix, technical plan, and exec
 
 Extends an **existing** feature specification with new requirements, user stories, and acceptance criteria.
 
+**When to use:** when a feature proposal needs changes before the feature is archived. After a feature is archived, use `sdrive amend` for a closure that was wrong, or `sdrive version:new` for a genuine change of scope.
+
 **What it does:**
 
 - Accepts a feature name and the change to add (e.g. `/sdrive:update-propose "signup-page" add google auth`)
@@ -719,7 +743,7 @@ The command enumerates every feature in `specs/ongoing/`, processes them **seque
 
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
-| `/sdrive:update-propose` | Extend an existing feature spec | When adding requirements to a feature that already exists |
+| `/sdrive:update-propose` | Extend an existing feature spec | When a feature proposal needs changes before the feature is archived |
 | `/sdrive:design` | Build UI/UX prototype | When there is no existing prototype |
 | `/sdrive:secure` | Security audit and fixes | When security is a concern |
 | `/sdrive:performance` | Benchmark and optimize for speed and SEO | When performance NFRs are not met, or search visibility needs work |

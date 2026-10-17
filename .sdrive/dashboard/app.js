@@ -334,7 +334,7 @@ function renderBranchingModel(branching) {
 /* ============================================================
    OVERVIEW
    ============================================================ */
-function renderOverview(onboarding, git, product, productType) {
+function renderOverview(onboarding, git, product, productType, health) {
   const wrap = document.createElement("div");
   wrap.className = "overview-page";
 
@@ -342,11 +342,115 @@ function renderOverview(onboarding, git, product, productType) {
 
   wrap.innerHTML = `
     ${renderOverviewHero(summary, git, productType)}
+    ${renderHealthCard(health)}
     ${renderOverviewKpis(onboarding, git, summary)}
     ${renderOverviewPanels(onboarding, git, summary)}
   `;
 
   return wrap;
+}
+
+/* Project health. The number is deliberately inseparable from its breakdown:
+   every component opens to show the rows behind it, and "do this next" is the only
+   call to action on the page. A score without those two things is a vibe, not a
+   measurement. */
+function renderHealthCard(health) {
+  if (!health) return "";
+
+  if (!health.available) {
+    return `
+    <section class="ov-panel health-card">
+      <header class="ov-panel-head">
+        <span class="ov-panel-icon">+</span>
+        <h3>Project Health</h3>
+      </header>
+      <div class="ov-panel-body">
+        <div class="ov-empty">${escapeHtml(health.reason || "Nothing to score yet.")}</div>
+      </div>
+    </section>
+    `;
+  }
+
+  const tone = health.score >= 80 ? "green" : health.score >= 55 ? "amber" : "red";
+
+  const components = health.components
+    .map((component) => {
+      const pct = component.percent === null ? "not scored" : `${component.percent}%`;
+      const width = component.percent === null ? 0 : component.percent;
+      const evidence = (component.evidence || [])
+        .map((line) => `<li>${escapeHtml(line)}</li>`)
+        .join("");
+      const more = component.evidenceMore
+        ? `<li class="muted">and ${component.evidenceMore} more</li>`
+        : "";
+      return `
+        <details class="health-row">
+          <summary>
+            <span class="health-row-label">${escapeHtml(component.label)}</span>
+            <span class="health-row-bar"><span style="width:${width}%"></span></span>
+            <span class="health-row-pct">${pct}</span>
+          </summary>
+          <div class="health-row-body">
+            <p>${escapeHtml(component.detail)}</p>
+            ${evidence || more ? `<ul class="health-evidence">${evidence}${more}</ul>` : ""}
+          </div>
+        </details>
+      `;
+    })
+    .join("");
+
+  const next = health.nextAction
+    ? `
+      <div class="health-next">
+        <div class="health-next-label">Do this next</div>
+        <div class="health-next-title">${escapeHtml(health.nextAction.title)}</div>
+        <div class="health-next-command"><code>${escapeHtml(health.nextAction.command)}</code>${
+          health.nextAction.points > 0
+            ? `<span class="health-next-gain">+${health.nextAction.points}</span>`
+            : ""
+        }</div>
+        <div class="health-next-reason">${escapeHtml(health.nextAction.reason)}</div>
+      </div>
+    `
+    : "";
+
+  const blockers = health.blockers.length
+    ? `
+      <div class="health-blockers">
+        <div class="health-blockers-label">${health.blockers.length} live version(s) cannot be archived</div>
+        <ul class="health-evidence">
+          ${health.blockers
+            .map(
+              (entry) =>
+                `<li><strong>${escapeHtml(entry.feature)}</strong> - ${escapeHtml(entry.blockers[0] || "")}</li>`
+            )
+            .join("")}
+        </ul>
+      </div>
+    `
+    : "";
+
+  return `
+    <section class="ov-panel health-card">
+      <header class="ov-panel-head">
+        <span class="ov-panel-icon">+</span>
+        <h3>Project Health</h3>
+        <span class="chip ${tone}">${escapeHtml(health.band)}</span>
+      </header>
+      <div class="ov-panel-body health-body">
+        <div class="health-score">
+          <div class="health-score-value">${health.score}</div>
+          <div class="health-score-meta">
+            <div>out of 100</div>
+            <div class="muted">${health.liveCount} live feature(s) scored</div>
+          </div>
+        </div>
+        <div class="health-components">${components}</div>
+        ${next}
+        ${blockers}
+      </div>
+    </section>
+  `;
 }
 
 /* Hero banner — the product's identity at a glance. */
@@ -670,12 +774,41 @@ function renderOnboardingPanel(onboarding) {
 /* ============================================================
    PRODUCT PLAN
    ============================================================ */
-function renderProduct(product) {
+function renderProduct(product, productType) {
   const div = document.createElement("div");
 
   if (!product || !product.exists) {
     div.className = "panel-loading";
-    div.innerHTML = `No product plan yet. Run <code>/sdrive:product-plan</code> to create a product overview, conceptual mockup, roadmap, and feature backlog.`;
+
+    // The product plan is a DEFINITION step: it invents a product overview, mockup,
+    // roadmap and backlog for something that does not exist yet. That is the
+    // greenfield path. On a project adopted from existing code the content is
+    // already in the repository, so pointing at the same command as though nothing
+    // were there is misleading.
+    const type = productType?.type || "unknown";
+
+    if (type === "brownfield") {
+      div.innerHTML = `
+        No product plan yet.<br><br>
+        <strong>Product Plan is the greenfield definition step</strong> — it invents a
+        product overview, mockup, roadmap and backlog for a product that does not exist
+        yet. This project was adopted from existing code, so that content is already in
+        the repository.<br><br>
+        Start with the onboarding scan, which derives a draft product brief from your
+        README (falling back to the code) and writes it to
+        <code>.sdrive/product/overview.md</code>: <code>sdrive onboard</code><br><br>
+        Then <code>/sdrive:product-plan</code> reads that draft, asks only about what the
+        repository cannot tell it, and merges — it does not overwrite it.
+      `;
+      return div;
+    }
+
+    if (type === "greenfield") {
+      div.innerHTML = `No product plan yet. Run <code>/sdrive:product-plan</code> to create a product overview, conceptual mockup, roadmap, and feature backlog.`;
+      return div;
+    }
+
+    div.innerHTML = `No product plan yet. Run <code>/sdrive:product-plan</code> to create a product overview, conceptual mockup, roadmap, and feature backlog — or <code>sdrive onboard</code> first if this project already has code.`;
     return div;
   }
 
@@ -936,7 +1069,7 @@ let featureRenderToken = 0;
 
 // Feature cards are tall (each carries its version blocks and metrics), so a
 // smaller page keeps the grid scannable and the KPI explainer within reach.
-const FEATURES_PER_PAGE = 12;
+const FEATURES_PER_PAGE = 20;
 
 async function renderFeatures() {
   const token = ++featureRenderToken;
@@ -2473,7 +2606,12 @@ function renderWorkflowCards() {
       <p class="workflow-summary">${escapeHtml(w.summary || "")}</p>
       <ol class="workflow-steps">
         ${(w.steps || [])
-          .map((s) => `<li><code>${escapeHtml(s)}</code></li>`)
+          .map((s) => {
+            const isOptional = (w.optional || []).includes(s);
+            return `<li${isOptional ? ' class="optional"' : ""}><code>${escapeHtml(s)}</code>${
+              isOptional ? '<span class="step-optional-badge">optional</span>' : ""
+            }</li>`;
+          })
           .join("")}
         ${(w.iteration || [])
           .map(
@@ -2482,6 +2620,11 @@ function renderWorkflowCards() {
           )
           .join("")}
       </ol>
+      ${
+        w.optionalNote
+          ? `<p class="workflow-note">${escapeHtml(w.optionalNote)}</p>`
+          : ""
+      }
       ${
         w.migrationNote
           ? `<aside class="workflow-subcard">
@@ -2808,18 +2951,16 @@ function syncTopbarHeight() {
   }
 }
 
-async function main() {
-  // Wire the theme toggle before the data fetches below. It needs no fetched
-  // data, and running it first means the button shows the right label straight
-  // away instead of the static "Theme" placeholder until the panels resolve.
-  setupThemeToggle();
-
-  const [onboarding, product, git, project, productType] = await Promise.all([
+// Fetch everything the shell needs and paint it. Kept separate from main() so the
+// live refresh can re-run exactly this without re-binding any events.
+async function loadAndRenderShell() {
+  const [onboarding, product, git, project, productType, health] = await Promise.all([
     fetchJson("/api/onboarding"),
     fetchJson("/api/product"),
     fetchJson("/api/git-info"),
     fetchJson("/api/project-info"),
-    fetchJson("/api/product-type")
+    fetchJson("/api/product-type"),
+    fetchJson("/api/health")
   ]);
 
   renderProjectInfo(project);
@@ -2828,14 +2969,62 @@ async function main() {
   const overviewContainer = document.getElementById("overview-panel");
   if (overviewContainer) {
     overviewContainer.innerHTML = "";
-    overviewContainer.appendChild(renderOverview(onboarding, git, product, productType));
+    overviewContainer.appendChild(renderOverview(onboarding, git, product, productType, health));
   }
 
   const productContainer = document.getElementById("product-panel");
   if (productContainer) {
     productContainer.innerHTML = "";
-    productContainer.appendChild(renderProduct(product));
+    productContainer.appendChild(renderProduct(product, productType));
   }
+}
+
+// The dashboard used to show stale data until a manual refresh. Polling the real
+// APIs on a timer would be worse than the bug it fixes: it would repaint while
+// someone is reading, and reset state they had set. So poll a cheap fingerprint
+// and refresh only when it genuinely changes.
+const LIVE_POLL_MS = 5000;
+
+function setupLiveRefresh(refresh) {
+  let last = null;
+  let running = false;
+
+  const tick = async () => {
+    // Skip while a refresh is in flight, and while the tab is hidden - there is
+    // nothing to keep current, and the interval would just burn requests.
+    if (running || document.hidden) return;
+    running = true;
+    try {
+      const { stamp } = await fetchJson("/api/stamp");
+      if (last === null) {
+        last = stamp;
+      } else if (stamp !== last) {
+        last = stamp;
+        await refresh();
+      }
+    } catch (error) {
+      // A failed poll is not worth interrupting anyone for; the next one retries.
+    } finally {
+      running = false;
+    }
+  };
+
+  setInterval(tick, LIVE_POLL_MS);
+
+  // Returning to a hidden tab should catch up immediately rather than waiting out
+  // the rest of the interval.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) tick();
+  });
+}
+
+async function main() {
+  // Wire the theme toggle before the data fetches below. It needs no fetched
+  // data, and running it first means the button shows the right label straight
+  // away instead of the static "Theme" placeholder until the panels resolve.
+  setupThemeToggle();
+
+  await loadAndRenderShell();
 
   // Bind each control to the single event it actually emits. A <select> fires
   // BOTH `input` and `change`, so binding both caused renderFeatures() to run
@@ -2864,6 +3053,16 @@ async function main() {
   await renderTeam();
   await renderAudit();
   await renderCommands();
+
+  // Keep the page current without a manual refresh. Only the panels that read
+  // .sdrive/ state are re-run; event bindings and the sidebar are left alone, so
+  // filters and the current page survive a refresh.
+  setupLiveRefresh(async () => {
+    await loadAndRenderShell();
+    await renderFeatures();
+    await renderTeam();
+    await renderAudit();
+  });
 
   // Deep link: /features/<name> loads the detail page directly.
   const { route, feature } = parseLocation();

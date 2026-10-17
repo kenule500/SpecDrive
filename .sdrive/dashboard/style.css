@@ -2909,6 +2909,179 @@ body.drawer-open {
   color: var(--text);
 }
 
+/* Explains why a step carries the optional badge. Muted on purpose: it is a
+   clarification, not a warning. */
+.workflow-note {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--amber, #b45309);
+  border-radius: 0 6px 6px 0;
+  background: var(--amber-soft, rgba(180, 83, 9, 0.1));
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+/* ---- Project health ---- */
+.health-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.health-score {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.health-score-value {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+}
+
+.health-score-meta {
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.health-components {
+  display: flex;
+  flex-direction: column;
+}
+
+.health-row {
+  border-top: 1px solid var(--border);
+}
+
+.health-row > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+}
+
+.health-row > summary::-webkit-details-marker {
+  display: none;
+}
+
+.health-row-label {
+  flex: 0 0 190px;
+  color: var(--text-2);
+}
+
+.health-row-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3, var(--surface-2));
+  overflow: hidden;
+}
+
+/* Health is read at a glance, so the bar reuses the sidebar gradient rather than
+   introducing a new colour language. */
+.health-row-bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+}
+
+.health-row-pct {
+  flex: 0 0 68px;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.health-row-body {
+  padding: 0 0 10px;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.health-row-body p {
+  margin: 0 0 6px;
+}
+
+.health-evidence {
+  margin: 0;
+  padding-left: 16px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text-3);
+}
+
+.health-evidence .muted {
+  opacity: 0.75;
+}
+
+.health-next {
+  border: 1px solid var(--accent-border, var(--border));
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+}
+
+.health-next-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.health-next-title {
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.health-next-command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11.5px;
+}
+
+.health-next-gain {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.health-next-reason {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.health-blockers {
+  padding: 8px 10px;
+  border-left: 2px solid var(--red, #dc2626);
+  border-radius: 0 6px 6px 0;
+  background: var(--red-soft, rgba(220, 38, 38, 0.08));
+}
+
+.health-blockers-label {
+  margin-bottom: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
 /* ---- Overview product-type badge ---- */
 .ov-type-badge {
   display: inline-flex;

@@ -18,6 +18,7 @@ You do NOT merge and you do NOT move the feature to `completed/`. That is `/sdri
 You operate within the current version folder only.
 
 <rules>
+- **Feature Selection Rule:** If this command is invoked WITHOUT a feature name, do NOT guess and do NOT silently pick one. Detect the ongoing features by listing `.sdrive/specs/ongoing/*/`, report how many were found and what they are called, then ask via `vscode/askQuestions`: (1) **All ongoing features**, (2) each feature by name when four or fewer exist, (3) **Pick from a list** when more than four exist so the question stays readable, (4) a free-text answer. If no ongoing feature exists, STOP and say so instead of asking. `/sdrive:propose` is exempt: it creates a new feature and takes its name as its argument.
 - **Audit-Only Rule:** This agent NEVER merges and NEVER moves the feature folder to `completed/`. Those actions belong to `/sdrive:archive`. Your deliverable is a review report with an honest PASS/FAIL verdict.
 - **Handoff Rule:** When the audit passes, tell the user to run `/sdrive:archive <feature>` to merge and archive. Do NOT offer to merge yourself.
 - ALWAYS read `.sdrive/constitution.md`. If it does not exist, STOP and ask the user to run the Constitution Agent first. Do not audit without governance.

@@ -469,7 +469,8 @@ program
       console.log("\n✅ SpecDrive initialized successfully.");
 
       if (options.dashboard === false) {
-        console.log("💡 Dashboard skipped (--no-dashboard). Start it with: sdrive dashboard");
+        console.log("💡 Dashboard skipped (--no-dashboard).");
+        printDashboardHint("   Start it any time with:");
         return;
       }
 
@@ -1503,6 +1504,18 @@ function runDashboardForeground(scriptPath) {
   }
 }
 
+// Every path out of `init` and `onboard` closes by pointing at the dashboard. It is
+// the fastest way to see what SpecDrive just did, and it is easy to miss otherwise.
+const DASHBOARD_PITCH = [
+  "   A visual view of your specs, features, approval gates, team, and activity -",
+  "   the quickest way to see where the project actually stands."
+];
+
+function printDashboardHint(prefix) {
+  console.log(`${prefix} sdrive dashboard`);
+  DASHBOARD_PITCH.forEach((line) => console.log(line));
+}
+
 function dashboardScriptPath() {
   const sdriveRoot = path.join(process.cwd(), ".sdrive");
   const scriptPath = path.join(sdriveRoot, "dashboard", "server.js");
@@ -1544,28 +1557,33 @@ function launchDashboard() {
     process.env.SDRIVE_NO_DASHBOARD === "1" || process.env.SDRIVE_NO_DASHBOARD === "true";
 
   if (disabled) {
-    console.log("💡 Dashboard skipped (SDRIVE_NO_DASHBOARD is set). Start it with: sdrive dashboard");
+    console.log("💡 Dashboard skipped (SDRIVE_NO_DASHBOARD is set).");
+    printDashboardHint("   Start it any time with:");
     return;
   }
 
   if (!process.stdout.isTTY) {
-    console.log("💡 Dashboard not started (no interactive terminal). Start it with: sdrive dashboard");
+    console.log("💡 Dashboard not started (no interactive terminal).");
+    printDashboardHint("   Start it any time with:");
     return;
   }
 
   const scriptPath = dashboardScriptPath();
   if (!scriptPath) {
-    console.log("💡 Dashboard not found in .sdrive/dashboard/. Start it with: sdrive dashboard");
+    console.log("💡 Dashboard not found in .sdrive/dashboard/.");
+    printDashboardHint("   Start it any time with:");
     return;
   }
 
   console.log("\n📊 Starting the SpecDrive dashboard in this terminal.");
+  DASHBOARD_PITCH.forEach((line) => console.log(line));
   console.log("   Press Ctrl+C when you are done to get your prompt back.\n");
 
   const result = runDashboardForeground(scriptPath);
 
   if (result.stoppedByUser) {
     console.log("\n📊 Dashboard stopped.");
+    printDashboardHint("   Bring it back any time with:");
   } else if (!result.ok) {
     console.error("⚠️  Dashboard exited unexpectedly. Run `sdrive dashboard` to retry.");
   }
@@ -2230,7 +2248,8 @@ program
       console.log("   or the agent will run this scan for you if needed.");
 
       if (options.dashboard === false) {
-        console.log("💡 Dashboard skipped (--no-dashboard). Start it with: sdrive dashboard");
+        console.log("💡 Dashboard skipped (--no-dashboard).");
+        printDashboardHint("   Start it any time with:");
         return;
       }
 

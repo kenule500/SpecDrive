@@ -887,6 +887,381 @@ function serveStatic(res, filePath, contentType) {
   res.end(fs.readFileSync(filePath));
 }
 
+// ---------- LIVE REFRESH STAMP ----------
+// A cheap fingerprint of everything the dashboard renders. The client polls this
+// - a few hundred bytes - and re-fetches the real data only when it changes, so a
+// poll that finds nothing new cannot disturb the page someone is reading. Polling
+// the full APIs on a timer would be wasteful and would repaint regardless.
+function fileStamp(filePath) {
+  try {
+    const stat = fs.statSync(filePath);
+    return `${stat.size}:${Math.round(stat.mtimeMs)}`;
+  } catch (error) {
+    return "0";
+  }
+}
+
+// Newest mtime plus a file count for a tree. The count matters as much as the
+// time: deleting a file can leave the newest mtime untouched.
+function treeStamp(dir) {
+  let newest = 0;
+  let count = 0;
+
+  const walk = (current) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch (error) {
+      return;
+    }
+
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      count += 1;
+      try {
+        const mtime = fs.statSync(full).mtimeMs;
+        if (mtime > newest) newest = mtime;
+      } catch (error) {
+        // A file that vanished mid-walk is not a reason to fail the whole stamp.
+      }
+    }
+  };
+
+  walk(dir);
+  return `${count}:${Math.round(newest)}`;
+}
+
+// ---------- PROJECT HEALTH ----------
+// One score from five inputs, every one derived from files that already exist. The
+// breakdown travels with the number on purpose: a score nobody can audit is
+// decoration, and a dashboard has to earn the trust it asks for.
+//
+// Nothing is stored, and no component can be moved by editing a file - only by
+// approving, testing, verifying, or archiving something real. A health number that
+// can be gamed is worse than no number at all.
+const HEALTH_GATES = ["specification", "planning", "implementation", "review"];
+const HEALTH_STALE_DAYS = 14;
+const HEALTH_MOMENTUM_DAYS = 7;
+
+// Live = a version that has not been archived. Finished work is not a health
+// problem; scoring it would punish a project for having shipped.
+function liveVersions(state) {
+  const live = [];
+  for (const feature of state.features || []) {
+    const version = (feature.versions || []).find((v) => v.id === feature.currentVersion);
+    if (!version || version.phase === "completed") continue;
+    live.push({ feature, version });
+  }
+  return live;
+}
+
+// Reuses commands/archive.js instead of reimplementing the rules, so this score and
+// `sdrive archive:check` can never disagree about whether something is stuck.
+function archivableChecker() {
+  try {
+    return require(path.join(sdriveRoot, "commands", "archive.js")).checkArchivable;
+  } catch (error) {
+    return null;
+  }
+}
+
+function eventTime(event) {
+  const raw = event.timestamp || event.at || event.date || "";
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+// Same reasoning as archivableChecker: reuse the real checker so the page can never
+// suggest an approval that `sdrive approve` would refuse.
+function gateChecker() {
+  try {
+    return require(path.join(sdriveRoot, "commands", "gates.js")).checkGateRequirements;
+  } catch (error) {
+    return null;
+  }
+}
+
+function apiHealth() {
+  const state = loadJson(path.join(sdriveRoot, "workflow-state.json"), { features: [] });
+  const live = liveVersions(state);
+  const events = loadJson(path.join(sdriveRoot, "audit-log.json"), { events: [] }).events || [];
+  const checkArchivable = archivableChecker();
+  const checkGateRequirements = gateChecker();
+
+  if (live.length === 0) {
+    return {
+      available: false,
+      reason: "No live features. Every version is either not started or already archived, so there is nothing to score yet.",
+      components: [],
+      nextAction: null,
+      blockers: []
+    };
+  }
+
+  // ---- 1. Gates ----
+  let gatesApproved = 0;
+  const gatesMissing = [];
+  for (const { feature, version } of live) {
+    for (const gate of HEALTH_GATES) {
+      if ((version.gates || {})[gate] === "approved") {
+        gatesApproved += 1;
+      } else {
+        gatesMissing.push(`${feature.name} · ${gate}`);
+      }
+    }
+  }
+
+  // ---- 2. Coverage (the same source as the TESTS chip, so they always agree) ----
+  let acsTotal = 0;
+  let acsTested = 0;
+  const coverageGaps = [];
+  for (const { feature, version } of live) {
+    const summary = apiTestReport(feature.name, version.id).summary || {};
+    const total = summary.totalACs || 0;
+    const tested = summary.testedACs || 0;
+    acsTotal += total;
+    acsTested += tested;
+    if (total - tested > 0) {
+      coverageGaps.push(`${feature.name}: ${total - tested} of ${total} ACs untested`);
+    }
+  }
+
+  // ---- 3. Verification ----
+  let verifiedCount = 0;
+  const unverified = [];
+  for (const { feature, version } of live) {
+    if (apiVerification(feature.name, version.id).status === "pass") {
+      verifiedCount += 1;
+    } else {
+      unverified.push(feature.name);
+    }
+  }
+
+  // ---- 4. Blockers, straight from the archive checker ----
+  const blockers = [];
+  let archivableCount = 0;
+  if (checkArchivable) {
+    for (const { feature } of live) {
+      let verdict = null;
+      try {
+        verdict = checkArchivable(projectRoot, feature.name);
+      } catch (error) {
+        verdict = null;
+      }
+      if (verdict && verdict.ok) {
+        archivableCount += 1;
+      } else if (verdict && Array.isArray(verdict.blockers) && verdict.blockers.length > 0) {
+        blockers.push({ feature: feature.name, blockers: verdict.blockers });
+      }
+    }
+  }
+
+  // ---- 5. Momentum ----
+  const now = Date.now();
+  const recent = events.filter((event) => {
+    const at = eventTime(event);
+    return at !== null && now - at <= HEALTH_MOMENTUM_DAYS * 86400000;
+  });
+  const lastAt = events.reduce((newest, event) => {
+    const at = eventTime(event);
+    return at === null ? newest : Math.max(newest, at);
+  }, 0);
+  const daysSinceLast = lastAt === 0 ? null : Math.floor((now - lastAt) / 86400000);
+
+  const components = [
+    {
+      id: "gates",
+      label: "Gates approved",
+      weight: 30,
+      earned: gatesApproved,
+      max: live.length * HEALTH_GATES.length,
+      detail: `${gatesApproved} of ${live.length * HEALTH_GATES.length} gate approvals are signed on live versions`,
+      evidence: gatesMissing.slice(0, 8),
+      evidenceMore: Math.max(0, gatesMissing.length - 8)
+    },
+    {
+      id: "coverage",
+      label: "Acceptance criteria tested",
+      weight: 25,
+      earned: acsTested,
+      max: acsTotal,
+      detail: `${acsTested} of ${acsTotal} acceptance criteria have a passing test`,
+      evidence: coverageGaps,
+      evidenceMore: 0
+    },
+    {
+      id: "verification",
+      label: "Spec-to-code verification",
+      weight: 15,
+      earned: verifiedCount,
+      max: live.length,
+      detail: `${verifiedCount} of ${live.length} live versions pass verification`,
+      evidence: unverified.map((name) => `${name}: not passing`),
+      evidenceMore: 0
+    },
+    {
+      id: "archivable",
+      label: "Ready to archive",
+      weight: 15,
+      earned: archivableCount,
+      max: checkArchivable ? live.length : 0,
+      detail: checkArchivable
+        ? `${archivableCount} of ${live.length} live versions have no blocker`
+        : "the archive checker is not in this project yet - run `sdrive update`",
+      evidence: blockers.map((b) => `${b.feature}: ${b.blockers[0]}`),
+      evidenceMore: 0
+    },
+    {
+      id: "freshness",
+      label: "Freshness of activity",
+      weight: 15,
+      // Measures STALENESS, not velocity. An absolute "events per week" target is
+      // unachievable for a small or early project and would pin its health at zero
+      // through no fault of its own.
+      earned: daysSinceLast === null ? 0 : Math.max(0, HEALTH_STALE_DAYS - daysSinceLast),
+      max: HEALTH_STALE_DAYS,
+      detail:
+        daysSinceLast === null
+          ? "no activity has ever been recorded in audit-log.json"
+          : `last recorded activity was ${daysSinceLast} day(s) ago (full marks within a day, zero at ${HEALTH_STALE_DAYS})`,
+      evidence:
+        recent.length > 0
+          ? [`${recent.length} event(s) in the last ${HEALTH_MOMENTUM_DAYS} days`]
+          : [`nothing recorded in the last ${HEALTH_MOMENTUM_DAYS} days`],
+      evidenceMore: 0
+    }
+  ];
+
+  for (const component of components) {
+    component.percent = component.max === 0 ? null : Math.round((component.earned / component.max) * 100);
+  }
+
+  // Rescaled over only the components that could actually be scored. An unavailable
+  // checker should lower confidence in the score, never silently lower the score.
+  let scoredWeight = 0;
+  let earnedWeight = 0;
+  for (const component of components) {
+    if (component.percent === null) continue;
+    scoredWeight += component.weight;
+    earnedWeight += (component.percent / 100) * component.weight;
+  }
+  const score = scoredWeight === 0 ? 0 : Math.round((earnedWeight / scoredWeight) * 100);
+
+  const band =
+    score >= 80 ? "Healthy" : score >= 55 ? "Needs attention" : "At risk";
+
+  // The part that earns a return visit. A snapshot says where you are; this says
+  // what to do, with the real command and an honest estimate of what it is worth.
+  const opportunities = [];
+  const coverageWeightPerAc = acsTotal > 0 ? 25 / acsTotal : 0;
+  const gatesMax = live.length * HEALTH_GATES.length;
+  const gateWeight = gatesMax > 0 ? 30 / gatesMax : 0;
+  const verificationWeight = live.length > 0 ? 15 / live.length : 0;
+
+  for (const { feature, version } of live) {
+    const summary = apiTestReport(feature.name, version.id).summary || {};
+    const untested = (summary.totalACs || 0) - (summary.testedACs || 0);
+    if (untested > 0) {
+      opportunities.push({
+        points: untested * coverageWeightPerAc,
+        title: `${feature.name}: ${untested} acceptance criteria have no passing test`,
+        command: `/sdrive:test ${feature.name}`,
+        reason: "Testing is the largest single lever on this project's health."
+      });
+    }
+
+    // Verification was the biggest recoverable block and had no suggested action
+    // until this existed - the score dropped without saying how to raise it.
+    const verification = apiVerification(feature.name, version.id);
+    if (verification.status !== "pass") {
+      opportunities.push({
+        points: verificationWeight,
+        title: `${feature.name}: spec-to-code verification is ${
+          verification.status === "warn" ? "reporting drift" : "not run"
+        }`,
+        command: `sdrive verify ${feature.name}`,
+        reason: "Verification counts only when it passes; drift here is real work outstanding."
+      });
+    }
+
+    const pending = HEALTH_GATES.filter((gate) => (version.gates || {})[gate] !== "approved");
+    if (pending.length > 0 && untested === 0) {
+      // Only suggest an approval the real checker would accept. Recommending a
+      // command that then refuses is worse than recommending nothing.
+      const approvable = checkGateRequirements
+        ? pending.filter((gate) => {
+            try {
+              return checkGateRequirements(projectRoot, feature.name, version, gate).ok === true;
+            } catch (error) {
+              return false;
+            }
+          })
+        : [];
+
+      if (approvable.length > 0) {
+        opportunities.push({
+          points: approvable.length * gateWeight,
+          title: `${feature.name}: ${approvable.length} gate(s) ready to approve (${approvable.join(", ")})`,
+          command: `sdrive approve ${feature.name} ${approvable[0]}`,
+          reason: "Its requirements are met, so the approval is the only thing outstanding."
+        });
+      } else if (pending.length > 0) {
+        opportunities.push({
+          points: 0,
+          title: `${feature.name}: ${pending.length} gate(s) pending, none approvable yet (${pending.join(", ")})`,
+          command: `sdrive status`,
+          reason:
+            "A gate is waiting, but its requirements are not met — approving now would be refused.",
+        });
+      }
+    }
+  }
+
+  if (blockers.length > 0) {
+    opportunities.push({
+      points: 0,
+      title: `${blockers.length} live version(s) cannot be archived`,
+      command: `sdrive archive:check ${blockers[0].feature}`,
+      reason: "A blocker is not worth points, it is worth clearing - see the list below."
+    });
+  }
+
+  opportunities.sort((a, b) => b.points - a.points);
+  const best = opportunities[0] || null;
+  const nextAction = best
+    ? {
+        title: best.title,
+        command: best.command,
+        reason: best.reason,
+        points: Math.round(best.points)
+      }
+    : null;
+
+  return {
+    available: true,
+    score,
+    band,
+    liveCount: live.length,
+    components,
+    nextAction,
+    blockers
+  };
+}
+
+function apiStamp() {
+  const files = ["workflow-state.json", "audit-log.json", "team.json", "config.json"];
+  const dirs = ["specs", "governance", "product", "onboarding", "reports", "context"];
+
+  const parts = files.map((name) => fileStamp(path.join(sdriveRoot, name)));
+  for (const dir of dirs) parts.push(treeStamp(path.join(sdriveRoot, dir)));
+
+  return { stamp: parts.join("|") };
+}
+
 function apiOnboarding() {
   const state = loadJson(path.join(sdriveRoot, "workflow-state.json"), { features: [] });
   return state.onboarding || null;
@@ -1167,7 +1542,7 @@ const SLASH_DETAILS = {
   "/sdrive:constitution": {
     what: "Establishes the project's ground rules and context.",
     why: "Every later decision is checked against this shared foundation.",
-    when: "First, before any feature work.",
+    when: "Immediately after sdrive init, before any feature work.",
     does: [
       "Interviews you about the product, stack, and constraints",
       "Merges the answers into a single constitution document",
@@ -1221,7 +1596,7 @@ const SLASH_DETAILS = {
   "/sdrive:update-propose": {
     what: "Extends an existing specification with new requirements.",
     why: "Lets features grow without rewriting their history.",
-    when: "When scope changes on an existing feature.",
+    when: "When a feature proposal needs changes before the feature is archived.",
     does: [
       "Adds new requirements without renumbering existing ones",
       "Updates the plan and task list to cover the additions",
@@ -1452,7 +1827,13 @@ const PRODUCT_WORKFLOWS = [
     summary:
       "You are beginning with a clean slate — either an empty folder or a freshly scaffolded repo that has no plan in place yet. SpecDrive walks you from that starting point all the way to governed, specified, and tested code.",
     steps: ["/sdrive:constitution", "/sdrive:product-plan"],
-    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"]
+    // product-plan is the only optional setup step. It is for a project that has an
+    // idea but no written plan, or an empty repo. A project that already knows what
+    // it is building can go straight from the constitution to /sdrive:propose.
+    optional: ["/sdrive:product-plan"],
+    optionalNote:
+      "/sdrive:product-plan is optional: run it when you have an idea but no written plan, or an empty repo. You can go straight from the constitution to /sdrive:propose.",
+    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:test", "/sdrive:review", "/sdrive:archive"]
   },
   {
     id: "brownfield",
@@ -1462,7 +1843,8 @@ const PRODUCT_WORKFLOWS = [
     summary:
       "Your codebase is already well underway — a plan exists and development has moved far past the early stages. SpecDrive takes stock of what is there, writes specs after the fact, and flags the gaps as deferred so nothing breaks.",
     steps: ["/sdrive:onboard", "/sdrive:constitution"],
-    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:review", "/sdrive:archive"],
+    optional: [],
+    iteration: ["/sdrive:propose", "/sdrive:apply", "/sdrive:test", "/sdrive:review", "/sdrive:archive"],
     migrationNote: {
       title: "Coming from another spec framework?",
       body:
@@ -1479,12 +1861,12 @@ const OPTIONAL_COMMANDS = {
   tagline: "Run on demand",
   icon: "✦",
   summary:
-    "These commands are not part of the core workflow. Run them when you need them — for example when a feature is totally done and ready to ship.",
+    "These commands are not part of the core workflow. Run them when you need them - for example when performance becomes a concern, when you need to fix a defect, or when you want docs.",
   commands: [
     {
       command: "/sdrive:update-propose",
       what: "Revises an existing proposal after feedback, without starting over.",
-      when: "When a proposal needs changes before it is approved."
+      when: "When a feature proposal needs changes before the feature is archived."
     },
     {
       command: "/sdrive:sync",
@@ -1510,11 +1892,6 @@ const OPTIONAL_COMMANDS = {
       command: "/sdrive:secure",
       what: "Runs a deep security audit and fixes vulnerabilities.",
       when: "Before shipping anything that touches auth, data, or payments."
-    },
-    {
-      command: "/sdrive:test",
-      what: "Writes and runs the test suite for the feature.",
-      when: "When development is done and you want coverage before review."
     }
   ]
 };
@@ -1631,6 +2008,14 @@ function handleRequest(req, res) {
 
     if (url === "/api/product-type") {
       return res.end(JSON.stringify(apiProductType()));
+    }
+
+    if (url === "/api/stamp") {
+      return res.end(JSON.stringify(apiStamp()));
+    }
+
+    if (url === "/api/health") {
+      return res.end(JSON.stringify(apiHealth()));
     }
 
     if (url === "/api/commands") {

@@ -16,6 +16,7 @@ You treat GitHub as your "Cloud Memory". You will work on the feature's OWN dedi
 You operate within the current version folder only.
 
 <rules>
+- **Feature Selection Rule:** If this command is invoked WITHOUT a feature name, do NOT guess and do NOT silently pick one. Detect the ongoing features by listing `.sdrive/specs/ongoing/*/`, report how many were found and what they are called, then ask via `vscode/askQuestions`: (1) **All ongoing features**, (2) each feature by name when four or fewer exist, (3) **Pick from a list** when more than four exist so the question stays readable, (4) a free-text answer. If no ongoing feature exists, STOP and say so instead of asking. `/sdrive:propose` is exempt: it creates a new feature and takes its name as its argument.
 - ALWAYS read `.sdrive/constitution.md` first. If it does not exist, STOP and ask the user to run the Constitution Agent. Do not write code without governance.
 - **Version Detection Rule:** Before reading feature files, read `.sdrive/workflow-state.json`:
   - Find the feature by name.
