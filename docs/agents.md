@@ -38,6 +38,7 @@ SpecDrive uses 16 specialized agents. Each agent has one slash command.
 - If no inventory exists, runs `node .sdrive/scripts/onboard.js` internally to scan the project
 - If an inventory exists but is stale, asks the user whether to rescan
 - Reads `.sdrive/onboarding/inventory.json`
+- **Checks the README before describing the product.** If it is generator boilerplate (create-next-app, create-vite, …) or missing, the scan records `projectBrief.readmeQuality` as `template`/`missing` and the agent asks whether to interview the user and write a real `.sdrive/product/overview.md`, rather than quoting "This is a Next.js project bootstrapped with create-next-app" as the vision
 - Asks the user what to fill vs. defer
 - Generates a baseline constitution from discovered facts (if approved)
 - Generates retroactive specs for existing features (if approved)
@@ -45,6 +46,15 @@ SpecDrive uses 16 specialized agents. Each agent has one slash command.
 - Migrates Spec-Kit specs and constitution when detected and approved
 - Records missing, deferred, migrated, and skipped items in `workflow-state.json` under `onboarding`
 - Never overwrites, deletes, or fabricates
+
+**Asking about the product overview:**
+
+- Triggered when `projectBrief.readmeQuality` is `template` or `missing`, or `needsProductInput` is true
+- When the README *is* usable, the derived Vision sentence is still shown for confirmation — a scan can spot a template README, but only the user can say whether a real README has drifted from the code
+- The question offers three choices: interview now (recommended), keep the draft, or defer
+- Interviewing reuses the Product Plan questions (problem, users, flows, success criteria, non-goals) and writes `Status: Approved`, `Source: onboarding interview`, preserving the derived draft under `## Previous draft (derived)`
+- It never creates feature specs or workflow-state entries — that stays `/sdrive:propose`'s job
+- Deferring records `product/overview.md` in `onboarding.deferred`
 
 **Migration rules:**
 

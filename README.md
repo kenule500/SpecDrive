@@ -479,11 +479,12 @@ The Onboarding Agent will:
 2. Detect any `openspec/` or `.specify/` folders
 3. Write `.sdrive/onboarding/inventory.json` and `report.md`
 4. Show the inventory for your approval
-5. Ask which missing pieces to fill vs. defer
-6. Optionally generate a baseline constitution
-7. Optionally generate retroactive specs for existing features
-8. Optionally migrate OpenSpec or Spec-Kit specs
-9. Record onboarding state in `workflow-state.json`
+5. **Ask about the product overview** — if the README is scaffold boilerplate (create-next-app, create-vite, …) or missing, it offers to interview you and write a real overview instead of quoting the framework
+6. Ask which missing pieces to fill vs. defer
+7. Optionally generate a baseline constitution
+8. Optionally generate retroactive specs for existing features
+9. Optionally migrate OpenSpec or Spec-Kit specs
+10. Record onboarding state in `workflow-state.json`
 
 ### Monorepos
 
@@ -504,8 +505,11 @@ Only the `packages:` list is parsed from `pnpm-workspace.yaml`. Other keys that 
 A freshly onboarded project used to show an empty dashboard, which read as though SpecDrive knew nothing about it. The scan now derives a **project brief** so the Overview has something true to show:
 
 1. It reads `README.md` — the only file written to explain the product — taking the title, the opening paragraph (rejoined across its wrapped lines), bullets under a features/goals heading, and bullets under a users/audience heading.
-2. If the README is missing or says nothing useful (a title and badges only), it falls back to a **code scan**: language markers such as `tsconfig.json` or `go.mod`, the dependencies in `package.json`, and the detected workspace packages.
-3. It writes the result to `.sdrive/product/overview.md`, **only when that file does not already exist**.
+2. It first checks whether the README is **generator boilerplate**. A scaffolded repo ships the framework's own README, so its opening paragraph reads "This is a Next.js project bootstrapped with create-next-app" — true of thousands of unrelated repositories, and useless as a product overview. When that signature is detected the README is treated as absent rather than quoted, `projectBrief.readmeQuality` is `template`, and the Onboarding Agent asks whether to interview you and write a real overview.
+3. If the README is missing, is boilerplate, or says nothing useful (a title and badges only), it falls back to a **code scan**: language markers such as `tsconfig.json` or `go.mod`, the dependencies in `package.json`, and the detected workspace packages.
+4. It writes the result to `.sdrive/product/overview.md`, **only when that file does not already exist**.
+
+When the brief comes from a boilerplate README, the file says so and deliberately has **no Vision section** — an honest gap with the open questions listed, rather than a confident sentence about the framework.
 
 The brief is derived, and the file says so on its first line:
 

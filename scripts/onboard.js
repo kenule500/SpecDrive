@@ -394,7 +394,15 @@ const TECH_LABELS = {
   zod: "Zod",
   graphql: "GraphQL",
   "socket.io": "Socket.IO",
-  stripe: "Stripe"
+  stripe: "Stripe",
+  convex: "Convex",
+  "@clerk/nextjs": "Clerk",
+  "@supabase/supabase-js": "Supabase",
+  firebase: "Firebase",
+  "next-auth": "NextAuth",
+  "@trpc/server": "tRPC",
+  resend: "Resend",
+  zustand: "Zustand"
 };
 
 // A manifest sitting in the repo is the surest statement of language it can make.
@@ -421,6 +429,65 @@ function readReadme() {
     }
   }
   return null;
+}
+
+// A scaffolded project ships with the scaffolder's README, and that README is
+// confidently wrong about the product: "This is a Next.js project bootstrapped
+// with create-next-app" is true of thousands of unrelated repositories. Taking
+// its first paragraph as the description produced a brief that described the
+// framework, not the app.
+//
+// These are the exact sentences the generators emit. Each one is conclusive on
+// its own, because no project writes "bootstrapped with create-next-app" about
+// itself after it becomes an actual product.
+const TEMPLATE_README_SIGNATURES = [
+  { pattern: /bootstrapped with \[?`?create-next-app/i, label: "create-next-app" },
+  { pattern: /this is a \[?next\.?js\]?\s+project/i, label: "next.js starter readme" },
+  { pattern: /create-vite|create-remix|create-t3-app|create-svelte|create-nuxt|create-expo-app/i, label: "framework scaffold" },
+  { pattern: /deploy on vercel/i, label: "vercel deploy section" }
+];
+
+// The last two signatures are weak on their own - plenty of real READMEs link
+// Next.js docs or mention Vercel - so they only count when the README also looks
+// like a generator's output: a Getting Started section whose only step is
+// `npm run dev`, and no product language anywhere.
+const TEMPLATE_README_SUPPORTING = [
+  { pattern: /##\s+getting started/i, label: "getting-started section" },
+  { pattern: /npm run dev|yarn dev|pnpm dev|bun dev/i, label: "run-the-dev-server step" },
+  { pattern: /##\s+learn more/i, label: "learn-more section" },
+  { pattern: /you can start editing the page/i, label: "edit-this-page instruction" }
+];
+
+/**
+ * Decides whether the README can be trusted to describe the product.
+ *
+ * @returns {{quality: "usable"|"template"|"missing", signals: string[]}}
+ */
+function assessReadme(readme) {
+  if (!readme) return { quality: "missing", signals: [] };
+
+  const text = readme.text;
+  const matched = TEMPLATE_README_SIGNATURES.filter((entry) => entry.pattern.test(text));
+
+  // The first two signatures are conclusive. "Deploy on Vercel" is not, so it
+  // only counts alongside generator-shaped scaffolding.
+  const conclusive = matched.filter((entry) => entry.label !== "vercel deploy section");
+
+  if (conclusive.length > 0) {
+    const supporting = TEMPLATE_README_SUPPORTING.filter((entry) => entry.pattern.test(text));
+    return {
+      quality: "template",
+      signals: conclusive.concat(supporting).map((entry) => entry.label)
+    };
+  }
+
+  const supporting = TEMPLATE_README_SUPPORTING.filter((entry) => entry.pattern.test(text));
+
+  if (matched.length > 0 && supporting.length >= 2) {
+    return { quality: "template", signals: matched.concat(supporting).map((entry) => entry.label) };
+  }
+
+  return { quality: "usable", signals: [] };
 }
 
 // A README line worth quoting as a description. Headings, badges, images, HTML,
@@ -551,13 +618,20 @@ function detectTechStack(inventory) {
 }
 
 // README first, because it is the only file that was written to explain the
-// product. Fall back to the manifests when it does not explain anything.
+// product - but only when it actually describes the product. A scaffolded
+// README is treated as absent: it is confidently about the framework, and
+// quoting it would fill the overview with something true of every repo the
+// generator ever produced.
 function buildProjectBrief(inventory) {
   const readme = readReadme();
-  const fromReadme = readme ? extractReadmeBrief(readme) : null;
+  const assessment = assessReadme(readme);
+  const fromReadme = readme && assessment.quality === "usable" ? extractReadmeBrief(readme) : null;
 
   if (fromReadme) {
     fromReadme.architecture = detectTechStack(inventory);
+    fromReadme.readmeQuality = assessment.quality;
+    fromReadme.templateSignals = [];
+    fromReadme.needsProductInput = false;
     return fromReadme;
   }
 
@@ -577,6 +651,9 @@ function buildProjectBrief(inventory) {
     return {
       derivedFrom: "none",
       readmePath: readme ? readme.name : null,
+      readmeQuality: assessment.quality,
+      templateSignals: assessment.signals,
+      needsProductInput: true,
       title: "",
       description: "",
       goals: [],
@@ -588,6 +665,11 @@ function buildProjectBrief(inventory) {
   return {
     derivedFrom: "code-scan",
     readmePath: readme ? readme.name : null,
+    readmeQuality: assessment.quality,
+    templateSignals: assessment.signals,
+    // A code scan can name the stack; it cannot say what the product is for.
+    // Whatever it produces, the overview needs the user's own words.
+    needsProductInput: !title || assessment.quality === "template",
     title,
     description: "",
     goals: [],
@@ -598,12 +680,34 @@ function buildProjectBrief(inventory) {
 
 function renderBriefMarkdown(brief) {
   const origin = brief.derivedFrom === "readme" ? brief.readmePath : "the code scan";
+  const isTemplate = brief.readmeQuality === "template";
   const lines = [];
 
   lines.push(`# ${brief.title || path.basename(projectRoot)}`);
   lines.push("");
-  lines.push(`Status: Draft (derived from ${origin})`);
+  lines.push(
+    isTemplate
+      ? `Status: Draft (derived from ${origin}; README is template boilerplate)`
+      : `Status: Draft (derived from ${origin})`
+  );
   lines.push("");
+
+  if (isTemplate) {
+    lines.push("> **The README is scaffold boilerplate, not a description of this product.**");
+    lines.push(
+      `> ${brief.readmePath} looks like the file ${
+        (brief.templateSignals || []).includes("create-next-app") ? "create-next-app" : "a project generator"
+      } writes (${(brief.templateSignals || []).slice(0, 3).join(", ") || "template signature"}).`
+    );
+    lines.push("> Taking its opening paragraph as the vision would describe the framework, not the app -");
+    lines.push('> "This is a Next.js project bootstrapped with create-next-app" is true of thousands of');
+    lines.push("> unrelated repositories. So this brief deliberately has no Vision section.");
+    lines.push(">");
+    lines.push("> Run `/sdrive:onboard` again, or `/sdrive:product-plan`, and answer the questions");
+    lines.push("> below to replace this file with a real product overview.");
+    lines.push("");
+  }
+
   lines.push("> **This is a draft, not a product plan.**");
   lines.push("> The onboarding scan wrote it from what was already in the repository. Nobody");
   lines.push("> reviewed it and nothing here was confirmed. Run `/sdrive:product-plan` to");
@@ -643,7 +747,11 @@ function renderBriefMarkdown(brief) {
 
   lines.push("## Open Questions");
   lines.push("");
-  lines.push("- Was the vision above accurate, or is it only the opening paragraph of the README?");
+  lines.push(
+    isTemplate
+      ? "- What is this product, in one sentence? The scaffolded README never says."
+      : "- Was the vision above accurate, or is it only the opening paragraph of the README?"
+  );
   lines.push(
     brief.targetUsers.length > 0
       ? "- Are those the right segments, and what does each one actually need?"
@@ -813,6 +921,18 @@ function buildReport(inventory) {
   if (brief.architecture && brief.architecture.length > 0) {
     lines.push(`- Tech stack: ${brief.architecture.join(", ")}`);
   }
+
+  if (brief.readmeQuality === "template") {
+    lines.push(
+      `- ⚠️  README looks like generator boilerplate (${(brief.templateSignals || []).join(", ") || "template signature"})`
+    );
+    lines.push("- ⚠️  It does not describe this product, so the brief was built from the code scan");
+    lines.push("- ➡️  Ask the user whether to write a real product overview (see the Onboarding Agent)");
+  } else if (brief.readmeQuality === "missing") {
+    lines.push("- ⚠️  No README, so the brief was built from the code scan");
+    lines.push("- ➡️  Ask the user whether to write a real product overview");
+  }
+
   lines.push("");
   lines.push("> This brief is DERIVED from the repository, not confirmed by anyone. It is");
   lines.push("> written to `.sdrive/product/overview.md` as a draft, and only when that file");
@@ -860,7 +980,15 @@ function main() {
     date: inventory.scannedAt,
     detectedSystems: inventory.detectedSystems,
     missing: inventory.missing,
-    deferred: inventory.deferred
+    deferred: inventory.deferred,
+    // Surfaced so the Onboarding Agent can see, without re-reading the README,
+    // that the product overview still needs the user's own words.
+    projectBrief: {
+      quality: inventory.projectBrief?.readmeQuality || "missing",
+      derivedFrom: inventory.projectBrief?.derivedFrom || "none",
+      needsProductInput: inventory.projectBrief?.needsProductInput === true,
+      signals: inventory.projectBrief?.templateSignals || []
+    }
   };
   fs.writeFileSync(workflowStatePath, JSON.stringify(workflowState, null, 2));
 
@@ -872,6 +1000,14 @@ function main() {
   console.log(`Deferred: ${inventory.deferred.length}`);
 
   const brief = inventory.projectBrief || {};
+
+  if (brief.readmeQuality === "template") {
+    console.log("");
+    console.log(`⚠️  ${brief.readmePath} looks like scaffold boilerplate (${(brief.templateSignals || []).slice(0, 3).join(", ")}).`);
+    console.log("   It does not describe this product, so the brief uses the code scan instead.");
+    console.log("   The Onboarding Agent will ask whether to write a real product overview.");
+  }
+
   if (briefResult.written) {
     console.log("");
     console.log(`📝 Draft product brief written: ${briefResult.path}`);

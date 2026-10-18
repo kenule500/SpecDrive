@@ -43,7 +43,17 @@ function makeProject(files) {
 }
 
 function scan(dir) {
-  spawnSync(process.execPath, [ONBOARD], { cwd: dir, encoding: "utf8" });
+  // This test never reads the child's output, and piped stdio is refused outright
+  // by some sandboxes (EPERM on the pipe) - which looked like "onboarding wrote
+  // nothing" rather than "the child never started". Silence it and say so if the
+  // spawn itself failed.
+  const result = spawnSync(process.execPath, [ONBOARD], { cwd: dir, encoding: "utf8", stdio: "ignore" });
+
+  if (result.error) {
+    console.error(`onboard.js could not start: ${result.error.code} ${result.error.message}`);
+    process.exit(2);
+  }
+
   const inventoryPath = path.join(dir, ".sdrive", "onboarding", "inventory.json");
   const inventory = fs.existsSync(inventoryPath)
     ? JSON.parse(fs.readFileSync(inventoryPath, "utf8"))
@@ -184,6 +194,89 @@ const PACKAGE_JSON = JSON.stringify({
   // Open questions must not ask for what the brief already contains.
   check("users-only readme: does not ask who the users are", overview.includes("Who are the target users?"), false);
   check("users-only readme: asks what the product is for", overview.includes("What is this product for"), true);
+}
+
+// ---------- 7. A scaffolded README must not become the product vision ----------
+// The exact file create-next-app writes. It has prose, so the old first-paragraph
+// rule happily turned "This is a Next.js project bootstrapped with create-next-app"
+// into the project's vision - true of thousands of unrelated repositories.
+{
+  const dir = makeProject({
+    "package.json": JSON.stringify({ name: "spott", dependencies: { next: "14.0.0" } }),
+    "README.md": [
+      "This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).",
+      "",
+      "## Getting Started",
+      "",
+      "First, run the development server:",
+      "",
+      "```bash",
+      "npm run dev",
+      "```",
+      "",
+      "Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.",
+      "",
+      "You can start editing the page by modifying `app/page.tsx`.",
+      "",
+      "## Learn More",
+      "",
+      "- [Next.js Documentation](https://nextjs.org/docs)",
+      "",
+      "## Deploy on Vercel",
+      "",
+      "The easiest way to deploy your Next.js app is to use the Vercel Platform.",
+      ""
+    ].join("\n")
+  });
+
+  const { inventory, overview } = scan(dir);
+  const brief = inventory.projectBrief;
+
+  check("template readme: detected", brief.readmeQuality, "template");
+  check("template readme: flags the signal", brief.templateSignals.includes("create-next-app"), true);
+  check("template readme: does not use the boilerplate as description", brief.description, "");
+  check("template readme: falls back to the code scan", brief.derivedFrom, "code-scan");
+  check("template readme: asks the agent for product input", brief.needsProductInput, true);
+  check("template readme: records the quality in workflow state", inventory.projectBrief.needsProductInput, true);
+
+  // The overview must say why it is empty, not silently claim a vision.
+  check("template readme: status names the boilerplate", /Status: Draft .*template boilerplate/.test(overview), true);
+  check("template readme: no Vision section", overview.includes("## Vision"), false);
+  check("template readme: does not claim the boilerplate as the vision", /^This is a \[?Next\.js/m.test(overview), false);
+  check("template readme: asks for the real product", overview.includes("What is this product, in one sentence?"), true);
+}
+
+// ---------- 8. A real README that happens to use Next.js is not boilerplate ----------
+// Guards the detector against firing on the framework's name alone.
+{
+  const dir = makeProject({
+    "package.json": JSON.stringify({ name: "spott", dependencies: { next: "14.0.0" } }),
+    "README.md": [
+      "# Spott",
+      "",
+      "Spott is an event booking platform where organizers publish events and guests",
+      "reserve seats without creating an account.",
+      "",
+      "## Features",
+      "",
+      "- Event pages with seat maps",
+      "- Invite-only events",
+      "",
+      "## Target Users",
+      "",
+      "- Independent event organizers",
+      ""
+    ].join("\n")
+  });
+
+  const { inventory, overview } = scan(dir);
+  const brief = inventory.projectBrief;
+
+  check("real next.js readme: stays usable", brief.readmeQuality, "usable");
+  check("real next.js readme: keeps the vision", brief.description, "Spott is an event booking platform where organizers publish events and guests reserve seats without creating an account.");
+  check("real next.js readme: no template signals", brief.templateSignals, []);
+  check("real next.js readme: does not ask for product input", brief.needsProductInput, false);
+  check("real next.js readme: writes a Vision section", overview.includes("## Vision"), true);
 }
 
 console.log("");

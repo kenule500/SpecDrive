@@ -515,7 +515,7 @@ catches up when it becomes visible again.
 
 | Command | Agent | Purpose |
 |---------|-------|---------|
-| `/sdrive:onboard` | Onboarding | Adopt SpecDrive into an existing project, migrate OpenSpec/Spec-Kit |
+| `/sdrive:onboard` | Onboarding | Adopt SpecDrive into an existing project, migrate OpenSpec/Spec-Kit, and offer a real product overview when the README is scaffold boilerplate |
 | `/sdrive:constitution` | Constitution | Create/update constitution |
 | `/sdrive:product-plan` | Product Plan | Optionally draft an app overview, conceptual mockup, roadmap, milestones, and backlog |
 | `/sdrive:propose` | Specification | Create spec, plan, tasks |
