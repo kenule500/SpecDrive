@@ -7,9 +7,55 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
 
 ---
 
-## 0.1.41 — 2026-10-18
+## 0.1.42 — 2026-10-18
 
-**Branch creation moved to `/sdrive:propose`.**
+**Archive now demands evidence, and merges back where the feature came from.**
+
+Two changes are bundled here: the archive rules below, and the branch-workflow
+change that was staged as 0.1.41 but never published.
+
+### Enforced in code, not just in the prompt
+
+`archive:check` and `archive:finalize` now block when:
+
+- **`/sdrive:test` never ran** — there is no `test-report-<feature>-<version>-<date>.md`
+  in `.sdrive/reports/tests/`. Only `/sdrive:test` writes that file, so its absence
+  is the honest signal that coverage in `traceability.json` was never backed by a
+  run. The blocker names the command to fix it.
+- **`/sdrive:review` never ran** — `review.md` for the current version has no
+  `Status: PASS` (already enforced at approval time; now re-checked at archive).
+
+A feature approved before 0.1.42 may therefore be refused until `/sdrive:test` is
+run once for that version. That is the intent: archive is the last moment an
+untested claim can be caught, because a feature in `specs/completed/` is already on
+the target branch.
+
+### Merge destination is the branch it came from
+
+`/sdrive:archive` merges into `feature.base` — recorded by `/sdrive:propose` when it
+created the branch. There is no "which branch?" menu any more, and the default
+branch is never assumed. The only exceptions are stated before merging:
+
+- the base is a peer feature branch that has not landed (stacked) — the parent
+  lands first, then this feature lands on the integration branch
+- the base has since been deleted or was never recorded — falls back to the
+  integration branch, reported as a fallback (and as a warning in `archive:check`)
+
+### Delete or keep
+
+After the merge, it asks whether to delete the branch `/sdrive:propose` created or
+keep it. Delete is recommended, keep leaves both the local and remote branch
+untouched, and either answer is reported.
+
+### Tests
+
+`test/test-archive-evidence.js` covers the new refusals in-process: no report →
+refused with the fix named; report + PASS review → archivable; tests but no verdict
+→ refused; legacy feature without `base` → archivable with a warning. 9 checks.
+
+---
+
+### Branch creation moved to `/sdrive:propose`
 
 `/sdrive:apply` used to ask which base branch to use and create `feature/<feature>`
 itself — after the spec already existed. That meant choosing a base **blind**: if
