@@ -763,27 +763,28 @@ Final audit and pass/fail verdict. Does **not** merge or archive.
 
 ### 6. `/sdrive:archive`
 
-Merges an approved feature to the confirmed target branch and completes its lifecycle.
+Merges an approved feature back into the branch it came from, and completes its lifecycle.
 
 **What it does:**
 
 - Runs `sdrive archive:check <feature>` first — a read-only pre-flight that re-verifies every approval and the evidence behind it, and reports blockers without writing anything
-- Resolves the target branch and then confirms it with you. The destination is always an **integration branch**; a peer feature branch is never a merge destination
+- **Refuses until the tests have actually run.** A `test-report-<feature>-<version>-<date>.md` must exist in `.sdrive/reports/tests/`, because only `/sdrive:test` writes one. Coverage in `traceability.json` can be hand-edited to look complete; the report is the evidence that a run happened
+- **Refuses until the review has actually run** — `review.md` for the current version must record `Status: PASS`
+- **Merges into `feature.base`** — the branch `/sdrive:propose` cut this feature from. It is not a menu and not a guess: the destination was recorded at proposal time. The only fallbacks are a stacked parent (lands first) or a base that has since been deleted, and both are stated before merging
 - Refuses to merge a branch that carries another in-flight feature's commits (CON-611)
-- Requires a passing review for the current version (Review-First Rule)
 - Requires human merge approval
-- Merges the current version
 - **Writes no record itself.** `sdrive archive:finalize` does, and it moves only the *current version's* folder to `completed/`, sets `phase: completed`, and never promotes a gate — an outstanding gate is a refusal, not a shortcut
 - Preserves older versions and sibling releases
-- Verifies the move succeeded before writing, then cleans up the branch
+- Verifies the move succeeded before writing
+- **Asks whether to delete or keep** the branch `/sdrive:propose` created — never silently. Delete is recommended (CON-610), keep leaves both the local and remote branch untouched, and the answer is reported either way
 
 **When to use:**
 
-- Only after `/sdrive:review` has returned `Status: PASS`
+- Only after `/sdrive:test` has run **and** `/sdrive:review` has returned `Status: PASS`. `sdrive archive:check` names whichever is missing
 
 **Batch mode:**
 
-- `/sdrive:archive --all` — archive every ongoing feature that has passed review, one after the other
+- `/sdrive:archive --all` — archive every ongoing feature that has passed review, one after the other. Each feature still lands on its own recorded `base`
 
 ---
 

@@ -180,6 +180,34 @@ function checkArchivable(root, featureName) {
 
   requirements.warnings.forEach((warning) => warnings.push(warning));
 
+  // Test and review must actually have RUN, not merely have been recorded as if they
+  // had. traceability.json can be hand-edited to say "complete" without a test ever
+  // existing; the test report is written only by /sdrive:test, so its presence is the
+  // evidence that the run happened. Enforced here as a blocker because archive is the
+  // last moment it can be checked: once the feature is in specs/completed/ it is already
+  // on the target branch, and no later gate can pull it back.
+  const reportsDir = path.join(root, ".sdrive", "reports", "tests");
+  const reportPrefix = `test-report-${featureName}-${version.id}-`;
+  const testReports = fs.existsSync(reportsDir)
+    ? fs.readdirSync(reportsDir).filter((file) => file.startsWith(reportPrefix))
+    : [];
+
+  if (testReports.length === 0) {
+    blockers.push(
+      `No test report for ${featureName} ${version.id} (expected ${reportPrefix}<date>.md in .sdrive/reports/tests/) - the tests have not been run. ` +
+        `Run \`/sdrive:test ${featureName}\` first, then re-run \`sdrive archive:check ${featureName}\`.`
+    );
+  }
+
+  // The branch this feature came from is what it must go back to. When `base` is missing
+  // - every feature proposed before base was recorded - the agent falls back to the
+  // integration branch, but the fallback is a guess and is reported as one.
+  if (!feature.base) {
+    warnings.push(
+      `No recorded "base" for ${featureName} - the branch it came from is unknown. The archive agent will fall back to the integration branch. New features record it in /sdrive:propose.`
+    );
+  }
+
   // Ordering, not evidence: a stacked feature has perfectly good approvals and still
   // cannot be merged yet. Reported as a blocker because the merge is part of archiving,
   // and its wording says ORDER so it is not mistaken for missing evidence.

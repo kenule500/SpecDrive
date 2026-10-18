@@ -171,6 +171,12 @@ check(
   const v2GovDir = sdrive(root, "governance", FEATURE, "v2");
 
   fs.writeFileSync(path.join(v2SpecDir, "review.md"), "Status: PASS\n");
+
+  // Only /sdrive:test writes this report, and archive now refuses without it.
+  const v2Reports = sdrive(root, "reports", "tests");
+  fs.mkdirSync(v2Reports, { recursive: true });
+  fs.writeFileSync(path.join(v2Reports, `test-report-${FEATURE}-v2-2026-01-01.md`), "# Tests v2\n");
+
   fs.writeFileSync(
     path.join(v2GovDir, "spec.json"),
     JSON.stringify({

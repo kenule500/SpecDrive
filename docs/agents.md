@@ -326,16 +326,19 @@ SpecDrive uses 16 specialized agents. Each agent has one slash command.
 
 **Command:** `/sdrive:archive`
 
-**Purpose:** Merge an approved feature to the confirmed target branch and complete its lifecycle.
+**Purpose:** Merge an approved feature back into the branch it came from, and complete its lifecycle.
 
 **What it does:**
 
-- Requires a passing `review.md` for the current version (Review-First Rule)
+- **Refuses until `/sdrive:test` has run** — a `test-report-<feature>-<version>-<date>.md` must exist in `.sdrive/reports/tests/`; coverage alone is not evidence that tests ran
+- **Refuses until `/sdrive:review` has run** — `review.md` for the current version must record `Status: PASS`
+- **Merges into `feature.base`**, the branch `/sdrive:propose` created the feature from — no branch menu; stacked and deleted-base cases are stated explicitly
 - Requires human merge approval
 - Merges the current version and marks it as `completed`
 - Preserves other versions
 - Moves feature folder from `ongoing/` to `completed/` (the ongoing → completed transition)
-- Updates governance and workflow state, then cleans up the branch
+- Updates governance and workflow state
+- **Asks whether to delete or keep** the feature branch, then acts on the answer
 - Verifies permission before and after merge
 
 **Lifecycle ownership:** `/sdrive:archive` owns `ongoing/` → `completed/`.

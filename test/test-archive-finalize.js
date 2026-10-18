@@ -58,8 +58,9 @@ const ALL_APPROVED = {
 };
 
 // A feature whose evidence is complete: ACs in spec.json, a passing test per AC in
-// traceability.json, and a PASS verdict in review.md.
-function seedFeature(root, { gates = ALL_APPROVED, traceability = true, reviewMd = true } = {}) {
+// traceability.json, a PASS verdict in review.md, and the test report that only
+// /sdrive:test writes.
+function seedFeature(root, { gates = ALL_APPROVED, traceability = true, reviewMd = true, testReport = true } = {}) {
   const specDir = sdrive(root, "specs", "ongoing", FEATURE, VERSION);
   const govDir = sdrive(root, "governance", FEATURE, VERSION);
   fs.mkdirSync(specDir, { recursive: true });
@@ -71,6 +72,15 @@ function seedFeature(root, { gates = ALL_APPROVED, traceability = true, reviewMd
 
   if (reviewMd) {
     fs.writeFileSync(path.join(specDir, "review.md"), "Status: PASS\n");
+  }
+
+  if (testReport) {
+    const reportsDir = sdrive(root, "reports", "tests");
+    fs.mkdirSync(reportsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(reportsDir, `test-report-${FEATURE}-${VERSION}-2026-01-01.md`),
+      "# Test report\n"
+    );
   }
 
   fs.writeFileSync(
@@ -229,6 +239,17 @@ console.log("=== archive finalization tests ===\n");
 
   check("REFUSES to finalize when review.md is missing", r.status !== 0, r.output);
   check("  ...reporting the missing verdict", /review\.md/.test(r.output), r.output);
+}
+
+// ---------------------------------------------------------------------------
+// 4b - tests that were never run cannot reach completed/
+// ---------------------------------------------------------------------------
+{
+  const root = newRepo({ testReport: false });
+  const r = run(root, ["archive:finalize", FEATURE]);
+
+  check("REFUSES to finalize when no test report exists", r.status !== 0, r.output);
+  check("  ...telling the user to run /sdrive:test", /sdrive:test/.test(r.output), r.output);
 }
 
 // ---------------------------------------------------------------------------
