@@ -634,10 +634,14 @@ Creates or updates the project constitution.
 
 ### 2. `/sdrive:propose`
 
-Creates the feature specification, traceability matrix, technical plan, and execution tasks.
+Chooses the base branch, creates the feature branch, then writes the specification, traceability matrix, technical plan, and execution tasks.
 
 **What it does:**
 
+- **Asks for the branch first — before writing anything.** Lists every local and remote branch (the integration branch is recommended, the current one is marked, and any branch already in use by another feature is flagged), then switches to the one you pick
+- Creates `feature/<feature>` from that base and leaves you on it
+- Records `branch` and `base` in `workflow-state.json`, so `/sdrive:apply` has nothing to guess and `/sdrive:archive` knows the merge target
+- Refuses to create a branch over a dirty working tree, and refuses a base that already carries another feature's commits without an explicit confirmation
 - Accepts a natural feature description
 - Generates a kebab-case feature name
 - Uses default template from `.sdrive/config.json`
@@ -645,6 +649,8 @@ Creates the feature specification, traceability matrix, technical plan, and exec
 - Assigns the feature to `v1` automatically if new
 - Runs anti-redundancy check
 - Requires two human approval gates
+
+**Why the branch comes first:** a base chosen after the spec exists is a base chosen blind. If it already carries another in-flight feature's commits, the two are stacked, and that is only discovered when `/sdrive:archive` refuses the merge. Deciding it at proposal time removes that failure mode entirely.
 
 **When to use:**
 
@@ -684,10 +690,10 @@ Writes production code from the approved tasks.
 
 **What it does:**
 
+- **Resumes the branch `/sdrive:propose` created** — it reads `feature.branch` from `workflow-state.json` and checks out that branch. It does **not** ask for a base, and it does not create a branch. Without a recorded branch it stops and tells you to run `/sdrive:propose` first
 - **Moves the feature from `specs/backlog/` to `specs/ongoing/`** and sets the version's `phase` to `ongoing`
 - Reads approved tasks and plan from the current version
-- Creates the feature's OWN branch, `feature/<feature>` — one branch per feature (CON-606)
-- Creates the feature branch with a suggested name and user approval
+- Refuses to run on the default branch, on another feature's branch, or with a dirty working tree
 - Implements production code only (no tests)
 - Runs `sdrive verify <feature>`
 - Commits and pushes
@@ -1157,12 +1163,14 @@ One branch per feature is mandatory. The constitution encodes this as **CON-606 
 | **CON-606** | **One branch per feature.** Two features never share a branch, and a feature is never implemented on another feature's branch |
 | **CON-607** | The branch is named `feature/<feature-name>` (kebab-case). If that name is taken, append `-v2`, `-v3`, … |
 | **CON-608** | Never implement on the repository's default or protected branch. The default branch is resolved dynamically — never assumed to be `main` |
-| **CON-609** | Branch from an approved base branch with a clean working tree (`git status --porcelain` must be empty) |
+| **CON-609** | Branch from an approved base branch with a clean working tree (`git status --porcelain` must be empty). Creation happens in `/sdrive:propose`; `/sdrive:apply` only resumes it |
 | **CON-610** | Delete the feature branch after a confirmed merge — locally (`git branch -d`) and on the remote (`git push origin --delete`) — unless the user declines. Never delete the merge target branch |
 | **CON-611** | One review unit per branch. `/sdrive:archive` refuses to merge a branch that contains other in-flight features' commits |
 | **CON-612** | Base a feature branch on the branch it will merge into — `git log <target>..<base>` must be empty. Stacking on another in-flight feature branch is reported with its consequences and must be confirmed, never silent. Dependent work uses `sdrive version:new`, not a stacked feature |
 
-`/sdrive:apply` always creates or resumes the feature's **own** branch. Resuming the same feature's existing branch is still one-branch-per-feature. `/sdrive:archive` asks which branch to merge into (detected, never assumed), then asks separately whether to delete the feature branch.
+**`/sdrive:propose` picks the base and creates the feature's own branch, before any spec file is written.** It lists every local and remote branch, recommends the integration branch, flags branches already in use by another feature, and records `branch` + `base` in `workflow-state.json`. `/sdrive:apply` only resumes that branch — it never chooses a base and never creates a branch. `/sdrive:archive` asks which branch to merge into (detected, never assumed), then asks separately whether to delete the feature branch.
+
+Doing it this way is what prevents overlap: the base is chosen while nothing depends on it, so two features can never be cut from one another's work by accident, and the merge target is written down at the start instead of reconstructed at archive time.
 
 #### Branching models
 

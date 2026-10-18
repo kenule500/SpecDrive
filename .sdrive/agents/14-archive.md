@@ -27,7 +27,7 @@ You operate within the current version folder only.
     2. `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`.
     3. Conventional remote-tracking branches that actually exist, in this order: `main`, `master`, `trunk`, `develop` (`git rev-parse --verify --quiet refs/remotes/origin/<name>`). This step exists because `origin/HEAD` is only populated once the remote is known and `remote set-head` has run, so it is missing far more often than it looks.
     4. Fall back to the current branch (`git rev-parse --abbrev-ref HEAD`) and say explicitly that you are falling back. **Never let this fallback land on `<feature-branch>` itself.** A feature branch is never an integration branch; if the current branch is the one `workflow-state.json` records for `<feature>`, STOP and ask instead of proceeding.
-  - Then read `feature.base` (`/sdrive:apply` and `sdrive amend` record it) and resolve it into a recommendation — one of exactly four cases:
+  - Then read `feature.base` (`/sdrive:propose` records it when it creates the branch; `sdrive amend` updates it when it re-branches) and resolve it into a recommendation — one of exactly four cases:
     1. **`base` equals the integration branch** → recommend `base`. Normal case, and it is exact: CON-612 requires a feature branch to be based on the branch it will merge into, so nothing is being guessed.
     2. **`base` is a PEER feature branch (the branch of another feature in `workflow-state.json`) that has NOT landed** → this feature is STACKED. Do NOT recommend `base` as the destination. Recommend the **integration branch** and explain why: "`<feature>` is stacked on `<base>`. `<base>` lands on `<integration>` first; this branch then lands on `<integration>` too, not into `<base>`." Report the order from the pre-flight. `<base>` may still be used as the **PR base** when that makes the diff readable — the merge still lands on the integration branch.
     3. **`base` is a non-peer branch that is not the branch you resolved above** — e.g. Git Flow's `develop` in a repo whose default branch is `main` — recommend `base`: it IS an integration branch, just not the default one. The test for stacking is "is this a PEER feature branch" (case 2), never "is this a different branch from the default". Resolving `develop` into case 2 would wrongly refuse to land on the branch the team actually integrates on.
@@ -37,7 +37,7 @@ You operate within the current version folder only.
   - Record the answer and use it for every `--base`, `checkout`, `pull`, `push`, and `--merged` check below.
   - If the user names a branch that does not exist locally or on the remote, STOP and ask before creating it.
 - **Feature Branch Rule:** NEVER assume the feature branch is named `feature/<feature>`. Detect it, confirm it, and clean it up on BOTH sides.
-  - **Detection**, in order: (1) `feature.branch` from `.sdrive/workflow-state.json` — this is AUTHORITATIVE, written by `/sdrive:apply`, and MUST be preferred over any guess; (2) if the current branch is not `<target-branch>`, that IS the feature branch — record it; (3) otherwise use `feature/<feature>` if `git rev-parse --verify --quiet "feature/<feature>"` succeeds or it exists on the remote; (4) if none of these resolve, record "no feature branch" and skip all branch deletion.
+  - **Detection**, in order: (1) `feature.branch` from `.sdrive/workflow-state.json` — this is AUTHORITATIVE, written by `/sdrive:propose`, and MUST be preferred over any guess; (2) if the current branch is not `<target-branch>`, that IS the feature branch — record it; (3) otherwise use `feature/<feature>` if `git rev-parse --verify --quiet "feature/<feature>"` succeeds or it exists on the remote; (4) if none of these resolve, record "no feature branch" and skip all branch deletion.
   - **Never delete a branch while it is checked out.** Always `git checkout <target-branch>` first. Git refuses to delete the checked-out branch, and forcing around that can destroy the wrong work.
   - **Never delete `<target-branch>`.** If `<feature-branch>` equals `<target-branch>`, STOP and skip deletion — deleting it would destroy the release branch.
   - **Only delete after the merge is confirmed.** Verify `<feature-branch>` appears in `git branch --merged <target-branch>`. If it is NOT merged, STOP and report — never force-delete a branch that may hold unmerged work.
@@ -180,7 +180,7 @@ When invoked as `/sdrive:archive --all`, archive every ongoing feature that has 
            3. /sdrive:archive contact-page      <- this feature
 
        To avoid this next time, base every feature branch on <target-branch>
-       (CON-612, see the Base-Branch Invariant in /sdrive:apply).
+       (CON-612, decided in /sdrive:propose before the spec was written).
        ```
 
 3. **DECISION GATE**

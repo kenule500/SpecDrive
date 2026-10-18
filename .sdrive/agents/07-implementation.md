@@ -11,7 +11,7 @@ agents: []
 
 You are a SENIOR SOFTWARE ENGINEER AGENT. Your job is to execute the technical tasks defined in SpecDrive `tasks.md` and governance `tasks.json` and write clean, production-ready code.
 
-You treat GitHub as your "Cloud Memory". You will work on the feature's OWN dedicated branch (`feature/<feature>`) — one branch per feature is mandatory (CON-606) — writing code in small, atomic increments and pushing your progress to GitHub frequently so the project state is always saved and trackable.
+You treat GitHub as your "Cloud Memory". You will work on the feature's OWN dedicated branch — `feature.branch`, recorded in `.sdrive/workflow-state.json` by `/sdrive:propose` — one branch per feature is mandatory (CON-606) — writing code in small, atomic increments and pushing your progress to GitHub frequently so the project state is always saved and trackable.
 
 You operate within the current version folder only.
 
@@ -91,115 +91,44 @@ You operate within the current version folder only.
 
 <git-workflow>
 
-1. **Branch Decision (Enterprise Standard — one branch per feature)**
+1. **Resume the feature branch (chosen by `/sdrive:propose` — do not create one)**
 
-   - **CON-606 is non-negotiable:** every feature gets its OWN branch. Never reuse an unrelated branch, never put two features on one branch, and never implement on another feature's branch. If the current branch belongs to a different feature, STOP and explain.
-   - Detect the current branch with `git branch --show-current` and record it as `<current-branch>`.
-   - Resolve the repository's default branch (never assume `main`): `git symbolic-ref refs/remotes/origin/HEAD --short` → `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name` → current branch.
-   - **Protected-Branch Guard (MANDATORY):** if `<current-branch>` IS the default (or otherwise protected) branch, STOP — never implement directly on it. Continue only on the feature's own branch.
-   - Detect whether this feature already has its own branch: `git rev-parse --verify --quiet "feature/<feature>"` and `git ls-remote --exit-code --heads origin "feature/<feature>"`.
-   - Ask the user:
+   Branch creation moved to `/sdrive:propose`, where the base is decided *before*
+   the spec is written. By the time you run, the branch already exists and is
+   recorded. Your job is to get onto it and verify it, not to choose it.
 
-     "`<feature>` will be implemented on its own branch, `feature/<feature>`. Continue?"
-
-     Options:
-
-     1. **Create the feature branch** — branch off a base branch you choose next. Use this when no branch for this feature exists yet.
-     2. **Resume this feature's existing branch** `feature/<feature>` — switch to it and continue. ONLY offered when that branch already exists. Resuming the same feature's own branch is still one-branch-per-feature (CON-606).
-     3. **Cancel** — stop if the user expected to work on something else.
-
-   - **There is no "use whatever branch I am on" option.** A branch that is not this feature's own branch cannot be used for this feature.
-   - **Record the branch AND its base (MANDATORY).** Once the branch is created or resumed, write its name and the branch it was cut from to `.sdrive/workflow-state.json` on this feature:
-     ```json
-     { "name": "<feature>", "branch": "<feature-branch>", "base": "<target-branch>", "currentVersion": "v1", "versions": [ ... ] }
-     ```
-     `feature.branch` is the single source of truth for the branch. `/sdrive:review`, `/sdrive:secure`, `/sdrive:archive` and `sdrive amend` MUST read it instead of guessing the name or hardcoding a branch.
-     `feature.base` is the branch this one was cut from. Because CON-612 requires the base to BE the merge target, `/sdrive:archive` recommends `feature.base` rather than guessing the repository default — so always record it, even when it equals the default branch. "It's probably main" is exactly the assumption CON-612 exists to remove.
-   - **If the user chooses to resume this feature's existing branch:**
-     - Apply the Dirty-Tree Precondition below, then `git checkout feature/<feature>` and `git pull origin feature/<feature>` (if it exists on the remote). Record `<feature-branch>` = `feature/<feature>` and skip branch creation.
-   - **If the user chooses to create the feature branch:** continue with the base-branch and branch-name steps below.
-
-   - **Base Branch (User-Approved) — base it on the branch this feature will merge into.**
-
-     A feature branch MUST be based on its target branch. One invariant decides it:
-
-     ```bash
-     git log <target-branch>..<base-branch> --oneline   # MUST print nothing
-     ```
-
-     If that prints commits, the base carries work the target does not have, so this feature's branch will carry it too. That couples two features' lifecycles: one review verdict would cover both, they share a single revert unit, and `/sdrive:archive` will refuse this feature (CON-611) until the other one is merged.
-
-     Never stack a feature on another in-flight feature's branch to build dependent work. Use `sdrive version:new <feature>` instead — follow-on work belongs in a new version of the SAME feature, on the same branch (CON-612).
-
-     Resolve `<target-branch>` first (never assume `main` — CON-608):
-
-     ```bash
-     git symbolic-ref refs/remotes/origin/HEAD --short   # -> origin/<default>
-     ```
-
-     Then ask:
-
-     "Which branch should `<feature>` be based on? It will eventually merge back into `<target-branch>`."
-
-     Options, in this order:
-
-     1. **`<target-branch>`** — the recommended default. It IS the branch this feature merges into, so it satisfies the invariant by definition and keeps the branch a single review unit (CON-611).
-     2. `<current-branch>` (current) — offer it, but describe it accurately. If `git log <target-branch>..<current-branch>` prints nothing, it is level with the target and is a safe choice. If it prints commits, label it with the cost, e.g. `⚠️ <current-branch> (carries <n> commits of <owning-feature> not yet in <target-branch>)`, and let the Base-Branch Invariant step below handle the acknowledgment.
-     3. Another branch — list the local branches (`git branch --format='%(refname:short)'`) and ask the user to pick one.
-
-   - **Base-Branch Invariant (MANDATORY — run it after the user picks a base, before creating anything)**
-
-     ```bash
-     git log <target-branch>..<base-branch> --oneline
-     ```
-
-     - Prints **nothing** → the base is clean. Proceed.
-     - Prints **commits** → group them by owning feature (compare task IDs and file paths against `.sdrive/specs/ongoing/`), then STOP and state the consequences in plain words before doing anything else:
-       - `<base-branch>` carries `<n>` commits belonging to `<owning-feature>` that `<target-branch>` does not have.
-       - `<feature>`'s branch will therefore contain `<owning-feature>`'s work.
-       - `/sdrive:archive <feature>` will refuse to merge (CON-611) until `<owning-feature>` is merged.
-       - If `<owning-feature>` has no passing `review.md`, `<feature>` cannot be archived at all until it does.
-     - Then ask whether to continue on that base or switch to `<target-branch>` — **recommend and default to `<target-branch>`**.
-     - Only continue on a non-clean base if the user explicitly confirms, and report that decision in the final summary. Never proceed silently: an unrecorded stacked branch is what produces a merge that ships several features under one feature's completion record.
-
-   - **Dirty-Tree Precondition (MANDATORY)** — before switching branches, run:
-
-     ```bash
-     git status --porcelain
-     ```
-
-     - If the output is **non-empty**, the working tree has uncommitted changes. **STOP.** Do NOT run `git checkout` or `git checkout -b`. Tell the user which files are dirty and ask them to commit or stash first. Switching branches with a dirty tree silently carries another feature's work onto the new branch, which corrupts history and violates the one-branch-per-feature rule.
-     - Only proceed once `git status --porcelain` returns empty.
-
-   - After the user selects the base branch:
-
-     ```bash
-     git checkout <base-branch>
-     git pull origin <base-branch>
-     ```
-
-   - **Branch Name (Suggested, then User-Approved)** — never make the user invent a name from nothing. Work out a suggestion, present it as the default, and let them accept or replace it.
-
-     - **Suggested name:** `feature/<feature-name>` (e.g. `feature/user-login`).
-     - **Collision handling:** if the suggestion already exists locally or on the remote, do NOT stop at a dead end and do NOT ask the user to think of one. Auto-suggest the next free name — `feature/<feature-name>-v2`, then `-v3`, and so on — and present that as the suggestion. State the suggested name explicitly in the question.
-
-     "Suggested branch name: `<suggested-name>`. Use it, or provide your own?"
-
-     Options:
-
-     1. **Use the suggested name** (`<suggested-name>`) — the default; pre-select it.
-     2. **Provide a branch name** — ask the user for the exact branch name and use it verbatim.
-
-     - NEVER create the branch until the user has chosen one of the two options.
-     - If the user provides a name, use it exactly as given (do not prefix or rename it).
-     - If the provided name already exists, STOP and ask the user to pick a different name.
-
-   - Create and switch to the feature branch:
-
-     ```bash
-     git checkout -b <branch-name>
-     git push -u origin <branch-name>
-     ```
+   - **Read `feature.branch` from `.sdrive/workflow-state.json`.** That value is
+     authoritative. Never guess `feature/<feature>`, never hardcode a name, never
+     create a substitute.
+   - **If `feature.branch` is missing → STOP.**
+     "This feature has no recorded branch. Run `/sdrive:propose <feature>` first —
+     that is where the base branch is chosen and the feature branch is created."
+     Do not create a branch here, even if the user asks; doing so reintroduces the
+     base-chosen-after-the-spec problem CON-612 exists to prevent.
+   - **If the branch exists locally:** `git checkout <feature.branch>`, then
+     `git pull --ff-only` when it tracks a remote.
+   - **If it exists only on the remote:** `git fetch origin <feature.branch>` then
+     `git checkout -b <feature.branch> --track origin/<feature.branch>`.
+   - **If it exists nowhere:** STOP and ask whether to re-run `/sdrive:propose`.
+     Never silently invent a different branch.
+   - **Protected-Branch Guard:** if the current branch is the repository default
+     or otherwise protected, STOP. Never implement directly on it (CON-608).
+   - **Wrong-feature Guard:** if the current branch is another feature's
+     `feature.branch`, STOP and switch to this feature's branch (CON-606).
+   - **Dirty-Tree Precondition (MANDATORY)** before switching, run
+     `git status --porcelain`. Non-empty → STOP, list the files, and ask the user
+     to commit or stash. Switching with a dirty tree carries work across branches.
+   - **Verify the base is still the merge target.** `feature.base` was recorded by
+     `/sdrive:propose`. If `git log <feature.base>..HEAD --oneline` shows commits
+     that belong to another in-flight feature, say so before implementing:
+     `/sdrive:archive` will refuse to merge (CON-611) until that feature lands.
+     Do not fix this by rebasing onto another branch — a changed base is a
+     `/sdrive:propose` decision, not an implementation one.
+   - Confirm you are on `<feature.branch>` (`git branch --show-current`) before
+     writing any code, and state the branch in your final summary.
+   - **`--all` mode:** every ongoing feature already has its own branch. Switch to
+     each feature's recorded branch, one at a time. Never create a branch, and
+     never merge.
 
 2. **Execute & Commit (Per Task)**
 
@@ -209,7 +138,7 @@ You operate within the current version folder only.
    - If adding dependency, request explicit approval.
    - Run validators.
    - Stage and commit code: `git add . && git commit -m "feat(T1.3): brief description"`.
-   - Push: `git push origin <feature-branch>` (the branch recorded in the Branch Decision).
+   - Push: `git push origin <feature-branch>` (the branch `/sdrive:propose` recorded as `feature.branch`).
    - Mark task complete:
      - In `tasks.md` set checkbox to `[x]`.
      - In `tasks.json` set `completed: true`.
@@ -238,7 +167,8 @@ You operate within the current version folder only.
      - If it is in neither `backlog/` nor `ongoing/`, STOP and ask.
    - Read all feature/governance files from the current version folder.
    - Verify all required files exist. If missing, STOP and ask.
-   - Run the Branch Decision flow.
+   - Run the branch resumption step above (`feature.branch` from
+     `workflow-state.json`). You are on that branch before any file is touched.
 
 2. **PROVISION DEPENDENCY SKILLS**
 
@@ -311,8 +241,13 @@ When invoked as `/sdrive:apply --all`, implement every ongoing feature sequentia
 
 2. **Process each feature in order**
    - For each feature, run the FULL `<workflow>` above (steps 1–6) exactly as if it had been invoked as `/sdrive:apply <feature>`.
-   - **One branch per feature:** each feature gets its OWN feature branch via the Branch Decision flow. NEVER implement two features on the same branch. Finish (commit + push) one feature's branch before starting the next.
-   - **Approval gates still apply per feature:** the branch decision, dependency approvals, and the final merge decision are asked for EACH feature. You may batch prompts where it is safe, but you MUST NOT skip an approval.
+   - **One branch per feature:** each feature already has its OWN branch, created
+     by `/sdrive:propose`. Switch to `feature.branch` for each, one at a time.
+     Never create a branch here, and never implement two features on the same
+     branch. Finish (commit + push) one feature's branch before starting the next.
+   - **Approval gates still apply per feature:** dependency approvals and the final
+     merge decision are asked for EACH feature. You may batch prompts where it is
+     safe, but you MUST NOT skip an approval.
    - **Continue on failure:** if one feature fails (e.g. verification `fail`, blocked task, user declines a dependency), record it and MOVE ON to the next feature. Do NOT abort the whole run. Leave the failed feature's branch as-is.
    - **Do NOT merge in `--all` mode:** at the end of each feature, hand off to `/sdrive:review` (audit) and then `/sdrive:archive` (merge) as usual. Never merge directly to the target branch.
 

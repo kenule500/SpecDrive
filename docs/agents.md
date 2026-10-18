@@ -121,6 +121,8 @@ SpecDrive uses 16 specialized agents. Each agent has one slash command.
 
 **What it does:**
 
+- **Chooses the base branch and creates the feature branch first** — lists every local and remote branch (integration branch recommended, current branch marked, other features' branches flagged), switches to the chosen base, creates `feature/<feature>` from it, and stays on it
+- **Records `branch` and `base`** in `workflow-state.json` before writing any spec file
 - Accepts natural feature description
 - Generates feature name
 - Uses default template from `.sdrive/config.json`
@@ -229,7 +231,7 @@ SpecDrive uses 16 specialized agents. Each agent has one slash command.
 
 - **Moves the feature from `specs/backlog/` to `specs/ongoing/`** and sets the version's `phase` to `ongoing` (the backlog → ongoing transition)
 - Reads approved tasks and plan from the current version
-- Creates the feature's OWN branch `feature/<feature>` — one branch per feature (CON-606); bases it on the branch the feature will merge into and verifies that base carries no other feature's commits (CON-612), then asks for the branch name with a suggested default
+- **Resumes the feature branch** `feature.branch` recorded by `/sdrive:propose`; it never chooses a base and never creates a branch. With no recorded branch it stops and points back to `/sdrive:propose`
 - Implements production code only (no tests)
 - Runs `sdrive verify <feature>` before declaring completion
 - Commits and pushes

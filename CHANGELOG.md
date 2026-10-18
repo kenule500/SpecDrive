@@ -9,20 +9,47 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
 
 ## 0.1.40 — 2026-10-18
 
-**Documentation release. No code changes.**
+**Documentation and workflow release. No CLI code changes.**
 
-0.1.39 shipped the whole feature set, but its tarball was built before this
-changelog and the README's tool section were written, so the package page did not
-mention any of it. `0.1.40` is byte-identical in behaviour and carries:
+### Branch creation moved to `/sdrive:propose`
+
+`/sdrive:apply` used to ask which base branch to use and create `feature/<feature>`
+itself — after the spec already existed. That meant choosing a base **blind**: if
+it already carried another in-flight feature's commits, the two were silently
+stacked, and you only found out when `/sdrive:archive` refused the merge.
+
+Now `/sdrive:propose` does it first, before writing anything:
+
+1. lists **every local and remote branch** — integration branch recommended, the
+   current branch marked, any branch already in use by another feature flagged
+2. takes your pick as **both the base and the merge target** (CON-612)
+3. switches to that base, creates `feature/<feature>` from it, and leaves you **on
+   the new branch**
+4. records `branch` and `base` in `workflow-state.json` before any spec file exists
+
+`/sdrive:apply` only resumes the recorded branch. With no recorded branch it stops
+and points back to `/sdrive:propose` — it never invents one. This is what prevents
+overlap: the base is decided while nothing depends on it, and the merge target is
+written down at the start instead of reconstructed at archive time.
+
+Guards, unchanged in spirit but now enforced at proposal time: a clean working
+tree, never the default branch, never another feature's branch, and a base that
+carries another feature's commits requires explicit confirmation.
+
+### Documentation
+
+0.1.39's tarball was built before this changelog and the README's tool section
+existed, so the package page did not mention any of it. 0.1.40 carries:
 
 - `CHANGELOG.md` in the published package
 - a README front page that names the 30 adapters, native slash commands, and
   `sdrive adapters:add`
 - an `sdrive adapters:verify` step in the upgrading instructions
 - a "historical snapshot" note on `SpecDrive-Complete-System-Reference.md`, which
-  still describes 13 agents and 15 tools
+  still described 13 agents and 15 tools
 
-Nothing to do beyond installing 0.1.40 if you want the documentation.
+If you only want the tool-support features, 0.1.39 already has them. 0.1.40 adds
+the branch-workflow change and the documentation.
 
 ---
 

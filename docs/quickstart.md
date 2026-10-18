@@ -121,7 +121,17 @@ It can help prepare a conceptual app mockup, milestones, and an approved feature
 /sdrive:propose "User login with email and password"
 ```
 
-Approve:
+Answer the branch question first — it is asked before anything is written:
+
+- **Which branch should this feature merge into, and be based on?** Every local
+  and remote branch is listed, the integration branch is recommended, the current
+  branch is marked, and any branch already in use by another feature is flagged.
+- The agent switches to your choice, creates `feature/<feature>` from it, and
+  leaves you on that branch.
+- `branch` and `base` are recorded in `workflow-state.json` immediately, so
+  `/sdrive:apply` and `/sdrive:archive` never have to guess.
+
+Then approve:
 
 - Gate 1: Spec + traceability
 - Gate 2: Plan + tasks
@@ -136,10 +146,9 @@ SpecDrive assigns the feature to `v1` automatically.
 /sdrive:apply
 ```
 
-The agent asks:
-
-- Which base branch to use — the feature always gets its OWN `feature/<feature>` branch (one branch per feature)
-- Whether to create a new branch
+There is no branch question here any more: the branch was created during
+`/sdrive:propose`. The agent reads `feature.branch`, checks it out, and stops with
+an instruction to re-run `/sdrive:propose` if no branch is recorded.
 
 The agent writes production code only.
 

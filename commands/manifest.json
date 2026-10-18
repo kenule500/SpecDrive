@@ -24,7 +24,7 @@
       "command": "/sdrive:propose",
       "agent": "specification",
       "agentFile": ".sdrive/agents/02-specification.md",
-      "description": "Create feature specification, traceability, technical plan, and tasks",
+      "description": "Choose the base branch, create the feature branch, then write the specification, traceability, plan, and tasks",
       "acceptsFeature": true,
       "gates": [],
       "validators": ["governance"]
@@ -79,7 +79,7 @@
       "command": "/sdrive:apply",
       "agent": "implementation",
       "agentFile": ".sdrive/agents/07-implementation.md",
-      "description": "Write production code from approved tasks",
+      "description": "Write production code from approved tasks, on the branch /sdrive:propose created",
       "acceptsFeature": true,
       "acceptsAll": true,
       "gates": ["specification", "planning"],

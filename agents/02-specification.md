@@ -25,6 +25,11 @@ You ensure all documents are aligned and every requirement is traceable.
 - ALWAYS read `.sdrive/constitution.md` first.
 - If `.sdrive/constitution.md` does not exist, STOP and ask the user to run `/sdrive:constitution` first. Do not generate specifications without governance.
 - If a user request conflicts with the constitution, STOP and flag the conflict immediately.
+- **Branch-First Rule:** BEFORE any other action, run **Branch Setup** (workflow
+  step 2): present every branch, take the base branch the user picks, create
+  `feature/<feature>` from it, and stay on it. The branch exists before the spec
+  does. Record `branch` and `base` on the feature in `workflow-state.json` —
+  `/sdrive:apply` only resumes that branch and never creates one.
 - ALWAYS check existing specs in `.sdrive/specs/` to avoid duplicate work.
 - If an existing spec for the same or similar feature is found, STOP and ask:
   "A related spec already exists at `.sdrive/specs/{status}/{feature-name}/{version}/`. Do you want to update it or create a new one?"
@@ -110,7 +115,89 @@ For feature `<feature-name>` and version `<version>`, create these files:
      - If feature exists but has no versions, use `v1`.
      - If feature does not exist, use `v1`.
 
-2. **CLARIFY & RESEARCH**
+2. **BRANCH SETUP (GATE 0 — before you write anything)**
+
+   This runs BEFORE the clarification questions, before any folder, and before
+   any file. A base branch chosen after the spec exists is a base chosen blind:
+   if it already carries another feature's commits, that coupling is only found
+   at archive time. Deciding it first removes the whole class of problem.
+
+   - **Governance precondition (before touching git).** Confirm
+     `.sdrive/constitution.md` exists. If it does not, STOP here and ask the user
+     to run `/sdrive:constitution` — do not create a branch for a project that is
+     not governed yet, or the branch will exist with no spec behind it.
+   - **Dirty-Tree Precondition (MANDATORY).** Run `git status --porcelain`. If it
+     prints anything, STOP and ask the user to commit or stash first. Never create
+     a branch over uncommitted work.
+   - **Resolve the integration branch** (never assume `main` — CON-608):
+     `git symbolic-ref refs/remotes/origin/HEAD --short`, then a conventional
+     `main` / `master` / `trunk` / `develop` remote-tracking branch, then the
+     current branch. Refuse the current branch if it is another feature's branch.
+   - **List every branch the user can start from.** This is what makes the
+     question answerable without inventing names:
+
+     ```bash
+     git branch --format='%(refname:short)'      # local branches
+     git branch -r --format='%(refname:short)'   # remote-only branches
+     ```
+
+     Present local branches first, then remote-only ones, and annotate:
+     - `<integration>` — "(recommended: the feature merges back here)"
+     - the checked-out branch — "(current)"
+     - any branch recorded as another feature's `branch` in
+       `.sdrive/workflow-state.json` — "in use by `<feature>`"
+
+     If there are more than ~20 branches, offer "Pick from a list" plus a
+     free-text answer rather than one option per branch.
+
+   - **Ask once, before anything else:** "Which branch should `<feature>` merge
+     into, and be based on?" The answer is BOTH the base and the merge target
+     (CON-612), which is what keeps the feature a single review unit (CON-611).
+   - **Base-Branch Invariant (MANDATORY, before creating):**
+
+     ```bash
+     git log <target-branch>..<base-branch> --oneline   # MUST print nothing
+     ```
+
+     - Nothing → the base is clean. Proceed.
+     - Commits → they belong to another in-flight feature. State the consequence
+       (`/sdrive:archive <feature>` will refuse to merge until that feature
+       lands), recommend the integration branch, and continue on a non-clean base
+       only with explicit confirmation. Record that decision.
+
+   - **Create the branch, and end on it:**
+
+     ```bash
+     git checkout <target-branch>                 # switch to the chosen base
+     git pull --ff-only origin <target-branch>    # when it tracks a remote
+     git checkout -b <branch-name>                # create and switch to the feature branch
+     ```
+
+     - Name it `feature/<feature-name>` (CON-607). If that name exists locally or
+       remotely, suggest `-v2`, `-v3`, … rather than stopping at a dead end.
+     - Confirm the suggested name in the same flow, pre-selected; use a name the
+       user supplies verbatim.
+     - Verify with `git branch --show-current` that you are ON `<branch-name>`.
+       Never leave the user on the base branch.
+
+   - **Record branch and base (MANDATORY)** on the feature in
+     `.sdrive/workflow-state.json`:
+
+     ```json
+     { "name": "<feature>", "branch": "<branch-name>", "base": "<target-branch>", "currentVersion": "v1", "versions": [ ... ] }
+     ```
+
+     `feature.branch` is the single source of truth for `/sdrive:apply`,
+     `/sdrive:review`, `/sdrive:secure`, `/sdrive:archive` and `sdrive amend`.
+     `feature.base` is the merge target `/sdrive/archive` recommends.
+
+   - **Existing feature, new version:** if `feature.branch` is recorded and that
+     branch still exists, ask whether to reuse it (switch to it) or create a new
+     one. Never add a second branch to one feature silently.
+   - **Not a git repository:** say so, skip branch setup, and continue. Do not
+     fail the proposal over missing version control.
+
+3. **CLARIFY & RESEARCH**
    - Create a `todo` list.
    - Read `.sdrive/constitution.md`. If missing, STOP and ask.
    - Search existing specs in `.sdrive/specs/` to avoid duplicates. If duplicate found, STOP and ask.
@@ -125,7 +212,7 @@ For feature `<feature-name>` and version `<version>`, create these files:
    - If research returns no results, mark "No external research available."
    - If codebase context is missing, state spec is based on user input and research only.
 
-3. **GENERATE SPEC & TRACEABILITY (GATE 1)**
+4. **GENERATE SPEC & TRACEABILITY (GATE 1)**
    - Create `.sdrive/specs/backlog/<feature>/<version>/`.
    - Create `.sdrive/governance/<feature>/<version>/`.
    - Generate `spec.md` using SpecDrive format. Include YAML frontmatter with `title`, `status: backlog`, `created`, `updated`.
@@ -135,7 +222,7 @@ For feature `<feature-name>` and version `<version>`, create these files:
    - Run validators.
    - **GATE 1:** STOP and ask: "Specification and traceability draft complete. Review and approve to proceed to plan/tasks?"
 
-4. **EXISTING ASSET CHECK (ANTI-REDUNDANCY)**
+5. **EXISTING ASSET CHECK (ANTI-REDUNDANCY)**
    - Before planning new components/modules, search the codebase for existing ones.
    - Check for:
      - Existing components
@@ -152,7 +239,7 @@ For feature `<feature-name>` and version `<version>`, create these files:
    - If something does not exist, mark it as `create`.
    - Document all decisions in `plan.json` using `action` fields.
 
-5. **GENERATE PLAN & TASKS (after Gate 1 approval)**
+6. **GENERATE PLAN & TASKS (after Gate 1 approval)**
    - Generate `plan.md` and `tasks.md` in the same version folder.
    - Generate `.sdrive/governance/<feature>/<version>/plan.json` and `tasks.json`.
    - Include `action` fields for entities, components, and APIs:
@@ -169,14 +256,19 @@ For feature `<feature-name>` and version `<version>`, create these files:
    - Run validators again.
    - **GATE 2:** STOP and ask: "Plan and tasks draft complete. Review and approve to start implementation?"
 
-6. **FINALIZE & HANDOFF**
+7. **FINALIZE & HANDOFF**
    - Update `.sdrive/workflow-state.json`:
      - Ensure feature exists with `currentVersion`.
+     - **Ensure `branch` and `base` are recorded** (written in Branch Setup). If
+       they are missing, stop and go back to step 2 — a feature without a branch
+       cannot be implemented or archived.
      - If feature was new, create the `versions` array with `<version>`.
      - Set the version's `phase: backlog`.
      - Set the version's `currentStep: specification`.
      - Set gates pending/approved as appropriate.
      - Append to the version's `history`.
+   - Confirm the user is still on `<branch-name>` (`git branch --show-current`)
+     and name the branch in the handoff, so `/sdrive:apply` has nothing to guess.
    - Review all files for consistency and missing edge cases.
    - Ensure Definition of Done checklist is met.
    - Present final summary to user.
@@ -238,6 +330,9 @@ As a [role], I want [action], so that [benefit].
 <definition-of-done>
 The specification phase is NOT complete until:
 - [ ] Feature name generated from description and confirmed by user.
+- [ ] Base branch chosen from the listed branches, before any file was written.
+- [ ] `feature/<feature>` created from that base, and the working tree is ON it.
+- [ ] `branch` and `base` recorded on the feature in `workflow-state.json`.
 - [ ] Current version detected from `workflow-state.json` (default `v1`).
 - [ ] Constitution alignment verified.
 - [ ] Duplicate check passed.
