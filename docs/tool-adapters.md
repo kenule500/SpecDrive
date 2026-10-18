@@ -7,46 +7,104 @@ SpecDrive works with multiple AI coding tools through adapters and MCP.
 ## How It Works
 
 1. SpecDrive core lives in `.sdrive/`
-2. Each tool gets a small adapter file
-3. The adapter tells the tool how to use `/sdrive:*` commands
+2. Each tool gets the file(s) it actually reads
+3. That file tells the tool how to use `/sdrive:*` commands
 4. Tools that support MCP can also call SpecDrive directly
+
+---
+
+## One Tool Can Need More Than One File
+
+A tool's definition in `.sdrive/commands/tools.json` is a list of paths, not a
+single string:
+
+```json
+{
+  "name": "gemini-cli",
+  "label": "Gemini CLI",
+  "mcpClient": "gemini-cli",
+  "docs": "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/custom-commands.md",
+  "adapterPaths": [
+    { "path": "GEMINI.md", "format": "md", "kind": "rules" },
+    { "path": ".gemini/commands/sdrive.toml", "format": "toml", "kind": "command" }
+  ]
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `path` | File the tool reads, relative to the project root |
+| `format` | Content syntax: `md`, `mdc`, or `toml` |
+| `extension` | Optional, when the extension differs from the format (`.rules`, `.goosehints`) |
+| `kind` | `rules` (always-on instructions) or `command` (an invocable slash command) |
+| `frontmatter` | Optional YAML frontmatter, required by some tools |
+| `mcpClient` | Optional. Wires that client's MCP config. Omit when the tool has none |
+| `docs` | Vendor page that documents this path |
+| `verified` | `false` marks a best guess that has not been checked against vendor docs |
+
+`format` describes the **content**, `extension` describes the **file name**. They
+usually agree, but Zed reads Markdown from `.rules` and goose reads Markdown from
+`.goosehints`, so they are modelled separately rather than forcing a fake format.
+
+### Why this matters
+
+The first version of the registry stored one `adapterPath` string per tool. Four
+adapters pointed at files their tool never loads:
+
+| Tool | Old path | Reality |
+|------|----------|---------|
+| Gemini CLI | `.gemini/commands/sdrive.md` | Custom commands must be `.toml`; a `.md` there is ignored |
+| Cursor | `.cursor/rules/sdrive.md` | A plain `.md` in `.cursor/rules` is ignored; rules need `.mdc` + frontmatter |
+| Qwen Code | `.qwen/rules/sdrive.md` | The context file is `QWEN.md` |
+| VS Code | `.vscode/sdrive-commands.json` | No such convention; Copilot reads `.github/instructions/*.instructions.md` |
+
+`sdrive adapters:verify` refuses that class of mistake: an extension that
+disagrees with its format, `.mdc` without frontmatter, `.toml` outside a command
+file, two tools disagreeing about one path, or a path escaping the project.
 
 ---
 
 ## Supported Tools
 
-SpecDrive supports 15 AI tools.
+SpecDrive ships 30 definitions. Several share `AGENTS.md`, which is written once.
 
-| Tool | Adapter File |
-|------|--------------|
+| Tool | File(s) |
+|------|---------|
+| Any `AGENTS.md` tool | `AGENTS.md` |
 | GitHub Copilot | `.github/copilot-instructions.md` |
+| VS Code / Copilot | `.github/instructions/sdrive.instructions.md` |
 | Cline | `.clinerules/sdrive.md` |
 | Claude Code | `.claude/commands/sdrive.md` |
-| Cursor | `.cursor/rules/sdrive.md` |
-| VS Code | `.vscode/sdrive-commands.json` |
+| Cursor | `.cursor/rules/sdrive.mdc` |
 | Amazon Q Developer | `.amazonq/rules/sdrive.md` |
-| Gemini CLI | `.gemini/commands/sdrive.md` |
+| Gemini CLI | `GEMINI.md`, `.gemini/commands/sdrive.toml` |
 | Continue | `.continue/rules/sdrive.md` |
-| Codex | `.codex/rules/sdrive.md` |
+| Codex | `AGENTS.md` |
 | Windsurf | `.windsurf/rules/sdrive.md` |
 | Kilo Code | `.kilocode/rules/sdrive.md` |
-| OpenCode | `.opencode/rules/sdrive.md` |
-| Qoder | `.qoder/rules/sdrive.md` |
-| Qwen Code | `.qwen/rules/sdrive.md` |
-| Rovo Dev CLI | `.rovo/rules/sdrive.md` |
+| OpenCode | `AGENTS.md` |
+| Qoder | `.qoder/rules/sdrive.md` (unverified) |
+| Qwen Code | `QWEN.md` |
+| Atlassian Rovo Dev | `AGENTS.md` (unverified) |
+| Roo Code | `.roo/rules/sdrive.md` |
+| Amp | `AGENTS.md` |
+| Warp | `WARP.md` |
+| Zed | `.rules` |
+| Aider | `CONVENTIONS.md` |
+| Kiro (AWS) | `.kiro/steering/sdrive.md` |
+| JetBrains Junie | `.junie/guidelines.md` |
+| Factory Droid | `AGENTS.md` |
+| Trae | `.trae/rules/project_rules.md` (unverified) |
+| OpenHands | `.openhands/microagents/sdrive.md` (unverified) |
+| Google Antigravity | `AGENTS.md` (unverified) |
+| Augment Code | `.augment/rules/sdrive.md` |
+| goose | `.goosehints` |
+| Crush | `CRUSH.md` |
 
----
+Run `sdrive adapters:list` for the authoritative, installed list.
 
-## What Each Adapter Does
-
-Every adapter tells the AI tool:
-
-1. Read `.sdrive/commands/manifest.json`
-2. Find the matching command
-3. Read the agent file listed in `agentFile`
-4. Follow that agent's instructions
-5. Run validators after writing files
-6. Stop at human approval gates
+`AGENTS.md` is the cross-tool standard stewarded by the Agentic AI Foundation, so
+a tool that adopts it is supported the day it ships — no SpecDrive release needed.
 
 ---
 
@@ -58,19 +116,69 @@ Adapters are generated automatically when you run:
 sdrive init
 ```
 
-During initialization, you select which tools you use.
+During initialization you select which tools you use. Only selected tools get
+adapters. Non-interactive:
 
-Only selected tools get adapters.
+```bash
+sdrive init --tools all
+sdrive init --tools qwen-code,cursor
+```
+
+To regenerate later:
+
+```bash
+node .sdrive/scripts/generate-adapters.js --tools cursor,gemini-cli
+```
+
+---
+
+## Add a Tool SpecDrive Does Not Ship
+
+Any tool can be supported without waiting for a release:
+
+```bash
+sdrive adapters:add windsurf-next \
+  --path .windsurf-next/rules/sdrive.md \
+  --format md \
+  --label "Windsurf Next" \
+  --docs "https://example.com/docs/rules"
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--path` | Required. File the tool reads |
+| `--format` | `md` (default), `mdc`, `toml` |
+| `--extension` | When the extension differs, e.g. `--extension .rules` |
+| `--kind` | `rules` (default) or `command` |
+| `--frontmatter` | JSON, e.g. `'{"alwaysApply":true}'` |
+| `--mcp-client` | `claude-desktop`, `cursor`, `cline`, `roo`, `gemini-cli`, `vscode` |
+| `--unverified` | Record that the path is a best guess, not checked against vendor docs |
+| `--no-generate` | Register only; write the file later |
+
+The entry is validated before it is saved, so a path your tool would ignore is
+rejected instead of silently doing nothing.
+
+You can also edit `.sdrive/commands/tools.json` by hand and run
+`sdrive adapters:verify`.
+
+---
+
+## Verify
+
+```bash
+sdrive adapters:verify            # warnings for unverified paths, exit 0
+sdrive adapters:verify --strict   # unverified paths fail
+```
+
+Run it in CI alongside `sdrive validate` so a registry entry cannot rot after a
+vendor renames the file.
 
 ---
 
 ## MCP Server
 
-For tools that support Model Context Protocol (MCP), SpecDrive also runs an MCP server.
-
-This allows AI tools to call SpecDrive directly from chat.
-
-Example:
+For tools that support Model Context Protocol (MCP), SpecDrive also runs an MCP
+server, so AI tools can call SpecDrive directly from chat.
 
 ```text
 Show me all features
@@ -78,21 +186,10 @@ Is the governance valid?
 Get the traceability for user-login
 ```
 
-No slash commands needed.
-
----
-
-## MCP Setup
-
-`sdrive init` creates:
-
-```text
-.sdrive/mcp/server.js
-.sdrive/mcp/mcp.json
-```
-
-MCP clients are wired **automatically** based on the tools you select — there is
-no separate prompt. Each client uses its own config schema:
+`mcpClient` in the registry decides which client config is written. Only clients
+SpecDrive knows how to write are wired - a tool with no `mcpClient` gets a file
+adapter and nothing else, because writing a config a tool never reads is worse
+than writing none.
 
 | Client | Config Path | Config Key |
 |--------|-------------|------------|
@@ -100,10 +197,12 @@ no separate prompt. Each client uses its own config schema:
 | Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` | `mcpServers` |
 | Cursor | `.cursor/mcp.json` | `mcpServers` |
 | Cline | `.cline/mcp.json` | `mcpServers` |
+| Roo Code | `.roo/mcp.json` | `mcpServers` |
+| Gemini CLI | `.gemini/settings.json` | `mcpServers` |
 | GitHub Copilot (VS Code) | `.vscode/mcp.json` | `servers` (with `type: "stdio"`) |
 
-> **Note:** VS Code uses `servers` with an explicit `type`, while other clients
-> use `mcpServers`. SpecDrive writes the correct shape per client.
+> **Note:** VS Code uses `servers` with an explicit `type`, while the others use
+> `mcpServers`. SpecDrive writes the correct shape per client.
 
 ---
 
@@ -122,74 +221,23 @@ no separate prompt. Each client uses its own config schema:
 
 ## Safety Rule
 
-SpecDrive never overwrites existing MCP entries.
+SpecDrive never overwrites an existing adapter file. If the file is already
+there, it is skipped and reported — edit it if you want it to differ.
 
-If SpecDrive is already in the config, it is skipped.
-
----
-
-## Add a New Tool
-
-1. Open `.sdrive/commands/tools.json`
-2. Add a new entry:
-
-```json
-{
-  "name": "new-tool",
-  "adapterPath": ".newtool/sdrive.md"
-}
-```
-
-3. Run `sdrive init` again
-
-Done. No core changes needed.
+The same applies to MCP configs: an existing `specdrive` entry is left alone.
 
 ---
 
-## Tool Registry
+## Upgrading
 
-File:
+`sdrive update` refreshes framework files and merges new tools into your
+existing `.sdrive/commands/tools.json`:
 
-```text
-.sdrive/commands/tools.json
-```
+- entries you added or edited are preserved
+- tools that shipped after your `init` are appended
+- a registry still in the old single-`adapterPath` shape is repaired in place,
+  which is how the Cursor / Gemini / Qwen / VS Code fixes reach an existing
+  project
 
-Example:
-
-```json
-{
-  "version": "1.0.0",
-  "tools": [
-    {
-      "name": "github-copilot",
-      "adapterPath": ".github/copilot-instructions.md"
-    },
-    {
-      "name": "cline",
-      "adapterPath": ".clinerules/sdrive.md"
-    },
-    {
-      "name": "claude-code",
-      "adapterPath": ".claude/commands/sdrive.md"
-    },
-    {
-      "name": "cursor",
-      "adapterPath": ".cursor/rules/sdrive.md"
-    },
-    {
-      "name": "vscode-native",
-      "adapterPath": ".vscode/sdrive-commands.json"
-    }
-  ]
-}
-```
-
----
-
-## Custom Adapter Content
-
-Adapter files are simple Markdown.
-
-They do not contain agent logic.
-
-They only point to the SpecDrive core.
+Stale adapter files from the old paths are not deleted, because SpecDrive cannot
+tell them apart from files you wrote yourself.

@@ -1,85 +1,97 @@
-const fs = require("fs");
+// Generates the per-tool adapter files described by `.sdrive/commands/tools.json`.
+//
+// The heavy lifting lives in `lib/tool-registry.js` so `sdrive init` and
+// `sdrive adapters:*` share exactly the same planning, dedupe, and content
+// generation rules. This file is only the command-line wrapper.
+
 const path = require("path");
 
+const { loadRegistry, writeAdapters } = require("./lib/tool-registry");
+
 const projectRoot = process.cwd();
+const sdriveRoot = path.join(projectRoot, ".sdrive");
 
 function loadTools() {
-  const toolsPath = path.join(projectRoot, ".sdrive", "commands", "tools.json");
-
-  if (!fs.existsSync(toolsPath)) {
-    console.error("❌ tools.json not found.");
+  try {
+    return loadRegistry(sdriveRoot).tools;
+  } catch (error) {
+    console.error(`❌ ${error.message}`);
+    console.error("   Run `sdrive init` first.");
     process.exit(1);
   }
-
-  return JSON.parse(fs.readFileSync(toolsPath, "utf8")).tools;
 }
 
-function adapterContent(toolName) {
-  return `# SpecDrive Commands
-
-This project uses SpecDrive for spec-driven development.
-
-## How to use
-
-When the user types a /sdrive:* command, follow these steps:
-
-1. Read .sdrive/commands/manifest.json
-2. Find the matching command
-3. Read the agent file listed in agentFile
-4. Follow that agent's instructions exactly
-5. Run validators after writing files
-6. Stop at human approval gates
-
-Always read the manifest first. Never hardcode the command list.
-`;
-}
-
-function generateForTools(tools) {
-  tools.forEach((tool) => {
-    const adapterFullPath = path.join(projectRoot, tool.adapterPath);
-    const adapterDir = path.dirname(adapterFullPath);
-
-    if (!fs.existsSync(adapterDir)) {
-      fs.mkdirSync(adapterDir, { recursive: true });
-    }
-
-    if (fs.existsSync(adapterFullPath)) {
-      console.log(`⚠️  Skipped existing: ${tool.adapterPath}`);
-      return;
-    }
-
-    fs.writeFileSync(adapterFullPath, adapterContent(tool.name));
-    console.log(`✅ Generated: ${tool.adapterPath}`);
+function generateForTools(tools, options = {}) {
+  const result = writeAdapters(tools, projectRoot, {
+    force: options.force === true,
+    log: (message) => console.log(message)
   });
+
+  return result;
 }
 
-function generateAll() {
+function generateAll(options = {}) {
   const tools = loadTools();
-  generateForTools(tools);
-  console.log("\n🎉 All adapters generated successfully.");
+  const result = generateForTools(tools, options);
+  console.log(
+    `\n🎉 Adapters generated: ${result.written.length} written, ${result.skipped.length} left untouched.`
+  );
+  return result;
 }
 
-function generateSelected(indexes) {
+function generateSelected(indexes, options = {}) {
   const tools = loadTools();
   const selectedTools = indexes
-    .map((i) => tools[i])
-    .filter((tool) => tool);
+    .map((index) => tools[index])
+    .filter((tool) => Boolean(tool));
 
   if (selectedTools.length === 0) {
     console.error("❌ No valid tools selected.");
     process.exit(1);
   }
 
-  generateForTools(selectedTools);
-  console.log("\n🎉 Selected adapters generated successfully.");
+  const result = generateForTools(selectedTools, options);
+  console.log(
+    `\n🎉 Selected adapters generated: ${result.written.length} written, ${result.skipped.length} left untouched.`
+  );
+  return result;
+}
+
+function generateNamed(names, options = {}) {
+  const tools = loadTools();
+  const wanted = names.map((name) => name.trim().toLowerCase()).filter(Boolean);
+  const selectedTools = tools.filter((tool) => wanted.includes(tool.name.toLowerCase()));
+  const unknown = wanted.filter((name) => !selectedTools.some((tool) => tool.name.toLowerCase() === name));
+
+  if (unknown.length > 0) {
+    console.error(`❌ Unknown tool(s): ${unknown.join(", ")}`);
+    console.error(`   Available: ${tools.map((tool) => tool.name).join(", ")}`);
+    process.exit(1);
+  }
+
+  const result = generateForTools(selectedTools, options);
+  console.log(`\n🎉 Adapters generated: ${result.written.length} written, ${result.skipped.length} left untouched.`);
+  return result;
 }
 
 module.exports = {
   generateAll,
+  generateNamed,
   generateSelected,
   loadTools
 };
 
 if (require.main === module) {
-  generateAll();
+  const args = process.argv.slice(2);
+  const force = args.includes("--force");
+  const toolsFlag = args.find((arg) => arg.startsWith("--tools"));
+
+  if (toolsFlag) {
+    const inline = toolsFlag.includes("=") ? toolsFlag.split("=").slice(1).join("=") : "";
+    const idx = args.indexOf(toolsFlag);
+    const names = (inline || args[idx + 1] || "").split(",");
+    generateNamed(names, { force });
+  } else {
+    generateAll({ force });
+  }
 }

@@ -26,6 +26,9 @@ SpecDrive has two types of commands:
 | `sdrive team:sync` | Sync team members from GitHub collaborators |
 | `sdrive template:list` | List available templates |
 | `sdrive template:set <name>` | Set default template |
+| `sdrive adapters:list` | List every AI tool and the exact files each one reads |
+| `sdrive adapters:verify` | Check the tool registry for paths a tool would never read |
+| `sdrive adapters:add <name> --path <file>` | Support a tool SpecDrive does not ship |
 | `sdrive hooks:install` | Install pre-commit validation hook |
 | `sdrive diff <old> <new>` | Show differences between two spec files |
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
@@ -258,6 +261,63 @@ Changes the default template.
 ```bash
 sdrive template:set nextjs
 ```
+
+---
+
+### `sdrive adapters:list`
+
+Lists every AI tool SpecDrive can configure, the exact files each one reads, the
+format, and whether the path is verified against vendor documentation.
+
+```bash
+sdrive adapters:list
+sdrive adapters:list --json
+```
+
+---
+
+### `sdrive adapters:verify`
+
+Checks the tool registry for entries a tool would never read: an extension that
+disagrees with its format, `.mdc` without frontmatter, `.toml` outside a command
+file, two tools disagreeing about one path, or a path escaping the project.
+
+```bash
+sdrive adapters:verify
+sdrive adapters:verify --strict   # unverified paths fail
+```
+
+Exit code is `1` when anything is wrong, so it can gate CI.
+
+---
+
+### `sdrive adapters:add <name>`
+
+Registers a tool SpecDrive does not ship, and generates its adapter. This is how
+"any tool" is supported without waiting for a release.
+
+```bash
+sdrive adapters:add my-tool \
+  --path .mytool/rules/sdrive.md \
+  --format md \
+  --label "My Tool" \
+  --docs "https://example.com/docs"
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--path <path>` | Required. File the tool reads |
+| `--format <format>` | `md` (default), `mdc`, `toml` |
+| `--extension <ext>` | When the extension differs from the format |
+| `--kind <kind>` | `rules` (default) or `command` |
+| `--frontmatter <json>` | YAML frontmatter, e.g. `'{"alwaysApply":true}'` |
+| `--docs <url>` | Vendor page documenting the path |
+| `--mcp-client <id>` | Also wire MCP: `claude-desktop`, `cursor`, `cline`, `roo`, `gemini-cli`, `vscode` |
+| `--unverified` | Record that the path is a best guess |
+| `--no-generate` | Register only |
+
+The entry is validated before it is saved, so a path your tool ignores is
+rejected rather than silently doing nothing.
 
 ---
 

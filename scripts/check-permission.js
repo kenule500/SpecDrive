@@ -44,10 +44,13 @@ function getUserRole(username) {
 
 // Bootstrap escape hatch: a freshly initialized project has an empty roster, so
 // nobody can hold the `admin` role required by `team:add`. Without this, the
-// first member could never be added. Only `team:add` is exempt, and only while
-// the roster is empty.
+// first member could never be added. `adapters:add` is exempted for the same
+// reason - registering your tool is setup, not governed work, and an empty
+// roster means there is no governance to protect yet. Both are only exempt
+// while the roster is empty.
 function isBootstrapAllowed(commandType, commandName) {
-  if (commandType !== "cli" || commandName !== "team:add") return false;
+  if (commandType !== "cli") return false;
+  if (commandName !== "team:add" && commandName !== "adapters:add") return false;
 
   const team = loadTeam();
   return !team.members || team.members.length === 0;

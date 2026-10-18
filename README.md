@@ -992,6 +992,9 @@ Audits and manages AI skills.
 | `sdrive team:sync` | Sync team members from GitHub collaborators |
 | `sdrive template:list` | List available templates |
 | `sdrive template:set <name>` | Set default template |
+| `sdrive adapters:list` | List every AI tool and the exact files each one reads |
+| `sdrive adapters:verify` | Check the tool registry for paths a tool would never read |
+| `sdrive adapters:add <name> --path <file>` | Support a tool SpecDrive does not ship (any tool, no release needed) |
 | `sdrive hooks:install` | Install pre-commit validation hook |
 | `sdrive diff <old> <new>` | Show differences between two spec files |
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
@@ -1373,29 +1376,56 @@ SpecDrive never overwrites existing MCP entries. It merges safely.
 
 ## Tool Support
 
-SpecDrive supports 15 AI tools.
+SpecDrive ships 30 tool definitions. Each one names the file(s) that tool actually
+reads, in that tool's own format.
 
 | Tool | Adapter |
 |------|---------|
+| Any `AGENTS.md` tool | `AGENTS.md` |
 | GitHub Copilot | `.github/copilot-instructions.md` |
+| VS Code / Copilot | `.github/instructions/sdrive.instructions.md` |
 | Cline | `.clinerules/sdrive.md` |
 | Claude Code | `.claude/commands/sdrive.md` |
-| Cursor | `.cursor/rules/sdrive.md` |
-| VS Code | `.vscode/sdrive-commands.json` |
+| Cursor | `.cursor/rules/sdrive.mdc` |
 | Amazon Q Developer | `.amazonq/rules/sdrive.md` |
-| Gemini CLI | `.gemini/commands/sdrive.md` |
+| Gemini CLI | `GEMINI.md` + `.gemini/commands/sdrive.toml` |
 | Continue | `.continue/rules/sdrive.md` |
-| Codex | `.codex/rules/sdrive.md` |
+| Codex | `AGENTS.md` |
 | Windsurf | `.windsurf/rules/sdrive.md` |
 | Kilo Code | `.kilocode/rules/sdrive.md` |
-| OpenCode | `.opencode/rules/sdrive.md` |
+| OpenCode | `AGENTS.md` |
 | Qoder | `.qoder/rules/sdrive.md` |
-| Qwen Code | `.qwen/rules/sdrive.md` |
-| Rovo Dev CLI | `.rovo/rules/sdrive.md` |
+| Qwen Code | `QWEN.md` |
+| Atlassian Rovo Dev | `AGENTS.md` |
+| Roo Code | `.roo/rules/sdrive.md` |
+| Amp | `AGENTS.md` |
+| Warp | `WARP.md` |
+| Zed | `.rules` |
+| Aider | `CONVENTIONS.md` |
+| Kiro (AWS) | `.kiro/steering/sdrive.md` |
+| JetBrains Junie | `.junie/guidelines.md` |
+| Factory Droid | `AGENTS.md` |
+| Trae | `.trae/rules/project_rules.md` |
+| OpenHands | `.openhands/microagents/sdrive.md` |
+| Google Antigravity | `AGENTS.md` |
+| Augment Code | `.augment/rules/sdrive.md` |
+| goose | `.goosehints` |
+| Crush | `CRUSH.md` |
 
 Adapters are generated automatically when you run `sdrive init`.
 
 During initialization, you select which tools you use. Only selected tools get adapters.
+
+`AGENTS.md` is the cross-tool standard, so a tool that adopts it works without a
+SpecDrive release. For anything not in the list above, register it yourself:
+
+```bash
+sdrive adapters:add <name> --path <file> --format md
+sdrive adapters:list
+sdrive adapters:verify
+```
+
+See [docs/tool-adapters.md](docs/tool-adapters.md) for the registry format.
 
 ---
 

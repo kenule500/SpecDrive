@@ -41,6 +41,9 @@
     "openapi:generate": ["admin", "reviewer", "developer"],
     "version:new": ["admin", "reviewer"],
     "diff:version": ["admin", "reviewer", "developer"],
-    "onboard": ["admin"]
+    "onboard": ["admin"],
+    "adapters:list": ["admin", "reviewer", "developer"],
+    "adapters:verify": ["admin", "reviewer", "developer"],
+    "adapters:add": ["admin"]
   }
 }
