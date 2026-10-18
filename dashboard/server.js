@@ -15,7 +15,10 @@ const sdriveRoot = path.join(projectRoot, ".sdrive");
 // The memo keeps a single page load from paying for the same answer repeatedly (the
 // branch is asked for three times, origin/HEAD twice) and shares one in-flight spawn
 // between callers instead of racing duplicates.
-const GIT_TIMEOUT_MS = 5000;
+// A single git spawn can cost several seconds on a machine with an aggressive virus
+// scanner, so the ceiling is set well above that. Too tight a limit does not make the
+// dashboard faster - it makes it discard real answers and show less.
+const GIT_TIMEOUT_MS = 20000;
 const GIT_CACHE_TTL_MS = 10000;
 const gitCache = new Map();
 
@@ -62,24 +65,21 @@ async function git(args) {
 }
 
 async function apiGitInfo() {
-  const branch = await git(["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (!branch) {
-    return { available: false, branching: await apiBranching() };
-  }
-
-  // One spawn for the four commit facts. They always describe the same commit, so
-  // asking separately was four process launches with no extra information.
-  //
-  // These four questions are also independent of one another, so they run at the same
-  // time. Sequentially they cost the sum of four git launches; concurrently they cost
-  // the slowest one. That matters because spawning git can take seconds on Windows.
-  // `rev-list` returns "" when there is no upstream, which is handled below.
-  const [logLine, statusProbe, upstream, counts] = await Promise.all([
+  // Everything here except the branching read-out is independent of the branch name,
+  // so all five probes go out together. Asking for the branch first and the rest
+  // afterwards cost a whole extra round of slow spawns for no extra information.
+  const [branchProbe, logLine, statusProbe, upstream, counts] = await Promise.all([
+    gitProbe(["rev-parse", "--abbrev-ref", "HEAD"]),
     git(["log", "-1", "--pretty=%h%x1f%s%x1f%an%x1f%cI"]),
     gitProbe(["status", "--porcelain"]),
     git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]),
     git(["rev-list", "--left-right", "--count", "@{upstream}...HEAD"])
   ]);
+
+  const branch = branchProbe.out;
+  if (!branch) {
+    return { available: false, branching: await apiBranching() };
+  }
 
   const [commit = "", subject = "", author = "", committedAt = ""] = logLine.split("\u001f");
 
@@ -1060,9 +1060,12 @@ function serveStatic(res, filePath, contentType) {
 // - a few hundred bytes - and re-fetches the real data only when it changes, so a
 // poll that finds nothing new cannot disturb the page someone is reading. Polling
 // the full APIs on a timer would be wasteful and would repaint regardless.
-function fileStamp(filePath) {
+// Stamps are read asynchronously. The walk below touches every file under six trees,
+// and on a cold filesystem that first pass costs over a second - more than long enough
+// to freeze every other request if it ran on the event loop.
+async function fileStamp(filePath) {
   try {
-    const stat = fs.statSync(filePath);
+    const stat = await fs.promises.stat(filePath);
     return `${stat.size}:${Math.round(stat.mtimeMs)}`;
   } catch (error) {
     return "0";
@@ -1071,35 +1074,38 @@ function fileStamp(filePath) {
 
 // Newest mtime plus a file count for a tree. The count matters as much as the
 // time: deleting a file can leave the newest mtime untouched.
-function treeStamp(dir) {
+async function treeStamp(dir) {
   let newest = 0;
   let count = 0;
 
-  const walk = (current) => {
+  const walk = async (current) => {
     let entries;
     try {
-      entries = fs.readdirSync(current, { withFileTypes: true });
+      entries = await fs.promises.readdir(current, { withFileTypes: true });
     } catch (error) {
       return;
     }
 
-    for (const entry of entries) {
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        walk(full);
-        continue;
-      }
-      count += 1;
-      try {
-        const mtime = fs.statSync(full).mtimeMs;
-        if (mtime > newest) newest = mtime;
-      } catch (error) {
-        // A file that vanished mid-walk is not a reason to fail the whole stamp.
-      }
-    }
+    // Siblings are independent, so they are read together rather than one at a time.
+    await Promise.all(
+      entries.map(async (entry) => {
+        const full = path.join(current, entry.name);
+        if (entry.isDirectory()) {
+          return walk(full);
+        }
+
+        count += 1;
+        try {
+          const stat = await fs.promises.stat(full);
+          if (stat.mtimeMs > newest) newest = stat.mtimeMs;
+        } catch (error) {
+          // A file that vanished mid-walk is not a reason to fail the whole stamp.
+        }
+      })
+    );
   };
 
-  walk(dir);
+  await walk(dir);
   return `${count}:${Math.round(newest)}`;
 }
 
@@ -1114,6 +1120,8 @@ function treeStamp(dir) {
 const HEALTH_GATES = ["specification", "planning", "implementation", "review"];
 const HEALTH_STALE_DAYS = 14;
 const HEALTH_MOMENTUM_DAYS = 7;
+const HEALTH_MEMO_MS = 3000;
+let healthMemo = { at: 0, value: null };
 
 // Live = a version that has not been archived. Finished work is not a health
 // problem; scoring it would punish a project for having shipped.
@@ -1191,6 +1199,19 @@ function gateAccessors() {
 }
 
 function apiHealth() {
+  // Every open tab polls on a timer, so several requests can land within a second of
+  // each other and each one would rebuild the whole breakdown from disk. A short memo
+  // collapses those into one read without making the panel feel stale.
+  if (healthMemo.value && Date.now() - healthMemo.at < HEALTH_MEMO_MS) {
+    return healthMemo.value;
+  }
+
+  const value = computeHealth();
+  healthMemo = { at: Date.now(), value };
+  return value;
+}
+
+function computeHealth() {
   const state = loadJson(path.join(sdriveRoot, "workflow-state.json"), { features: [] });
   const live = liveVersions(state);
   const events = loadJson(path.join(sdriveRoot, "audit-log.json"), { events: [] }).events || [];
@@ -1480,14 +1501,24 @@ function apiHealth() {
   };
 }
 
-function apiStamp() {
+const STAMP_MEMO_MS = 2000;
+let stampMemo = { at: 0, value: null };
+
+async function apiStamp() {
+  if (stampMemo.value && Date.now() - stampMemo.at < STAMP_MEMO_MS) {
+    return stampMemo.value;
+  }
+
   const files = ["workflow-state.json", "audit-log.json", "team.json", "config.json"];
   const dirs = ["specs", "governance", "product", "onboarding", "reports", "context"];
 
-  const parts = files.map((name) => fileStamp(path.join(sdriveRoot, name)));
-  for (const dir of dirs) parts.push(treeStamp(path.join(sdriveRoot, dir)));
+  const parts = await Promise.all([
+    ...files.map((name) => fileStamp(path.join(sdriveRoot, name))),
+    ...dirs.map((dir) => treeStamp(path.join(sdriveRoot, dir)))
+  ]);
 
-  return { stamp: parts.join("|") };
+  stampMemo = { at: Date.now(), value: { stamp: parts.join("|") } };
+  return stampMemo.value;
 }
 
 function apiOnboarding() {
@@ -2261,7 +2292,7 @@ async function routeRequest(req, res) {
     }
 
     if (url === "/api/stamp") {
-      return res.end(JSON.stringify(apiStamp()));
+      return res.end(JSON.stringify(await apiStamp()));
     }
 
     if (url === "/api/health") {
