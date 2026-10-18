@@ -7,6 +7,25 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
 
 ---
 
+## 0.1.40 — 2026-10-18
+
+**Documentation release. No code changes.**
+
+0.1.39 shipped the whole feature set, but its tarball was built before this
+changelog and the README's tool section were written, so the package page did not
+mention any of it. `0.1.40` is byte-identical in behaviour and carries:
+
+- `CHANGELOG.md` in the published package
+- a README front page that names the 30 adapters, native slash commands, and
+  `sdrive adapters:add`
+- an `sdrive adapters:verify` step in the upgrading instructions
+- a "historical snapshot" note on `SpecDrive-Complete-System-Reference.md`, which
+  still describes 13 agents and 15 tools
+
+Nothing to do beyond installing 0.1.40 if you want the documentation.
+
+---
+
 ## 0.1.39 — 2026-10-18
 
 ### Tool support: 15 → 30
