@@ -7,11 +7,9 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
 
 ---
 
-## 0.1.40 — 2026-10-18
+## 0.1.41 — 2026-10-18
 
-**Documentation and workflow release. No CLI code changes.**
-
-### Branch creation moved to `/sdrive:propose`
+**Branch creation moved to `/sdrive:propose`.**
 
 `/sdrive:apply` used to ask which base branch to use and create `feature/<feature>`
 itself — after the spec already existed. That meant choosing a base **blind**: if
@@ -36,10 +34,20 @@ Guards, unchanged in spirit but now enforced at proposal time: a clean working
 tree, never the default branch, never another feature's branch, and a base that
 carries another feature's commits requires explicit confirmation.
 
-### Documentation
+Only the agent instructions and the command manifest changed; the CLI is
+unchanged. Re-run `sdrive update` (or re-install) to pick up the new agents.
+
+> **Correction to 0.1.40:** that entry described this change a release early. The
+> 0.1.40 package still has `/sdrive:apply` creating the branch. Use 0.1.41.
+
+---
+
+## 0.1.40 — 2026-10-18
+
+**Documentation release. No CLI or agent changes.**
 
 0.1.39's tarball was built before this changelog and the README's tool section
-existed, so the package page did not mention any of it. 0.1.40 carries:
+existed, so the package page did not mention any of it. 0.1.40 carried:
 
 - `CHANGELOG.md` in the published package
 - a README front page that names the 30 adapters, native slash commands, and
@@ -47,9 +55,6 @@ existed, so the package page did not mention any of it. 0.1.40 carries:
 - an `sdrive adapters:verify` step in the upgrading instructions
 - a "historical snapshot" note on `SpecDrive-Complete-System-Reference.md`, which
   still described 13 agents and 15 tools
-
-If you only want the tool-support features, 0.1.39 already has them. 0.1.40 adds
-the branch-workflow change and the documentation.
 
 ---
 
