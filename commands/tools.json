@@ -25,8 +25,10 @@
       "name": "claude-code",
       "label": "Claude Code",
       "mcpClient": "claude-desktop",
-      "docs": "https://docs.anthropic.com/en/docs/claude-code/slash-commands",
-      "adapterPaths": [{ "path": ".claude/commands/sdrive.md", "format": "md", "kind": "command" }]
+      "docs": "https://code.claude.com/docs/en/slash-commands",
+      "adapterPaths": [
+        { "path": ".claude/commands/sdrive", "format": "md", "kind": "command-set", "naming": "nested" }
+      ]
     },
     {
       "name": "cursor",
@@ -72,7 +74,7 @@
       "docs": "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/custom-commands.md",
       "adapterPaths": [
         { "path": "GEMINI.md", "format": "md", "kind": "rules" },
-        { "path": ".gemini/commands/sdrive.toml", "format": "toml", "kind": "command" }
+        { "path": ".gemini/commands/sdrive", "format": "toml", "kind": "command-set", "naming": "nested" }
       ]
     },
     {
@@ -110,8 +112,11 @@
     {
       "name": "opencode",
       "label": "OpenCode",
-      "docs": "https://opencode.ai/docs/rules/",
-      "adapterPaths": [{ "path": "AGENTS.md", "format": "md", "kind": "rules" }]
+      "docs": "https://opencode.ai/docs/commands/",
+      "adapterPaths": [
+        { "path": "AGENTS.md", "format": "md", "kind": "rules" },
+        { "path": ".opencode/commands", "format": "md", "kind": "command-set", "naming": "prefixed" }
+      ]
     },
     {
       "name": "qoder",
@@ -138,7 +143,10 @@
       "label": "Roo Code",
       "mcpClient": "roo",
       "docs": "https://docs.roocode.com/features/custom-instructions",
-      "adapterPaths": [{ "path": ".roo/rules/sdrive.md", "format": "md", "kind": "rules" }]
+      "adapterPaths": [
+        { "path": ".roo/rules/sdrive.md", "format": "md", "kind": "rules" },
+        { "path": ".roo/commands", "format": "md", "kind": "command-set", "naming": "prefixed" }
+      ]
     },
     {
       "name": "amp",

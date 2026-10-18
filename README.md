@@ -1385,19 +1385,19 @@ reads, in that tool's own format.
 | GitHub Copilot | `.github/copilot-instructions.md` |
 | VS Code / Copilot | `.github/instructions/sdrive.instructions.md` |
 | Cline | `.clinerules/sdrive.md` |
-| Claude Code | `.claude/commands/sdrive.md` |
+| Claude Code | `.claude/commands/sdrive/*.md` (16 native commands) |
 | Cursor | `.cursor/rules/sdrive.mdc` |
 | Amazon Q Developer | `.amazonq/rules/sdrive.md` |
-| Gemini CLI | `GEMINI.md` + `.gemini/commands/sdrive.toml` |
+| Gemini CLI | `GEMINI.md` + `.gemini/commands/sdrive/*.toml` (16 native commands) |
 | Continue | `.continue/rules/sdrive.md` |
 | Codex | `AGENTS.md` |
 | Windsurf | `.windsurf/rules/sdrive.md` |
 | Kilo Code | `.kilocode/rules/sdrive.md` |
-| OpenCode | `AGENTS.md` |
+| OpenCode | `AGENTS.md` + `.opencode/commands/sdrive-*.md` (16 native commands) |
 | Qoder | `.qoder/rules/sdrive.md` |
 | Qwen Code | `QWEN.md` |
 | Atlassian Rovo Dev | `AGENTS.md` |
-| Roo Code | `.roo/rules/sdrive.md` |
+| Roo Code | `.roo/rules/sdrive.md` + `.roo/commands/sdrive-*.md` (16 native commands) |
 | Amp | `AGENTS.md` |
 | Warp | `WARP.md` |
 | Zed | `.rules` |

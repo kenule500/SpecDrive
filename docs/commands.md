@@ -309,7 +309,8 @@ sdrive adapters:add my-tool \
 | `--path <path>` | Required. File the tool reads |
 | `--format <format>` | `md` (default), `mdc`, `toml` |
 | `--extension <ext>` | When the extension differs from the format |
-| `--kind <kind>` | `rules` (default) or `command` |
+| `--kind <kind>` | `rules` (default), `command`, or `command-set` |
+| `--naming <naming>` | For `command-set`: `nested` or `prefixed` |
 | `--frontmatter <json>` | YAML frontmatter, e.g. `'{"alwaysApply":true}'` |
 | `--docs <url>` | Vendor page documenting the path |
 | `--mcp-client <id>` | Also wire MCP: `claude-desktop`, `cursor`, `cline`, `roo`, `gemini-cli`, `vscode` |

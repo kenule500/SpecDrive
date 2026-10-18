@@ -24,7 +24,17 @@ const FORMAT_EXTENSION = {
 };
 
 const FORMATS = Object.keys(FORMAT_EXTENSION);
-const KINDS = ["rules", "command"];
+const KINDS = ["rules", "command", "command-set"];
+
+// How a command-set turns one manifest entry into a file name.
+//
+//   nested   `.claude/commands/sdrive/propose.md`  ->  /sdrive:propose
+//   prefixed `.roo/commands/sdrive-propose.md`     ->  /sdrive-propose
+//
+// The difference is the tool's own namespacing rule, not a preference: Claude
+// Code and Gemini CLI turn a subdirectory into a namespace, Roo Code and
+// OpenCode use the file name as the whole command name.
+const COMMAND_NAMINGS = ["nested", "prefixed"];
 
 // The body every adapter carries. Tools differ in where they read instructions
 // from; none of them differ in what SpecDrive tells them to do, so the body is
@@ -64,6 +74,7 @@ function normalizePath(entry) {
     format,
     extension,
     kind: entry.kind || "rules",
+    naming: entry.naming || null,
     frontmatter: entry.frontmatter || null
   };
 }
@@ -108,6 +119,21 @@ function loadRegistry(sdriveRoot) {
   };
 }
 
+// The command list a command-set expands into. Read from the installed manifest
+// so the generated commands always match what the project actually supports.
+function loadCommands(sdriveRoot) {
+  const manifestPath = path.join(sdriveRoot, "commands", "manifest.json");
+
+  if (!fs.existsSync(manifestPath)) return [];
+
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    return (manifest.commands || []).filter((command) => command && command.command);
+  } catch (error) {
+    return [];
+  }
+}
+
 // ---------- content ----------
 
 function renderFrontmatter(frontmatter) {
@@ -127,19 +153,75 @@ function renderFrontmatter(frontmatter) {
 
 // Gemini CLI custom commands are TOML with a required `prompt` field. A `.md`
 // file in `.gemini/commands/` is ignored no matter what it contains.
-function renderToml() {
+function renderToml(body) {
   return [
     'description = "SpecDrive command router"',
     'prompt = """',
-    STUB_BODY.trimEnd(),
+    body.trimEnd(),
     '"""',
     ""
   ].join("\n");
 }
 
 function renderContent(entry) {
-  if (entry.format === "toml") return renderToml(entry);
+  if (entry.format === "toml") return renderToml(STUB_BODY);
   return `${renderFrontmatter(entry.frontmatter)}${STUB_BODY}`;
+}
+
+// ---------- per-command files ----------
+
+function commandSlug(command) {
+  const raw = String(command.command || "");
+  const name = raw.includes(":") ? raw.split(":").pop() : raw.replace(/^\//, "");
+  return name.replace(/[^a-z0-9-]/gi, "-").toLowerCase();
+}
+
+function argumentHint(command) {
+  if (command.acceptsAll) return "<feature> | --all";
+  if (command.acceptsFeature) return "<feature>";
+  return null;
+}
+
+// One file per slash command. The agent file is named explicitly rather than
+// only through the manifest, so the generated command still explains itself if
+// someone reads it in isolation.
+function commandBody(command, placeholder) {
+  return [
+    `# ${command.command}`,
+    "",
+    command.description || "",
+    "",
+    `Run the SpecDrive command \`${command.command}\`.`,
+    "",
+    "1. Read `.sdrive/commands/manifest.json` and find the entry for this command.",
+    `2. Read the agent file it names in \`agentFile\` (\`${command.agentFile}\`).`,
+    "3. Follow that agent's instructions exactly.",
+    "4. Run the validators the manifest lists for this command.",
+    "5. Stop at every human approval gate the agent defines.",
+    "",
+    `Arguments: ${placeholder}`,
+    ""
+  ].join("\n");
+}
+
+function renderCommandFile(entry, command) {
+  if (entry.format === "toml") {
+    const body = commandBody(command, "{{args}}");
+    return [`description = ${JSON.stringify(command.description || command.command)}`, 'prompt = """', body.trimEnd(), '"""', ""].join("\n");
+  }
+
+  const frontmatter = { description: command.description || command.command };
+  const hint = argumentHint(command);
+  if (hint) frontmatter["argument-hint"] = hint;
+  Object.assign(frontmatter, entry.frontmatter || {});
+
+  return `${renderFrontmatter(frontmatter)}${commandBody(command, "$ARGUMENTS")}`;
+}
+
+function commandFilePath(entry, command) {
+  const slug = commandSlug(command);
+  const fileName = entry.naming === "nested" ? `${slug}${entry.extension}` : `sdrive-${slug}${entry.extension}`;
+  return toPosix(path.posix.join(entry.path, fileName));
 }
 
 // ---------- validation ----------
@@ -191,8 +273,26 @@ function validateRegistry(tools) {
       }
 
       const requiredExtension = entry.extension;
-      if (!entry.path.toLowerCase().endsWith(requiredExtension)) {
-        errors.push(`${label}: format "${entry.format}" requires a "${requiredExtension}" file.`);
+
+      // A command-set describes a directory that will hold one file per slash
+      // command, so its path must be the directory, not a file name.
+      if (entry.kind === "command-set") {
+        if (entry.path.toLowerCase().endsWith(requiredExtension)) {
+          errors.push(`${label}: a command-set path is a directory, not a file.`);
+        }
+        if (!COMMAND_NAMINGS.includes(entry.naming)) {
+          errors.push(`${label}: command-set needs "naming": "nested" or "prefixed".`);
+        }
+        if (entry.format === "mdc") {
+          errors.push(`${label}: command-set cannot use .mdc (no per-command frontmatter contract).`);
+        }
+      } else {
+        if (!entry.path.toLowerCase().endsWith(requiredExtension)) {
+          errors.push(`${label}: format "${entry.format}" requires a "${requiredExtension}" file.`);
+        }
+        if (entry.naming) {
+          errors.push(`${label}: "naming" only applies to command-set entries.`);
+        }
       }
 
       if (!KINDS.includes(entry.kind)) {
@@ -203,7 +303,7 @@ function validateRegistry(tools) {
         errors.push(`${label}: .mdc rules require frontmatter (Cursor ignores them otherwise).`);
       }
 
-      if (entry.format === "toml" && entry.kind !== "command") {
+      if (entry.format === "toml" && entry.kind === "rules") {
         errors.push(`${label}: .toml adapters are command files; set "kind": "command".`);
       }
 
@@ -235,26 +335,40 @@ function validateRegistry(tools) {
 // ---------- planning + writing ----------
 
 // Deduplicates by path so selecting ten AGENTS.md-based tools writes one file.
-function planWrites(tools, projectRoot) {
+// A `command-set` expands into one file per manifest entry, which is what turns
+// SpecDrive's 16 slash commands into 16 native commands in tools that support
+// them instead of one prompt that has to route itself.
+function planWrites(tools, projectRoot, commands = []) {
   const byPath = new Map();
+
+  const add = (tool, entry, relativePath, content) => {
+    if (byPath.has(relativePath)) {
+      byPath.get(relativePath).tools.push(tool.name);
+      return;
+    }
+
+    byPath.set(relativePath, {
+      relativePath,
+      absolutePath: path.join(projectRoot, ...relativePath.split("/")),
+      content,
+      format: entry.format,
+      kind: entry.kind,
+      entryPath: toPosix(entry.path),
+      tools: [tool.name]
+    });
+  };
 
   tools.forEach((tool) => {
     tool.paths.forEach((entry) => {
-      const relativePath = toPosix(entry.path);
-
-      if (byPath.has(relativePath)) {
-        byPath.get(relativePath).tools.push(tool.name);
+      if (entry.kind === "command-set") {
+        commands.forEach((command) => {
+          if (!command.agentFile) return;
+          add(tool, entry, commandFilePath(entry, command), renderCommandFile(entry, command));
+        });
         return;
       }
 
-      byPath.set(relativePath, {
-        relativePath,
-        absolutePath: path.join(projectRoot, entry.path),
-        content: renderContent(entry),
-        format: entry.format,
-        kind: entry.kind,
-        tools: [tool.name]
-      });
+      add(tool, entry, toPosix(entry.path), renderContent(entry));
     });
   });
 
@@ -267,11 +381,33 @@ function planWrites(tools, projectRoot) {
  * @returns {{written: string[], skipped: string[]}}
  */
 function writeAdapters(tools, projectRoot, options = {}) {
-  const { force = false, log = () => {} } = options;
+  const { force = false, log = () => {}, commands = [] } = options;
   const written = [];
   const skipped = [];
+  let group = null;
 
-  planWrites(tools, projectRoot).forEach((write) => {
+  // A command-set is 16 files. Logging 16 lines per tool buries the rest of the
+  // output, so each set is summarised as one line.
+  const flush = () => {
+    if (!group) return;
+
+    if (group.wrote === 0) {
+      log(`⚠️  Skipped existing: ${group.path}/ (${group.count} command(s))`);
+    } else {
+      const note = group.kept > 0 ? `, ${group.kept} kept` : "";
+      log(`✅ Generated: ${group.path}/ (${group.count} command(s)${note})`);
+    }
+
+    group = null;
+  };
+
+  const openGroup = (write) => {
+    if (group && group.path === write.entryPath) return;
+    flush();
+    group = { path: write.entryPath, count: 0, wrote: 0, kept: 0 };
+  };
+
+  planWrites(tools, projectRoot, commands).forEach((write) => {
     const dir = path.dirname(write.absolutePath);
 
     if (!fs.existsSync(dir)) {
@@ -280,14 +416,33 @@ function writeAdapters(tools, projectRoot, options = {}) {
 
     if (fs.existsSync(write.absolutePath) && !force) {
       skipped.push(write.relativePath);
+
+      if (write.kind === "command-set") {
+        openGroup(write);
+        group.count += 1;
+        group.kept += 1;
+        return;
+      }
+
       log(`⚠️  Skipped existing: ${write.relativePath}`);
       return;
     }
 
     fs.writeFileSync(write.absolutePath, write.content);
     written.push(write.relativePath);
+
+    if (write.kind === "command-set") {
+      openGroup(write);
+      group.count += 1;
+      group.wrote += 1;
+      return;
+    }
+
+    flush();
     log(`✅ Generated: ${write.relativePath}`);
   });
+
+  flush();
 
   return { written, skipped };
 }
@@ -320,6 +475,7 @@ function addTool(sdriveRoot, spec) {
 
   if (spec.frontmatter) entry.frontmatter = spec.frontmatter;
   if (spec.extension) entry.extension = String(spec.extension).toLowerCase();
+  if (spec.naming) entry.naming = spec.naming;
 
   const candidate = normalizeTool({
     name: spec.name,
@@ -348,6 +504,7 @@ function addTool(sdriveRoot, spec) {
         format: entry.format,
         kind: entry.kind,
         ...(entry.extension ? { extension: entry.extension } : {}),
+        ...(entry.naming ? { naming: entry.naming } : {}),
         ...(entry.frontmatter ? { frontmatter: entry.frontmatter } : {})
       }
     ]
@@ -359,15 +516,20 @@ function addTool(sdriveRoot, spec) {
 }
 
 module.exports = {
+  COMMAND_NAMINGS,
   FORMAT_EXTENSION,
   FORMATS,
   KINDS,
   STUB_BODY,
   addTool,
+  commandFilePath,
+  commandSlug,
+  loadCommands,
   loadRegistry,
   normalizeRegistry,
   normalizeTool,
   planWrites,
+  renderCommandFile,
   renderContent,
   toPosix,
   validateRegistry,

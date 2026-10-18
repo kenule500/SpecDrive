@@ -36,7 +36,8 @@ single string:
 | `path` | File the tool reads, relative to the project root |
 | `format` | Content syntax: `md`, `mdc`, or `toml` |
 | `extension` | Optional, when the extension differs from the format (`.rules`, `.goosehints`) |
-| `kind` | `rules` (always-on instructions) or `command` (an invocable slash command) |
+| `kind` | `rules` (always-on instructions), `command` (one invocable command), or `command-set` (one file per manifest command) |
+| `naming` | For `command-set`: `nested` (`sdrive/propose.md` → `/sdrive:propose`) or `prefixed` (`sdrive-propose.md` → `/sdrive-propose`) |
 | `frontmatter` | Optional YAML frontmatter, required by some tools |
 | `mcpClient` | Optional. Wires that client's MCP config. Omit when the tool has none |
 | `docs` | Vendor page that documents this path |
@@ -45,6 +46,53 @@ single string:
 `format` describes the **content**, `extension` describes the **file name**. They
 usually agree, but Zed reads Markdown from `.rules` and goose reads Markdown from
 `.goosehints`, so they are modelled separately rather than forcing a fake format.
+
+---
+
+## Native Slash Commands
+
+A `rules` adapter makes the tool *aware* of `/sdrive:*`, but the model still has
+to route the command itself. Tools with a native command system get better than
+that: `kind: "command-set"` expands `.sdrive/commands/manifest.json` into **one
+file per command**, so `/sdrive:propose` is a real, autocompleted command.
+
+| Tool | Path | Naming | You get |
+|------|------|--------|---------|
+| Claude Code | `.claude/commands/sdrive/` | `nested` | `/sdrive:propose` … 16 commands |
+| Gemini CLI | `.gemini/commands/sdrive/` | `nested` | `/sdrive:propose` … 16 commands (TOML) |
+| Roo Code | `.roo/commands/` | `prefixed` | `/sdrive-propose` … 16 commands |
+| OpenCode | `.opencode/commands/` | `prefixed` | `/sdrive-propose` … 16 commands |
+
+The naming difference is the tool's contract, not a preference: Claude Code and
+Gemini CLI turn a subdirectory into a namespace, while Roo Code and OpenCode use
+the file name as the whole command name.
+
+Each generated command names its agent file explicitly, carries the manifest
+description as `description`, and advertises `argument-hint` when the command
+takes one:
+
+```markdown
+---
+description: "Create feature specification, traceability, technical plan, and tasks"
+argument-hint: "<feature>"
+---
+
+# /sdrive:propose
+
+1. Read `.sdrive/commands/manifest.json` and find the entry for this command.
+2. Read the agent file it names in `agentFile` (`.sdrive/agents/02-specification.md`).
+...
+Arguments: $ARGUMENTS
+```
+
+Gemini gets the same body as TOML with `{{args}}` instead of `$ARGUMENTS`.
+
+Regenerating only writes missing files by default, so local edits survive. Use
+`--force` to overwrite:
+
+```bash
+node .sdrive/scripts/generate-adapters.js --tools claude-code --force
+```
 
 ### Why this matters
 
@@ -74,19 +122,19 @@ SpecDrive ships 30 definitions. Several share `AGENTS.md`, which is written once
 | GitHub Copilot | `.github/copilot-instructions.md` |
 | VS Code / Copilot | `.github/instructions/sdrive.instructions.md` |
 | Cline | `.clinerules/sdrive.md` |
-| Claude Code | `.claude/commands/sdrive.md` |
+| Claude Code | `.claude/commands/sdrive/*.md` (16 commands) |
 | Cursor | `.cursor/rules/sdrive.mdc` |
 | Amazon Q Developer | `.amazonq/rules/sdrive.md` |
-| Gemini CLI | `GEMINI.md`, `.gemini/commands/sdrive.toml` |
+| Gemini CLI | `GEMINI.md`, `.gemini/commands/sdrive/*.toml` (16 commands) |
 | Continue | `.continue/rules/sdrive.md` |
 | Codex | `AGENTS.md` |
 | Windsurf | `.windsurf/rules/sdrive.md` |
 | Kilo Code | `.kilocode/rules/sdrive.md` |
-| OpenCode | `AGENTS.md` |
+| OpenCode | `AGENTS.md`, `.opencode/commands/sdrive-*.md` (16 commands) |
 | Qoder | `.qoder/rules/sdrive.md` (unverified) |
 | Qwen Code | `QWEN.md` |
 | Atlassian Rovo Dev | `AGENTS.md` (unverified) |
-| Roo Code | `.roo/rules/sdrive.md` |
+| Roo Code | `.roo/rules/sdrive.md`, `.roo/commands/sdrive-*.md` (16 commands) |
 | Amp | `AGENTS.md` |
 | Warp | `WARP.md` |
 | Zed | `.rules` |
@@ -149,7 +197,8 @@ sdrive adapters:add windsurf-next \
 | `--path` | Required. File the tool reads |
 | `--format` | `md` (default), `mdc`, `toml` |
 | `--extension` | When the extension differs, e.g. `--extension .rules` |
-| `--kind` | `rules` (default) or `command` |
+| `--kind` | `rules` (default), `command`, or `command-set` |
+| `--naming` | For `command-set`: `nested` or `prefixed` |
 | `--frontmatter` | JSON, e.g. `'{"alwaysApply":true}'` |
 | `--mcp-client` | `claude-desktop`, `cursor`, `cline`, `roo`, `gemini-cli`, `vscode` |
 | `--unverified` | Record that the path is a best guess, not checked against vendor docs |

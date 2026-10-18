@@ -6,7 +6,7 @@
 
 const path = require("path");
 
-const { loadRegistry, writeAdapters } = require("./lib/tool-registry");
+const { loadCommands, loadRegistry, writeAdapters } = require("./lib/tool-registry");
 
 const projectRoot = process.cwd();
 const sdriveRoot = path.join(projectRoot, ".sdrive");
@@ -24,6 +24,7 @@ function loadTools() {
 function generateForTools(tools, options = {}) {
   const result = writeAdapters(tools, projectRoot, {
     force: options.force === true,
+    commands: loadCommands(sdriveRoot),
     log: (message) => console.log(message)
   });
 

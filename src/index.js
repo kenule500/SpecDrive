@@ -11,6 +11,7 @@ const readline = require("readline");
 // `update`, and `adapters:*` can never disagree about what a tool needs.
 const {
   addTool: addRegistryTool,
+  loadCommands,
   loadRegistry,
   toPosix,
   validateRegistry,
@@ -695,7 +696,8 @@ program
       }
 
       writeAdapters(selectedTools, projectRoot, {
-        log: (message) => console.log(message)
+        log: (message) => console.log(message),
+        commands: loadCommands(sdriveRoot)
       });
 
       autoWireMcp(selectedTools);
@@ -2413,22 +2415,31 @@ program
   .description("List every AI tool SpecDrive can configure, and the exact files each one reads")
   .option("--json", "Print the registry as JSON")
   .action((options) => {
-    const { registry } = loadProjectRegistry();
+    const { sdriveRoot, registry } = loadProjectRegistry();
 
     if (options.json) {
       console.log(JSON.stringify(registry.tools, null, 2));
       return;
     }
 
+    const commands = loadCommands(sdriveRoot);
+
     const rows = registry.tools.flatMap((tool) =>
-      tool.paths.map((entry) => [
-        tool.name,
-        toPosix(entry.path),
-        entry.format,
-        entry.kind,
-        tool.mcpClient || "-",
-        tool.verified ? "yes" : "unverified"
-      ])
+      tool.paths.map((entry) => {
+        const where =
+          entry.kind === "command-set"
+            ? `${toPosix(entry.path)}/ (${commands.length} commands)`
+            : toPosix(entry.path);
+
+        return [
+          tool.name,
+          where,
+          entry.format,
+          entry.kind,
+          tool.mcpClient || "-",
+          tool.verified ? "yes" : "unverified"
+        ];
+      })
     );
 
     console.log("");
@@ -2469,7 +2480,8 @@ program
   .requiredOption("--path <path>", "File the tool reads, relative to the project root")
   .option("--format <format>", "md, mdc, or toml (default: md)")
   .option("--extension <ext>", "File extension when it differs from the format, e.g. .rules")
-  .option("--kind <kind>", "rules or command (default: rules; toml implies command)")
+  .option("--kind <kind>", "rules, command, or command-set (default: rules; toml implies command)")
+  .option("--naming <naming>", "command-set naming: nested (.claude/commands/sdrive/propose.md) or prefixed (sdrive-propose.md)")
   .option("--label <label>", "Human-readable tool name")
   .option("--docs <url>", "Link to the vendor documentation for this path")
   .option("--mcp-client <id>", "MCP client to wire: claude-desktop, cursor, cline, roo, gemini-cli, vscode")
@@ -2478,7 +2490,6 @@ program
   .option("--no-generate", "Only update the registry; do not write the adapter file")
   .action((name, options) => {
     const { projectRoot, sdriveRoot } = loadProjectRegistry();
-
     if (options.mcpClient && !mcpClientNameFor(options.mcpClient)) {
       console.error(`❌ Unknown MCP client "${options.mcpClient}".`);
       console.error("   Use one of: claude-desktop, cursor, cline, roo, gemini-cli, vscode");
@@ -2507,6 +2518,7 @@ program
         path: options.path,
         format: options.format,
         kind: options.kind,
+        naming: options.naming,
         extension: options.extension,
         docs: options.docs,
         mcpClient: options.mcpClient,
@@ -2521,7 +2533,10 @@ program
     console.log(`\n✅ Registered tool "${tool.name}".`);
 
     if (options.generate !== false) {
-      writeAdapters([tool], projectRoot, { log: (message) => console.log(message) });
+      writeAdapters([tool], projectRoot, {
+        log: (message) => console.log(message),
+        commands: loadCommands(sdriveRoot)
+      });
     }
 
     console.log("\nNext: run /sdrive:* from your AI tool, or `sdrive adapters:list` to confirm.\n");
