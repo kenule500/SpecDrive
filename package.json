@@ -16,7 +16,8 @@
     "mcp/",
     "templates/",
     "logo.png",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "dependencies": {
     "commander": "^12.0.0",

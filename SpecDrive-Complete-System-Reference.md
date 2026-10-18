@@ -2,6 +2,13 @@
 
 A full walkthrough of everything we built, from the ground up.
 
+> **Status: historical snapshot, not current documentation.** This walkthrough was
+> written when SpecDrive had 13 agents, 8 schemas and 15 tool adapters. Today it
+> has 16 agents, 6 schemas, 30 tool definitions and native slash commands for four
+> tools. For current counts and behaviour read the [README](README.md),
+> [docs/tool-adapters.md](docs/tool-adapters.md) and [CHANGELOG.md](CHANGELOG.md).
+> Where this file disagrees with them, they are right.
+
 ---
 
 ## Table of Contents

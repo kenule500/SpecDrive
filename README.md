@@ -11,16 +11,21 @@ SpecDrive gives AI coding tools like GitHub Copilot, Cline, Claude Code, and Cur
 It adds:
 
 - 16 specialized governance agents
+- **30 AI tool adapters** — Claude Code, Cursor, Copilot, Gemini CLI, Roo Code, Qwen Code, Warp, Zed, Aider, Kiro, Junie and more, each written in the format that tool actually reads
+- **Native slash commands** — 16 real `/sdrive:*` commands in Claude Code, Gemini CLI, Roo Code and OpenCode, instead of one prompt that has to route itself
+- **Any tool, without a release** — `sdrive adapters:add` registers a tool SpecDrive does not ship; `AGENTS.md` covers the tools that follow the cross-tool standard
 - Machine-readable JSON schemas
 - Requirement → AC → task → test traceability
 - Per-version lifecycle tracking
 - Human approval gates
 - Anti-redundancy checks
 - Spec-to-code verification
-- Brownfield onboarding for existing projects
+- Brownfield onboarding for existing projects, including detecting a scaffolded README that describes the framework instead of the product
 - OpenSpec and Spec-Kit migration
 - Anti-hallucination controls
 - CI/CD integration
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed in the current release.
 
 ---
 
@@ -200,6 +205,16 @@ Preview changes first with a dry run:
 
 ```bash
 sdrive update --dry-run
+```
+
+`update` also merges **new tool definitions** into `.sdrive/commands/tools.json`:
+tools that shipped after your `init` are appended, entries you added or edited are
+preserved, and a registry still in the old single-`adapterPath` shape is repaired
+in place. After upgrading, check the result:
+
+```bash
+sdrive adapters:verify     # paths, formats, frontmatter, duplicates
+sdrive adapters:list       # every tool, in one table
 ```
 
 ### Upgrading an existing project
