@@ -67,7 +67,15 @@ function run(name, source, expected) {
   check(`subprocess: ${name}`, thrown ? detectedAsStop(thrown) : false, expected);
 }
 
-run("ctrl-c-windows", "process.exit(-1073741510);\n", true);
+// The Windows Ctrl+C code only survives as a distinct value on Windows. On POSIX,
+// process.exit(-1073741510) is truncated to an 8-bit status (0), so the shell cannot
+// report the Windows signal. The predicate is still checked against both spellings
+// above; this subprocess assertion is platform-specific.
+run(
+  "ctrl-c-windows",
+  "process.exit(-1073741510);\n",
+  process.platform === "win32"
+);
 run("ctrl-c-posix-130", "process.exit(130);\n", true);
 run("crash-exit-1", "process.exit(1);\n", false);
 run("crash-uncaught", "throw new Error('boom');\n", false);
