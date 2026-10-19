@@ -127,6 +127,15 @@ function main() {
   console.log(`📁 Agent File: ${command.agentFile}`);
   console.log(`📝 Description: ${command.description}`);
 
+  // A command that accepts a feature must receive one, even when it has no
+  // gates. Without this, `/sdrive:propose` (gates: []) silently ran with no
+  // feature and the agent had nothing to work on.
+  if (command.acceptsFeature && !featureName && !allFlag) {
+    console.error(`❌ ${command.command} requires a feature name or description.`);
+    console.error(`   Usage: node router.js ${commandName} "<feature-description>"`);
+    process.exit(1);
+  }
+
   if (command.gates && command.gates.length > 0) {
     // In --all mode gates are evaluated per feature by the agent, not here.
     if (!featureName && !allFlag) {

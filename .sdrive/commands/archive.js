@@ -314,7 +314,10 @@ function finalizeArchive(root, featureName, options = {}) {
     timestamp: new Date().toISOString()
   });
 
-  fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+  // Atomic replace: a crash must not leave a truncated workflow-state.json.
+  const tempStatePath = `${statePath}.${process.pid}.tmp`;
+  fs.writeFileSync(tempStatePath, `${JSON.stringify(state, null, 2)}\n`);
+  fs.renameSync(tempStatePath, statePath);
 
   // Governance deliberately stays at .sdrive/governance/<feature>/<version>/ (flat).
   // The dashboard reads that path, and validate-governance.js would treat a

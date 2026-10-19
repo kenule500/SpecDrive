@@ -7,6 +7,112 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
 
 ---
 
+## 0.1.43 — 2026-10-19
+
+**Evidence-backed review, migration adapters, a safer install, and a richer
+dashboard.**
+
+This release moves SpecDrive's guarantees from prompt text into verifiable
+artifacts: test evidence, structured reviews, hash-chained audit events, atomic
+state writes, adapter-based migrations, and dashboard visibility for all of it.
+
+### Added
+
+- `sdrive test <feature>` runs the project's test command and records
+  `.sdrive/governance/<feature>/<version>/test-evidence.json` (command, exit
+  code, counts, commit, output hash, `TEST-###` / `AC-###` IDs).
+- `governance.requireTestEvidence` (new projects default to `true`) makes
+  `sdrive approve <feature> review` require evidence with zero failures at
+  `HEAD`. Existing projects opt in with
+  `sdrive config:set governance.requireTestEvidence true`.
+- `review.schema.json` and `governance.requireStructuredReview` (new projects
+  default to `true`). `/sdrive:review` writes `review.json` with the verdict,
+  commit, branch/base, reviewer, coverage, criteria, findings, and evidence
+  paths; the review gate reads it and refuses a verdict for a different commit.
+- `/sdrive:review` now binds the verdict to `HEAD`, requires a clean tree and
+  the recorded feature branch, audits the diff against `base`, checks test
+  quality, security/NFR/docs evidence and CI, asks the human to confirm a PASS,
+  and warns on self-review.
+- Dashboard **Quality** page: schema validation results and detected/recent
+  migrations. Feature **Evidence** tab: test evidence, structured review
+  findings, stale-commit warning, and archive readiness.
+- `sdrive doctor` checks Node, Git identity, layout, config/workflow schemas,
+  team, permission coverage, adapters, CommonJS scope, framework-manifest drift,
+  validator dependencies, test command, and audit-chain integrity. `--json` and
+  `--fix` are supported.
+- `sdrive check` runs doctor + validation (+ `--tests`) in one pass for CI and
+  pre-push use.
+- `sdrive permissions:check` verifies every CLI/slash command has a rule.
+- `sdrive audit:verify` verifies the new hash-chained audit log.
+- `sdrive config:get` / `sdrive config:set` for dot-path configuration.
+- Migration adapters and `sdrive migrate:detect`, `migrate:plan`, `migrate:apply`,
+  `migrate:verify`, and `migrate:rollback`. The adapters cover OpenSpec, GitHub
+  Spec Kit, AWS Kiro, Agent OS, BMAD, and generic `specs/` folders. Every
+  migration is planned before writing, records a source→target report under
+  `.sdrive/migration-runs/`, and can be rolled back to the pre-migration
+  `workflow-state.json`.
+- `sdrive update --check` reports drift against `.sdrive/framework-manifest.json`.
+- `sdrive status --json`, plus `--json` on `validate`, `verify`, `approve`,
+  `archive:check`, `archive:finalize`, `doctor`, `test`, `check`, team, and
+  adapter commands. Stable exit codes `0`–`9` are documented.
+
+### Changed
+
+- Every chat command now stages, commits, and pushes the changes it made after
+  its work is complete and any required approval is granted. Commits use the
+  `specdrive(<command>):` prefix; nothing is force-pushed. `/sdrive:archive` is
+  exempt: it merges the feature into its confirmed target branch and pushes that
+  branch instead.
+- `/sdrive:archive` now detects merge conflicts before merging and resolves only
+  mechanical ones on the feature branch. After a resolution it re-runs
+  `sdrive validate`, `sdrive verify`, and the test suite; semantic, migration,
+  security, or secret conflicts abort the merge and leave the feature in
+  `ongoing/`.
+- `sdrive validate` validates in-process with the CLI's own `ajv`, so it works
+  in projects without a local `node_modules`.
+- `sdrive update` now refreshes `commands/*.js` (gate/archive/router rules) and
+  records a framework manifest. Previous versions left those files stale forever.
+- `sdrive status` reports assignee, branch/base, and the next action.
+- Mutating CLI commands are deny-by-default. Missing permission files fail
+  closed; `SDRIVE_SKIP_PERMISSIONS=1` is a reported test-only escape hatch.
+- `workflow-state.json`, `team.json`, and `audit-log.json` writes are atomic,
+  locked, schema-validated (workflow state), and backed up.
+- The dashboard binds `127.0.0.1` by default (`SDRIVE_HOST` opt-in), sends
+  CSP/frame/referrer/no-sniff headers, marks API responses `no-store`, and
+  sanitizes markdown link schemes.
+- The MCP server negotiates protocol versions, exposes
+  `specdrive.next_action` and `specdrive://` resources, and survives malformed
+  JSON instead of crashing. `specdrive.status` now reads the version-level phase.
+- `sdrive hooks:install` preserves an existing pre-commit hook as
+  `pre-commit.local` instead of overwriting it.
+- `commands/router.js` requires a feature for commands that accept one, even when
+  the command has no gates.
+
+### Fixed
+
+- `dashboard/app.js` mojibake that rendered garbled icons and separators.
+- `test/test-create.js` pointed at `.sdrive/src/index.js`, a path `init` never
+  creates.
+- `test/test-validator.js` deleted a tracked fixture; tests now run in temp
+  projects.
+- A documented `sdrive migrate` command with no implementation, and a CI snippet
+  that ran `verify.js` without a feature.
+- Shell-string execution of installed scripts (`diff`, `openapi:generate`,
+  `version:new`, `diff:version`, `team:sync`, `hooks:install`, `onboard`) now
+  uses argument arrays.
+
+### For existing projects
+
+Run after upgrading:
+
+```bash
+sdrive update
+sdrive doctor
+sdrive config:set governance.requireTestEvidence true   # optional opt-in
+```
+
+---
+
 ## 0.1.42 — 2026-10-18
 
 **Archive now demands evidence, and merges back where the feature came from.**

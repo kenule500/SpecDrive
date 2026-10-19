@@ -48,6 +48,13 @@ It then creates:
 - Tool adapters for selected tools
 - MCP server and config
 - Default config
+- `.sdrive/team.json`, with the current Git user as `admin`
+
+If Git is not configured, add yourself after init:
+
+```bash
+sdrive team:add <your-git-username> admin
+```
 
 For non-interactive setup (CI, scripts, agents), pass `--tools`:
 
@@ -57,6 +64,18 @@ sdrive init --tools all
 sdrive init --tools none
 ```
 
+### Check the installation
+
+Before writing specs, confirm the setup:
+
+```bash
+sdrive doctor
+```
+
+It checks Node, Git identity, `.sdrive/` layout, schemas, team roster, permission
+coverage, adapters, and the framework manifest. Use `sdrive doctor --fix` for the
+two safe repairs it knows about (the CommonJS marker and the framework manifest).
+
 ### The dashboard
 
 `sdrive init` starts the dashboard for you in the same terminal when it finishes, so
@@ -65,7 +84,10 @@ your prompt back — that is the normal way to stop a server, and it is reported
 "Dashboard stopped", never as an error.
 
 It gives you a visual view of your specs, features, approval gates, team, and
-activity, plus a **Project Health** score with the one action most worth doing next.
+activity, plus a **Project Health** score with the one action most worth doing
+next. The **Quality** page shows schema validation and migration runs; each
+feature's **Evidence** tab shows test evidence, structured review findings, and
+archive readiness.
 Start it any time later with:
 
 ```bash
@@ -84,8 +106,9 @@ After upgrading the CLI, refresh your project's framework files:
 sdrive update
 ```
 
-This updates the dashboard, MCP server, scripts, and schemas while leaving your
-specs, governance, and constitution untouched.
+This updates the dashboard, MCP server, scripts, schemas, and `commands/*.js`
+rules while leaving your specs, governance, and constitution untouched. Use
+`sdrive update --check` first to see whether anything has drifted.
 
 ---
 
@@ -179,6 +202,21 @@ The Test Agent:
 - Updates traceability
 - Generates a coverage report
 
+Then record what actually ran:
+
+```bash
+sdrive test user-login
+```
+
+`sdrive test` runs your configured test command and writes
+`.sdrive/governance/user-login/v1/test-evidence.json`. New projects require this
+evidence before the review gate can be approved, so a hand-written
+`Status: PASS` is no longer enough on its own. Existing projects opt in with:
+
+```bash
+sdrive config:set governance.requireTestEvidence true
+```
+
 ---
 
 ## 7. Review and Archive
@@ -189,6 +227,10 @@ The Test Agent:
 
 Review runs verification and coverage checks and writes a pass/fail verdict. It does **not** merge.
 
+When `governance.requireTestEvidence` is enabled, review also requires the
+`sdrive test` evidence recorded above. A failing or stale run blocks the gate
+instead of being reported as a warning.
+
 If the audit fails, the feature stays in `ongoing/` and review reports the findings.
 
 Once review returns `Status: PASS`, archive the feature:
@@ -198,6 +240,8 @@ Once review returns `Status: PASS`, archive the feature:
 ```
 
 Archive merges the approved feature to the confirmed target branch — the default branch is detected and confirmed with you, never assumed — and completes its lifecycle. The feature folder moves from `specs/ongoing/` to `specs/completed/` and the version's `phase` becomes `completed`.
+
+If the merge conflicts, Archive merges the target branch into the feature branch and resolves only mechanical conflicts. It then re-runs validation, verification, and the tests. If the conflict is semantic, a migration, or security-related, it aborts the merge and leaves the feature in `ongoing/`.
 
 ---
 

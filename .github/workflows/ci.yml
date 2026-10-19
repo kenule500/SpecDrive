@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ['18', '20', '22', '24']
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax check
+        run: npm run lint
+
+      - name: Encoding check
+        run: npm run encoding:check
+
+      - name: Tests
+        run: npm test
+
+      - name: Docs and registry drift
+        run: npm run docs:check
+
+      - name: Package contents
+        run: npm run pack:check
+
+  dogfood:
+    name: Dogfood (self-hosted project)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Refresh the reference installation
+        run: npm run dogfood
+
+      - name: The reference installation must match the source
+        run: |
+          if [ -n "$(git status --porcelain -- .sdrive)" ]; then
+            echo "::error::.sdrive/ is out of sync with the source directories. Run npm run dogfood and commit the result."
+            git status --porcelain -- .sdrive
+            exit 1
+          fi

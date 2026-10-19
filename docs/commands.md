@@ -12,13 +12,26 @@ SpecDrive has two types of commands:
 | Command | Purpose |
 |---------|---------|
 | `sdrive init` | Initialize SpecDrive structure and adapters |
-| `sdrive update` | Refresh framework files (dashboard, mcp, scripts, schemas) without touching your specs or governance |
+| `sdrive update` | Refresh framework files (dashboard, mcp, scripts, schemas, commands) without touching your specs or governance |
+| `sdrive update --check` | Report drift between `.sdrive/` and the framework manifest |
 | `sdrive onboard` | Scan an existing project (usually run automatically by `/sdrive:onboard`) |
-| `sdrive validate` | Validate all governance files |
+| `sdrive doctor` | Diagnose the installation |
+| `sdrive migrate:detect` | Detect known spec-driven frameworks |
+| `sdrive migrate:plan <framework>` | Show source→target mappings without writing |
+| `sdrive migrate:apply <framework> --yes` | Import a framework's specs as drafts |
+| `sdrive migrate:verify <id>` | Verify imported files (`--strict` for schemas) |
+| `sdrive migrate:rollback <id>` | Restore state and remove migration files |
+| `sdrive validate` | Validate all governance files (`--json` for CI) |
 | `sdrive config:validate` | Validate `.sdrive/config.json` |
-| `sdrive status` | Show feature lifecycle state |
+| `sdrive config:get <key>` | Read a config value by dot path |
+| `sdrive config:set <key> <value>` | Write a config value |
+| `sdrive status` | Show feature lifecycle state and the next action |
+| `sdrive test <feature>` | Run tests and record `test-evidence.json` |
+| `sdrive check` | Run doctor + validation (+ tests with `--tests`) |
 | `sdrive approve <feature> <gate>` | Approve a workflow gate (verifies the stage is genuinely complete) |
 | `sdrive create <feature>` | Create feature scaffold (internal) |
+| `sdrive update-propose <feature>` | Validate an existing feature for extension (internal) |
+| `sdrive assign <feature> <username>` | Assign an owner to a feature |
 | `sdrive team:add <username> <role>` | Add a new team member |
 | `sdrive team:remove <username>` | Remove a team member |
 | `sdrive team:list` | List all team members |
@@ -29,7 +42,9 @@ SpecDrive has two types of commands:
 | `sdrive adapters:list` | List every AI tool and the exact files each one reads |
 | `sdrive adapters:verify` | Check the tool registry for paths a tool would never read |
 | `sdrive adapters:add <name> --path <file>` | Support a tool SpecDrive does not ship |
-| `sdrive hooks:install` | Install pre-commit validation hook |
+| `sdrive permissions:check` | Verify every command has a permission rule |
+| `sdrive audit:verify` | Verify the audit-log hash chain |
+| `sdrive hooks:install` | Install pre-commit validation hook (preserves an existing hook) |
 | `sdrive diff <old> <new>` | Show differences between two spec files |
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
 | `sdrive dashboard` | Start local web dashboard (also auto-started by `init` / `onboard` in a terminal) |
@@ -91,6 +106,8 @@ Refreshes:
 - `.sdrive/schemas/`
 - `.sdrive/agents/`
 - `.sdrive/templates/`
+- `.sdrive/commands/*.js` (gate, archive, and router rules)
+- `.sdrive/framework-manifest.json`
 - `.sdrive/logo.png`
 
 Leaves untouched:
@@ -107,6 +124,16 @@ Preview changes without writing:
 ```bash
 sdrive update --dry-run
 ```
+
+Report drift without writing:
+
+```bash
+sdrive update --check
+sdrive update --check --json
+```
+
+`--check` compares `.sdrive/` with the hashes recorded at install time and exits
+`7` when a framework file has been modified, deleted, or added.
 
 ---
 
@@ -179,7 +206,7 @@ Allowed gates, in order:
 - `specification` — requires `spec.md` and `spec.json`
 - `planning` — requires `specification` approved, plus `plan.md`, `tasks.md`, `plan.json`, `tasks.json`, and `traceability.json`
 - `implementation` — requires `specification` and `planning` approved, every task in `tasks.json` marked `completed`, and no failing `verification.json`
-- `review` — requires `implementation` approved, plus a `review.md` recording `Status: PASS`
+- `review` — requires `implementation` approved, a `review.md` recording `Status: PASS`, and (when `governance.requireStructuredReview` is enabled) a matching `review.json` with the same verdict and `HEAD` commit
 
 Extra safeguards:
 
@@ -199,6 +226,11 @@ Adds a new team member.
 ```bash
 sdrive team:add alice admin
 ```
+
+`sdrive init` already adds the current Git user as `admin`. While the roster is
+empty, the first member must be the acting Git user (`SDRIVE_ACTOR`, or
+`git config user.name`), which prevents a typo from locking the caller out of
+every mutating command.
 
 ---
 
@@ -444,19 +476,22 @@ the `SDRIVE_PORT` environment variable.
 |-----------------|--------|
 | `--no-dashboard` | Skip the auto-start on `sdrive init` and `sdrive onboard` |
 | `SDRIVE_NO_DASHBOARD=1` | Skip the auto-start everywhere, including inside scripts |
+| `SDRIVE_HOST` | Bind a different interface; default `127.0.0.1`, with a warning because there is no authentication |
 
 The auto-start is skipped by itself when there is no interactive terminal. A script or CI run would otherwise block forever on a server that never exits, so in that case the command prints how to start it manually instead.
 
 Open `http://localhost:4747` to view:
 
 - Onboarding status
-- Detected external spec systems (OpenSpec, Spec-Kit)
+- Detected external spec systems (OpenSpec, Spec Kit, Kiro, Agent OS, BMAD, generic)
 - Migrated and skipped features
 - Features and versions
 - Gates and approvals per version
 - Traceability coverage per version
 - Spec-to-code verification status per version
 - Test coverage per version
+- **Test evidence, structured review findings, and archive readiness** on each feature's Evidence tab
+- **Schema validation, detected migration frameworks, and recent migration runs** on the Quality page
 - Team members
 - Recent activity
 - Project health, with the one action most worth doing next
@@ -507,6 +542,309 @@ catches up when it becomes visible again.
 
 ---
 
+### `sdrive create`
+
+Creates the backlog and governance scaffold for a feature without running an
+agent. It is normally called by `/sdrive:propose`.
+
+```bash
+sdrive create user-login
+```
+
+Writes `specs/backlog/<feature>/` (`spec.md`, `plan.md`, `tasks.md`) and
+`governance/<feature>/` (`spec.json`, `plan.json`, `tasks.json`,
+`traceability.json`). The scaffold is deliberately incomplete; `sdrive validate`
+rejects it until the agent fills it in.
+
+---
+
+### `sdrive update-propose`
+
+Validates that an existing feature is editable before `/sdrive:update-propose`
+extends it. Internal helper.
+
+```bash
+sdrive update-propose user-login
+```
+
+Refuses a released version; use `sdrive version:new` for new scope.
+
+---
+
+### `sdrive assign`
+
+Assigns an owner to a feature.
+
+```bash
+sdrive assign user-login alice
+```
+
+Warns, but does not block, when the username is not on the team roster. Writes
+`workflow-state.json` atomically.
+
+---
+
+### `sdrive test`
+
+Runs the project's tests and records machine-checkable evidence for the feature.
+
+```bash
+sdrive test user-login
+sdrive test user-login --cmd "pnpm vitest run"
+sdrive test user-login --version v2 --timeout 900000
+sdrive test user-login --json
+```
+
+Command resolution order:
+
+1. `--cmd`
+2. `.sdrive/config.json` → `test.command` (or `governance.testCommand`)
+3. `package.json` → `scripts.test` (runs `npm test`)
+4. `go.mod` → `go test ./...`
+5. Python test config → `pytest`
+
+Writes `.sdrive/governance/<feature>/<version>/test-evidence.json` with the
+command, exit code, pass/fail/skip counts, commit, branch, duration, output hash,
+and `TEST-###` / `AC-###` IDs found in the output.
+
+Exit codes: `0` passed, `8` tests failed (the evidence is still written).
+
+When `governance.requireTestEvidence` is `true`, `sdrive approve <feature>
+review` requires evidence with `exitCode: 0`, no failures, and a commit matching
+`HEAD`. `governance.allowStaleEvidence: true` relaxes only the commit check.
+
+---
+
+### `sdrive check`
+
+Runs the standard checks in one pass.
+
+```bash
+sdrive check
+sdrive check --json
+sdrive check --tests
+sdrive check --skip-doctor
+```
+
+- doctor (blocking checks only)
+- governance schema validation
+- with `--tests`: the configured test command for every ongoing feature,
+  recording evidence
+
+Designed for CI and a pre-push habit. Exit `0` when everything passes, `4` when a
+check fails.
+
+---
+
+### `sdrive doctor`
+
+Diagnoses a broken installation.
+
+```bash
+sdrive doctor
+sdrive doctor --json
+sdrive doctor --fix
+```
+
+Checks: Node version, Git identity, `.sdrive/` layout, config and workflow-state
+schemas, team roster, permission coverage, adapter registry, CommonJS marker,
+framework-manifest drift, validator dependency resolution, test command, and
+audit-chain integrity.
+
+`--fix` applies only safe repairs (`.sdrive/package.json`, framework manifest).
+Exit `9` means a blocking check failed.
+
+---
+
+### `sdrive permissions:check`
+
+Verifies that every mutating CLI command and every slash command has a rule in
+`.sdrive/commands/permissions.json`, and that no rule names a command that no
+longer exists.
+
+```bash
+sdrive permissions:check
+sdrive permissions:check --json
+```
+
+Mutating commands are deny-by-default. A missing `.sdrive/scripts/check-permission.js`
+also fails closed.
+
+---
+
+### `sdrive audit:verify`
+
+Verifies the hash chain of `.sdrive/audit-log.json`.
+
+```bash
+sdrive audit:verify
+sdrive audit:verify --json
+```
+
+Each new event commits to the previous hash. Editing an old entry breaks every
+later link. Legacy unhashed entries are reported but do not fail the check.
+
+---
+
+### `sdrive config:get`
+
+Reads a value from `.sdrive/config.json` by dot path.
+
+```bash
+sdrive config:get governance.requireTestEvidence
+sdrive config:get governance.requireTestEvidence --json
+```
+
+---
+
+### `sdrive config:set`
+
+Writes a value to `.sdrive/config.json` by dot path. `true`, `false`, numbers, and
+JSON are parsed; everything else is a string. The result is validated against
+`config.schema.json` before it is written.
+
+```bash
+sdrive config:set governance.requireTestEvidence true
+sdrive config:set governance.requireStructuredReview true
+sdrive config:set test.command "pnpm vitest run"
+```
+
+---
+
+### `sdrive archive:check`
+
+Reports whether a feature can be archived, and why not. Reads only; changes
+nothing.
+
+```bash
+sdrive archive:check user-login
+sdrive archive:check user-login --json
+```
+
+It refuses when a gate is not approved, when the evidence behind an approval has
+changed, or when the spec is not in `specs/ongoing/`. Exit `3` when blocked.
+
+---
+
+### `sdrive archive:finalize`
+
+Closes a feature's lifecycle: moves its spec to `completed/` and marks the
+version completed. It never grants an approval.
+
+```bash
+sdrive archive:finalize user-login --merge-commit <sha>
+sdrive archive:finalize user-login --json
+```
+
+Exit `3` when it refuses; nothing is written in that case.
+
+---
+
+### `sdrive amend`
+
+Corrects a wrongly-closed record. This is a corrective action on the same
+version, not new scope.
+
+```bash
+sdrive amend user-login --reason "shipped without the required tests"
+sdrive amend user-login --reason "..." --branch feature/user-login --base main
+```
+
+Moves only that version from `completed/` back to `ongoing/`, resets the review
+gate to `pending`, and records the reason. Use `sdrive version:new` for new work
+on a released feature.
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | success |
+| `1` | unexpected/internal error |
+| `2` | not initialized |
+| `3` | gate blocked |
+| `4` | validation failed |
+| `5` | permission denied |
+| `6` | usage error |
+| `7` | verification drift |
+| `8` | tests failed |
+| `9` | doctor found blocking problems |
+
+`--json` prints `{ ok, command, code, data, blockers, warnings }`; human output is
+rendered from the same object.
+
+---
+
+## Migration commands
+
+Migration is adapter-based. The same five commands work for every supported
+framework.
+
+### `sdrive migrate:detect`
+
+```bash
+sdrive migrate:detect
+sdrive migrate:detect --json
+```
+
+Detects OpenSpec, GitHub Spec Kit, AWS Kiro, Agent OS, BMAD, and generic
+`specs/` folders. Detection is read-only.
+
+### `sdrive migrate:plan <framework>`
+
+```bash
+sdrive migrate:plan kiro
+sdrive migrate:plan kiro --json --out plan.json
+```
+
+Shows every source→target file mapping, target lifecycle, conflicts, partial
+mappings, placeholders, and warnings. It writes nothing unless `--out` is used.
+
+### `sdrive migrate:apply <framework>`
+
+```bash
+sdrive migrate:apply kiro --yes
+sdrive migrate:apply kiro --dry-run
+```
+
+Imports the plan. `--yes` is required; without it the command only prints the
+plan. Each feature is marked `retroactive: true` and records
+`migratedFrom: <framework-id>`. Migrated governance is a schema-valid
+**placeholder** (`US-001`, `AC-001`, `FR-001`, `T1.1`) — replace it with the
+source requirements using `/sdrive:propose` (backlog) or `/sdrive:sync`
+(ongoing) before review.
+
+Reports are written to:
+
+```text
+.sdrive/migration-runs/<migration-id>/report.json
+```
+
+### `sdrive migrate:verify <migration-id>`
+
+```bash
+sdrive migrate:verify <migration-id>
+sdrive migrate:verify <migration-id> --strict
+```
+
+Checks that every mapped file exists and the report is consistent. `--strict`
+also validates the migrated governance JSON against the schemas. The imported
+placeholder is schema-valid; a strict failure means the placeholder or the
+source mapping is broken.
+
+### `sdrive migrate:rollback <migration-id>`
+
+```bash
+sdrive migrate:rollback <migration-id>
+```
+
+Restores `workflow-state.json` from the pre-migration snapshot and removes the
+files the migration created. A `rollback.json` record is written next to the
+report.
+
+---
+
 ## Slash Commands
 
 > **Typical workflow:** `/sdrive:onboard` (brownfield only) → `/sdrive:constitution` → optionally `/sdrive:product-plan` → `/sdrive:propose` → `/sdrive:apply` → `/sdrive:test` → `/sdrive:review` → `/sdrive:archive`
@@ -515,7 +853,7 @@ catches up when it becomes visible again.
 
 | Command | Agent | Purpose |
 |---------|-------|---------|
-| `/sdrive:onboard` | Onboarding | Adopt SpecDrive into an existing project, migrate OpenSpec/Spec-Kit, and offer a real product overview when the README is scaffold boilerplate |
+| `/sdrive:onboard` | Onboarding | Adopt SpecDrive into an existing project, migrate OpenSpec/Spec Kit/Kiro/Agent OS/BMAD/generic specs, and offer a real product overview when the README is scaffold boilerplate |
 | `/sdrive:constitution` | Constitution | Create/update constitution |
 | `/sdrive:product-plan` | Product Plan | Optionally draft an app overview, conceptual mockup, roadmap, milestones, and backlog |
 | `/sdrive:propose` | Specification | Create spec, plan, tasks |
@@ -721,6 +1059,54 @@ Sweeps every ongoing feature for defects, one after the other, and writes an agg
 
 ---
 
+### `/sdrive:review`
+
+Audits the implementation against the spec, traceability matrix, constitution, and the actual change. It does **not** merge or archive.
+
+```text
+/sdrive:review user-login
+/sdrive:review --all
+```
+
+**What it does:**
+
+- Runs `sdrive check`, `sdrive validate`, `sdrive verify`, and `sdrive audit:verify` and reads their structured output
+- Requires `test-evidence.json` with a zero-exit run, no failures, at least one result, and a commit matching `HEAD`
+- Binds the review to `HEAD`, the feature branch, and its recorded `base`; refuses a dirty tree or a branch mismatch
+- Audits the diff against `base` and flags unplanned files, untracked files, missing planned files, and commits from another feature
+- Checks coverage, test quality (`.only`, `xit`, skips, empty assertions, AC IDs), security, NFR evidence, docs, and CI
+- Records human confirmation and reviewer independence
+- Writes `review.md` in the spec version folder and `review.json` in the governance version folder with the same verdict
+
+**Verdict files:**
+
+```text
+.sdrive/specs/<lifecycle>/<feature>/<version>/review.md      # human report
+.sdrive/governance/<feature>/<version>/review.json           # machine-readable verdict
+```
+
+`review.json` is validated by `sdrive validate` and read by `sdrive approve <feature> review` when `governance.requireStructuredReview` is enabled.
+
+**When to use:**
+
+- After `/sdrive:test` has recorded passing evidence
+- Before `/sdrive:archive`
+
+**What it does NOT do:**
+
+- Merge, move the feature to `completed/`, create a branch, or create a PR
+- Write or fix tests (use `/sdrive:test`)
+
+**Batch mode:**
+
+```text
+/sdrive:review --all
+```
+
+Reviews every ongoing feature one after the other and writes an aggregate report to `.sdrive/reports/reviews/review-report-all-<date>.md`. A feature that fails review is never cleared for archive.
+
+---
+
 ### `/sdrive:archive`
 
 Merges an approved feature to the confirmed target branch and completes its lifecycle.
@@ -733,6 +1119,7 @@ Merges an approved feature to the confirmed target branch and completes its life
 
 - Requires a passing `review.md` for the current version (Review-First Rule)
 - Requires human merge approval
+- **Checks mergeability and resolves mechanical conflicts** by merging the target branch into the feature branch, then re-running `sdrive validate`, `sdrive verify`, and the test suite. Semantic, migration, security, or secret conflicts stop the archive with `git merge --abort`
 - Merges the current version and marks it as `completed`
 - Preserves other versions
 - Moves the feature folder from `ongoing/` to `completed/`
@@ -756,6 +1143,7 @@ Archives every ongoing feature that has passed review, one after the other, and 
 - Audit code (use `/sdrive:review`)
 - Write or fix production code
 - Write or run tests
+- Force-push, bypass branch protection, or guess a semantic conflict resolution
 
 ---
 ## Batch Mode (`--all`)

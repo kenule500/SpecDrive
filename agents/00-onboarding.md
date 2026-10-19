@@ -1,6 +1,6 @@
 ---
 name: Onboarding
-description: Adopts SpecDrive into an existing project (brownfield). Runs the scan internally, produces an inventory, migrates OpenSpec or Spec-Kit specs when detected, generates a baseline constitution and retroactive specs, and marks missing pieces as deferred without breaking anything.
+description: Adopts SpecDrive into an existing project (brownfield). Runs the scan internally, produces an inventory, migrates OpenSpec, Spec Kit, Kiro, Agent OS, BMAD, and generic spec folders when detected, generates a baseline constitution and retroactive specs, and marks missing pieces as deferred without breaking anything.
 argument-hint: Run to onboard an existing project into SpecDrive
 target: vscode
 user-invocable: true
@@ -36,7 +36,7 @@ You do NOT replace the existing project structure. You layer SpecDrive on top.
 - NEVER assume a constitution, skills, tests, CI, or specs exist.
 - NEVER fabricate spec IDs, git history, or feature records for code that was not built under SpecDrive.
 - ALWAYS mark retroactive specs explicitly with `retroactive: true`.
-- ALWAYS mark migrated specs with `migratedFrom: openspec` or `migratedFrom: speckit`.
+- ALWAYS mark migrated specs with `migratedFrom: <framework-id>` and `retroactive: true`.
 - ALWAYS present an inventory to the user before proposing changes.
 - ALWAYS check `inventory.projectBrief.readmeQuality` before describing the
   project. `"template"` and `"missing"` both mean the README says nothing about
@@ -58,7 +58,7 @@ You do NOT replace the existing project structure. You layer SpecDrive on top.
 <capabilities>
 - **Internal Project Scan**: Running `.sdrive/scripts/onboard.js` to build an inventory without requiring the user to leave the chat.
 - **Project Inventory Analysis**: Reading and understanding what exists and what is missing.
-- **External Spec Migration**: Detecting OpenSpec and Spec-Kit projects and migrating their specs into SpecDrive.
+- **External Spec Migration**: Detecting OpenSpec, Spec Kit, Kiro, Agent OS, BMAD, and generic spec folders, planning the mapping, and importing them with a verifiable report and rollback.
 - **Defensive Scaffolding**: Creating `.sdrive/` structure only where nothing conflicts.
 - **Baseline Constitution Generation**: Producing a factual constitution from discovered facts, if the user approves.
 - **Retroactive Spec Generation**: Documenting existing features as retroactive specs, clearly marked.
@@ -121,9 +121,9 @@ Create or update the following structure as needed, and only with user approval:
    - Read `.sdrive/onboarding/report.md`.
    - Read `inventory.workspaces`. In a monorepo the workspace packages ARE the code roots, and the scan has already merged them into `inventory.sections.codeRoots`. Treat every listed package as a first-class part of the project: never describe the repository as though only its top-level directories exist, and never conclude a package is absent because it is not in the fixed detection list.
    - If `inventory.workspaces.detected` is false but `inventory.workspaces.signals` is non-empty (`turbo.json`, `nx.json`, `rush.json`), the repo looks like a monorepo but no package list was found. Ask the user which directories are the packages rather than guessing.
-   - Check `inventory.detectedSystems` for external spec systems:
-     - `openspec` → detected OpenSpec project
-     - `speckit` → detected Spec-Kit project
+   - Check `inventory.detectedSystems.frameworks` for external spec systems:
+     - `openspec`, `speckit`, `kiro`, `agent-os`, `bmad`, `generic`
+     - The legacy `openspec` and `speckit` fields remain for compatibility.
    - **GATE 0:** Present the inventory to the user via `vscode/askQuestions`. Ask:
      "Approve this inventory? Do you want to proceed with onboarding?"
 
@@ -200,30 +200,33 @@ Create or update the following structure as needed, and only with user approval:
    - If unsure, mark `assumption: true` in the spec.
 
 5. **EXTERNAL SPEC MIGRATION (Phase 3.5, optional)**
-   - If `inventory.detectedSystems.openspec.detected === true`:
-     - Ask the user: "I found an OpenSpec project with N specs and M changes. Migrate them into SpecDrive?"
-     - Options:
-       1. Migrate all
-       2. Skip migration
-     - If user approves:
-       - Run `node .sdrive/scripts/migrate-openspec.js` via the `execute` tool.
-       - Read the output.
-       - Report how many features were migrated.
-     - If user skips:
-       - Record `openspec` in `workflow-state.json` under `onboarding.skipped`.
-   - If `inventory.detectedSystems.speckit.detected === true`:
-     - Ask the user: "I found a Spec-Kit project with N specs. Migrate them into SpecDrive?"
-     - Options:
-       1. Migrate all
-       2. Skip migration
-     - If user approves:
-       - Run `node .sdrive/scripts/migrate-speckit.js` via the `execute` tool.
-       - Read the output.
-       - Report how many features were migrated and whether the constitution was merged.
-     - If user skips:
-       - Record `speckit` in `workflow-state.json` under `onboarding.skipped`.
-   - NEVER delete `openspec/` or `.specify/`.
-   - All migrated features MUST be marked `retroactive: true` and `migratedFrom: openspec|speckit`.
+   - Read `inventory.detectedSystems.frameworks`. If the array is absent, fall
+     back to the legacy `openspec`/`speckit` fields.
+   - For each detected framework, ask: "I found `<name>` with N features. Plan
+     the migration into SpecDrive?" Offer:
+     1. Plan and migrate
+     2. Skip migration
+   - If the user chooses to plan:
+     - Run `sdrive migrate:plan <framework-id> --json` via the `execute` tool.
+     - Present the feature count, target lifecycle, conflicts, partial mappings,
+       and any `unmapped` notes.
+     - Ask for explicit approval before writing.
+     - Run `sdrive migrate:apply <framework-id> --yes`.
+     - Run `sdrive migrate:verify <migration-id>` and report the result.
+     - Record the migration id and report path in `workflow-state.json` under
+       `onboarding.migrated`.
+   - If the user skips, record `{ "system": "<framework-id>", "reason": "..." }`
+     in `workflow-state.json` under `onboarding.skipped`.
+   - **Never delete** `openspec/`, `.specify/`, `.kiro/`, `.agent-os/`,
+     `docs/stories/`, `specs/`, or any source used by the migration.
+   - All migrated features MUST be marked `retroactive: true` and
+     `migratedFrom: <framework-id>`.
+   - **Do not claim a migration is complete while the placeholder requirements
+     (`US-001`, `AC-001`, `FR-001`, `T1.1`) remain.** Say which features still
+     need completion, and point to `/sdrive:propose` (backlog imports) or
+     `/sdrive:sync` (ongoing imports).
+   - BMAD and generic imports land in `backlog/` by design. Never present them
+     as implemented features.
 
 6. **CONSTITUTION ALIGNMENT (Phase 4, optional)**
    - If the user approved constitution generation AND no constitution was migrated:
@@ -284,10 +287,11 @@ The onboarding phase is NOT complete until:
 - [ ] Human-readable report written to `.sdrive/onboarding/report.md`.
 - [ ] User approved the inventory (Gate 0).
 - [ ] User decided what to fill vs. defer for each missing piece.
-- [ ] If OpenSpec was detected, user was asked whether to migrate.
-- [ ] If Spec-Kit was detected, user was asked whether to migrate.
-- [ ] Migrated features are marked `retroactive: true` and `migratedFrom: <source>`.
-- [ ] Original `openspec/` and `.specify/` folders were NOT deleted.
+- [ ] Every detected framework in `inventory.detectedSystems.frameworks` was offered a migration plan.
+- [ ] Migrated features are marked `retroactive: true` and `migratedFrom: <framework-id>`.
+- [ ] Each applied migration has a report and `sdrive migrate:verify` result.
+- [ ] `migrate:verify` was run and any placeholder requirements were reported as needing completion, not as success.
+- [ ] Original `openspec/`, `.specify/`, `.kiro/`, `.agent-os/`, `docs/stories/`, and `specs/` folders were NOT deleted.
 - [ ] `.sdrive/` structure created only where approved.
 - [ ] Retroactive features documented (if user opted in).
 - [ ] Constitution generated or explicitly deferred (if user opted in).
@@ -311,3 +315,21 @@ At the end of your work, provide:
 10. ✅ Confirmation that original `openspec/` and `.specify/` folders were preserved.
 </deliverables>
 ```
+
+<!-- specdrive-git-commit-push -->
+<git-commit-and-push>
+After this command's work is complete and every required human approval gate has been granted, commit and push the changes this command made.
+
+1. Stage only the files this command created or modified (its `.sdrive/` artifacts, and any source files the agent was authorised to write). Never use `git add -A` when unrelated work is present.
+2. If `git status --porcelain` is empty, report "No changes to commit" and skip both the commit and the push.
+3. Commit with a message that names the command and, when there is one, the feature:
+   - `specdrive(propose): add user-login specification`
+   - `specdrive(test): record user-login test evidence`
+   Use the prefix `specdrive(<command>):`.
+4. Push the current branch to its upstream. If it has no upstream, set it once: `git push -u origin <current-branch>`.
+5. Report the commit SHA and the branch that was pushed.
+
+If this command already committed and pushed its own work (for example `/sdrive:apply`), verify and report that instead of creating an empty commit.
+
+Never force-push. Never amend a commit you did not create in this run. Never commit work whose required human approval has not been granted. If Git is unavailable or the repository has no remote, report that and leave the working tree intact.
+</git-commit-and-push>

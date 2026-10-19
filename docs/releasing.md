@@ -28,7 +28,9 @@ release can go live without a maintainer approving it with 2FA.
    ```
 
 4. `.github/workflows/publish.yml` takes over and **stages** the version. It is not
-   live yet.
+   live yet. The workflow runs `npm ci` and `npm run ci` first, so a broken test,
+   syntax error, encoding issue, or docs/registry drift blocks the release before
+   npm sees it.
 
 5. Approve the staged version with 2FA to publish it:
 

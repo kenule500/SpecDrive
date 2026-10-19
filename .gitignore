@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+.npm-cache/
+
+# Test and coverage output
+coverage/
+.nyc_output/
+
+# Logs and editor noise
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+
+# Local environment overrides
+.env
+.env.local
+
+# SpecDrive local runtime state (safe to ignore; see CONTRIBUTING.md)
+.sdrive/.state.lock
+.sdrive/.backups/
+.sdrive/mcp-debug.log
+.sdrive/package.json
+.sdrive/framework-manifest.json
+.sdrive/migration-runs/
+
+# Local scratch output
+.tmp-*

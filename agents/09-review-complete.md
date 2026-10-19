@@ -69,6 +69,32 @@ You operate within the current version folder only.
 - **Stale Test Report Rule:** Verify the test report's timestamp is newer than `spec.md` and `plan.md` (in the current version folder). If older, treat the report as stale and recommend a fresh `/sdrive:test <feature>` run.
 - ALWAYS read relevant files in `.sdrive/skills/` before auditing code or finalizing documentation to ensure compliance with project-specific standards.
 - **Permission Rule:** Before auditing, run `node .sdrive/scripts/check-permission.js slash /sdrive:review`. If denied, STOP immediately.
+- **Structured Review Rule:** Write the machine-readable verdict to `.sdrive/governance/<feature>/<version>/review.json`; `review.md` remains the human report in `.sdrive/specs/<lifecycle>/<feature>/<version>/review.md`. Required fields: `feature`, `version`, `status`, `commit`, `base`, `branch`, `reviewedBy`, `reviewedAt`, `coverage`, `criteria[]`, `findings[]`, and `evidence`. The gate reads this file when `governance.requireStructuredReview` is enabled.
+- **Commit Binding Rule:** Before auditing, record `HEAD` (`git rev-parse HEAD`), the current branch (`git rev-parse --abbrev-ref HEAD`), and `feature.branch`/`feature.base` from `.sdrive/workflow-state.json`. The review is valid only for that commit:
+  - the working tree must be clean (`git status --porcelain` empty);
+  - the current branch must equal `feature.branch` when one is recorded;
+  - `test-evidence.json` must exist, have `exitCode: 0`, `summary.failed: 0`, `summary.total > 0`, and `commit === HEAD`;
+  - if `HEAD` changes during the review, STOP and re-run the checks.
+- **Diff Scope Rule:** Audit the change, not only the artifacts. Run:
+  - `git diff --stat <base>...HEAD`
+  - `git diff --name-only <base>...HEAD`
+  - `git log <base>..HEAD --oneline`
+  Compare the changed files with `plan.json` and the tasks. Flag files changed but not planned, planned files never created, untracked files, and commits belonging to another in-flight feature (CON-611). Verify the branch is based on its recorded `base` (CON-612).
+- **Consolidated CLI Checks Rule:** Prefer the structured commands and read their JSON:
+  - `sdrive check --json`
+  - `sdrive validate --json`
+  - `sdrive verify <feature> --json`
+  - `sdrive audit:verify --json`
+  Do not invoke `.sdrive/scripts/validate-governance.js` directly when `sdrive validate` is available; the CLI validates in-process without project-local `ajv`.
+- **Test Quality Rule:** Coverage is not correctness. Fail or flag when:
+  - tests contain `.only`, `xit`, or commented-out assertions;
+  - tests are skipped without a recorded reason;
+  - assertions are empty or only check that a function exists;
+  - test names do not carry the AC ID they cover;
+  - the recorded run reports failed or stale tests.
+- **CI Rule:** Require a green CI run for `HEAD` when the repository has CI. Use `gh pr checks` / `gh run list` when available and record the run URL in `review.md`. If CI is not configured or `gh` is unavailable, record "CI not verified" rather than implying a pass.
+- **NFR And Docs Rule:** For features with performance, accessibility, or SEO NFRs, require the corresponding report from `/sdrive:performance` or mark the criterion `not_verified`. Check that user-facing changes have README/CHANGELOG/docs updates, and that schema changes record migration and rollback notes.
+- **Reviewer Independence Rule:** Compare `reviewedBy` with the feature's `assignee`. If they match, warn in the review and ask for an independent reviewer; never silently self-approve. The human must confirm the verdict before `Status: PASS` is written.
 - **`--all` Mode Rule:** If the user invokes this command with `--all` (e.g. `/sdrive:review --all`), you MUST review EVERY feature currently in `ongoing/`, one after the other, in a single run. See the `<all-mode>` section for the exact procedure. In `--all` mode, the per-feature rules above still apply to each feature individually — you simply repeat the full workflow for each one. NEVER skip a feature because an earlier one failed; continue to the next and report the failure.
 </rules>
 
@@ -83,9 +109,10 @@ You operate within the current version folder only.
 </capabilities>
 
 <output-structure>
-- **Audit Report**: `.sdrive/specs/<lifecycle>/<feature>/<version>/review.md` — write this INSIDE the feature's current version folder (resolve `<lifecycle>` via the Lifecycle Location Rule). This is the canonical location and is required by the Definition of Done.
+- **Audit Report**: `.sdrive/specs/<lifecycle>/<feature>/<version>/review.md` — write this INSIDE the feature's current version folder (resolve `<lifecycle>` via the Lifecycle Location Rule). This is the canonical human report and is required by the Definition of Done.
+- **Review Record**: `.sdrive/governance/<feature>/<version>/review.json` — the machine-readable verdict, schema-validated by `sdrive validate` and read by the review gate. It must carry the same status, commit, and evidence paths as `review.md`.
 - **Review Report Copy (optional)**: `.sdrive/reports/reviews/review-report-<feature>-<version>-<date>.md` — a dated copy for the reports archive. If you write this copy, you MUST still write the canonical `review.md` above. Never write only the reports copy.
-- **No Branch Involvement Rule:** This agent has NOTHING to do with branches. It never creates, switches, merges, deletes, resolves, or names a branch, and it never creates or comments on a PR. Branch creation belongs to `/sdrive:apply`; merging and branch deletion belong to `/sdrive:archive`. Review is READ-ONLY on git and GitHub — it may run read-only git commands (`git status`, `git log`, `git diff`) and writes ONLY inside `.sdrive/`.
+- **No Branch Involvement Rule:** This agent has NOTHING to do with branch lifecycle. It never creates, switches, merges, deletes, or resolves a branch, and it never creates or comments on a PR. It may READ the recorded branch/base and run read-only git commands (`git status`, `git log`, `git diff`, `git rev-parse`). It writes only its own review artifacts, then commits and pushes them per `<git-commit-and-push>`. Branch creation belongs to `/sdrive:apply`; merging and branch deletion belong to `/sdrive:archive`.
 - **Spec Lifecycle**: Read-only. Do NOT move the feature folder. `/sdrive:archive` owns the move to `completed/`.
 - **Active version** is defined by `currentVersion` in `.sdrive/workflow-state.json`.
 </output-structure>
@@ -101,13 +128,19 @@ You operate within the current version folder only.
    - `passedTests` / `totalTests` from test report
    - Require `coverage === 100` to pass
 5. **Test Report**: The coverage report exists at `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md` and is newer than `spec.md` and `plan.md`.
-6. **Code Quality**: Linter/typechecker/formatter pass (if configured).
-7. **Security**: No hardcoded secrets, no high/critical CVEs.
-8. **Testing**: All tests pass.
-9. **Documentation**: README and inline docs up to date.
-10. **Definition of Done**: All items from constitution's DoD checklist are satisfied.
-11. **Spec-to-Code Verification**: `sdrive verify <feature>` returns `pass` or `warn`.
-12. **Permission**: The current user is authorized to review.
+6. **Test Evidence**: `test-evidence.json` exists, records `exitCode: 0`, zero failures, at least one result, and `commit === HEAD`.
+7. **Change Scope**: The diff against `base` contains only planned files; no other feature's commits; the branch is based on its recorded `base`; the working tree is clean.
+8. **Test Quality**: No `.only`/`xit`, no unjustified skips, no empty assertions, and every test name carries its AC ID.
+9. **Code Quality**: Linter/typechecker/formatter pass (if configured).
+10. **Security**: No hardcoded secrets, no high/critical CVEs, and auth/data/payment changes have a `/sdrive:secure` report or an explicit waiver.
+11. **Testing**: All tests pass.
+12. **Documentation**: README, CHANGELOG, and inline docs are up to date for user-facing changes.
+13. **NFR Evidence**: Performance, accessibility, and SEO NFRs have a report or are marked `not_verified`.
+14. **Definition of Done**: All items from constitution's DoD checklist are satisfied.
+15. **Spec-to-Code Verification**: `sdrive verify <feature>` returns `pass` or `warn`.
+16. **CI**: A green run exists for `HEAD`, or CI is explicitly recorded as not verified.
+17. **Permission**: The current user is authorized to review.
+18. **Reviewer Independence**: The reviewer is not the feature's assignee, or the conflict is recorded and escalated.
 </audit-criteria>
 
 <all-mode>
@@ -137,106 +170,151 @@ When invoked as `/sdrive:review --all`, review every ongoing feature sequentiall
 </all-mode>
 
 <workflow>
-1. **PREPARE & READ**
+1. **PREPARE & BIND**
    - Create `todo` list.
    - Run `node .sdrive/scripts/check-permission.js slash /sdrive:review`. If denied, STOP immediately.
    - Read `.sdrive/constitution.md`. If missing, STOP and ask.
-   - Detect current version from `.sdrive/workflow-state.json`.
-   - Run `sdrive verify <feature>` and read `verification.json`. Do NOT create or switch branches.
-   - Read all SpecDrive and governance files listed above from the current version folder. If any missing, STOP and ask.
+   - Read `.sdrive/workflow-state.json`; resolve the feature, `currentVersion`, `feature.branch`, `feature.base`, and the actual lifecycle folder.
+   - Run `git rev-parse HEAD`, `git rev-parse --abbrev-ref HEAD`, and `git status --porcelain`. If the tree is dirty or the branch is not `feature.branch`, STOP and report the mismatch.
+   - Run `sdrive check --json`, `sdrive validate --json`, `sdrive verify <feature> --json`, and `sdrive audit:verify --json`. Read the JSON; a failing result blocks the review.
+   - Read `test-evidence.json`. It must exist, have `exitCode: 0`, `summary.failed: 0`, `summary.total > 0`, and `commit === HEAD`. If it is missing or stale, STOP and tell the user to run `sdrive test <feature>`.
+   - Run `git diff --stat <base>...HEAD`, `git diff --name-only <base>...HEAD`, and `git log <base>..HEAD --oneline`. Compare the files with `plan.json`/`tasks.json`; record unplanned files, missing planned files, untracked files, and any commits that belong to another feature (CON-611).
+   - Read all SpecDrive and governance files listed above from the current version folder. If any are missing, STOP and ask.
 
 2. **EXECUTE AUDIT**
-   - Run test suite, linter, typechecker using `execute` (if configured).
-   - Capture output directly from the tool result. Do NOT use shell redirection (`>`, `>>`, `Tee-Object`, `Out-File`) to write log files. Do NOT create `lint.log`, `lint1.log`, `*-help.log`, or any incrementing log files in the project root. To read a command's usage text, run it and read the tool result — do NOT redirect `--help` output to a file.
+   - Run the test suite, linter, and typechecker using `execute` (if configured). Capture output directly from the tool result. Do NOT use shell redirection (`>`, `>>`, `Tee-Object`, `Out-File`) to write log files. Do NOT create incrementing log files in the project root.
+   - **Test Quality:** scan the test files for `.only`, `xit`, skipped tests, empty assertions, and missing AC IDs. Record each as a finding.
    - Run `exa:search` for known vulnerabilities in dependencies. Flag unverified dependencies as unknown.
-   - **Secret Scan:** Use deterministic tools (`gitleaks`, `trufflehog`) if available; otherwise use `search` for patterns like `password =`, `api_key =`, `BEGIN PRIVATE KEY`. Report honestly.
-   - **Traceability Check:** Verify every AC-xxx in `spec.md` and `spec.json` has a corresponding test ID in `traceability.json`.
-   - **Coverage Check:**
-     - Read `spec.json` to count `totalACs`.
-     - Read `traceability.json` to count `testedACs`.
-     - Read the test report to get `passedTests` / `totalTests`.
-     - Compute `coverage = (testedACs / totalACs) × 100`.
-     - Require `coverage === 100`.
-     - If coverage < 100%, list which ACs are missing tests.
-   - **Test Existence Check:** For each linked test ID, confirm the test exists in the codebase via `search`.
-   - **Test Report Check:** Confirm the coverage report exists and its timestamp is newer than `spec.md` and `plan.md`. If older or missing, recommend `/sdrive:test`.
-   - **Constitution Check:** Verify code adheres to `.sdrive/constitution.md`.
-   - Run validators.
-   - For any check not run due to missing tool, mark it as "Not automatically verified" in review.
-   - Generate `review.md` with findings using template below **inside the current version folder** (`.sdrive/specs/<lifecycle>/<feature>/<version>/review.md`). Optionally also write a dated copy to `.sdrive/reports/reviews/`, but the in-folder `review.md` is mandatory.
-   - Run `sdrive verify <feature>` and read `verification.json`.
-   - If status is `fail`, treat the audit as failed.
+   - **Secret Scan:** use deterministic tools (`gitleaks`, `trufflehog`) if available; otherwise `search` for `password =`, `api_key =`, `BEGIN PRIVATE KEY`. Also scan the diff, not only the whole tree.
+   - **Dependency Diff:** compare dependency files against `base`; audit new or upgraded packages.
+   - **Traceability Check:** verify every AC-xxx in `spec.md` and `spec.json` has a corresponding test ID in `traceability.json`.
+   - **Coverage Check:** compute `totalACs`, `testedACs`, `coverage`, and `passedTests`/`totalTests`; require 100%. List every untested AC.
+   - **Test Existence Check:** for each linked test ID, confirm the test exists in the codebase via `search`.
+   - **Constitution Check:** verify code adheres to `.sdrive/constitution.md`.
+   - **NFR Check:** if performance, accessibility, or SEO NFRs exist, require the corresponding report or mark the criterion `not_verified`.
+   - **Docs Check:** confirm README/CHANGELOG/docs are updated for user-facing changes; require migration and rollback notes for schema changes.
+   - **CI Check:** use `gh pr checks` / `gh run list` when available and record the run URL; otherwise record "CI not verified".
+   - For any check not run because a tool is missing, mark it `not_verified`, never `pass`.
+   - Generate `review.md` in `.sdrive/specs/<lifecycle>/<feature>/<version>/` and `review.json` in `.sdrive/governance/<feature>/<version>/`. The in-folder `review.md` is mandatory; the dated reports copy is optional.
 
 3. **DECISION GATE**
    - **IF AUDIT FAILS:**
-     1. Record every finding in `review.md` with `Status: FAIL` in the current version folder. Do NOT create a PR and do NOT comment on one — review performs no GitHub writes.
-     2. If the failure is due to code issues:
-        - Add new "Fix" tasks to `tasks.md` and update `tasks.json`/`traceability.json` in the current version folder.
-        - Notify user: "Audit failed. Findings are recorded in `review.md`. Implementation Agent must fix the issues."
-     3. If the failure is due to missing tests:
-        - Do NOT write tests.
-        - Notify user: "Audit failed. Tests missing. Run `/sdrive:test <feature>` to generate them."
-     4. STOP. Do NOT merge, do NOT move the feature folder, do NOT create a branch, and do NOT create a PR.
+     1. Write `review.md` with `Status: FAIL` in the spec version folder and `review.json` with `status: "FAIL"` in the governance version folder, including every finding.
+     2. If the failure is due to code issues, add new "Fix" tasks to `tasks.md` and update `tasks.json`/`traceability.json`.
+     3. If the failure is due to missing tests, do NOT write tests; tell the user to run `/sdrive:test <feature>`.
+     4. STOP. Do NOT merge, move the feature folder, create a branch, or create a PR.
    - **IF AUDIT PASSES:**
-     1. Write the canonical `review.md` with `Status: PASS` inside the current version folder.
-     2. Notify user: "Audit passed. Run `/sdrive:archive <feature>` to merge and archive the feature — it will confirm which branch to merge into."
-     3. STOP. Do NOT merge. Do NOT move the feature folder. `/sdrive:archive` owns those steps.
+     1. Ask the human to confirm the PASS verdict via `vscode/askQuestions`, showing the criteria summary, coverage, commit, and any `not_verified` items.
+     2. Write `review.md` with `Status: PASS` in the spec version folder and `review.json` with `status: "PASS"`, `commit: <HEAD>`, `reviewedBy`, `reviewedAt`, `coverage`, structured `criteria`, `findings`, and `evidence` paths in the governance version folder.
+     3. Do not record a PASS if a blocking criterion is `not_verified` or the reviewer is the feature's assignee without an explicit escalation.
+     4. Notify the user: "Audit passed. Run `/sdrive:archive <feature>` to merge and archive the feature."
+     5. STOP. Do NOT merge and do NOT move the feature folder.
 
 4. **REPORT**
-   - Confirm the review report was written to the current version folder with an honest PASS/FAIL verdict.
-   - Confirm that other versions were preserved.
-   - Provide a summary of review findings, including any "Not automatically verified" items.
+   - Confirm both `review.md` (spec folder) and `review.json` (governance folder) were written with the same verdict.
+   - Confirm the commit, branch, base, coverage, test-evidence hash, and CI status recorded in the review.
+   - Confirm that other versions were preserved and no merge or lifecycle move happened.
    - If the verdict is PASS, tell the user the exact next command: `/sdrive:archive <feature>`.
+   - Commit and push the review artifacts per the `<git-commit-and-push>` rule.
 </workflow>
 
 <review-template>
-Use this exact structure for `review.md`:
+Use this structure for `review.md`. The YAML frontmatter is what the gate reads
+when `governance.requireStructuredReview` is enabled; `review.json` carries the
+same verdict in JSON.
+
+```markdown
+---
+status: [PASS / FAIL]
+feature: [feature]
+version: [version]
+commit: [HEAD SHA]
+branch: [feature branch]
+base: [base branch]
+reviewedBy: [git user]
+reviewedAt: [ISO timestamp]
+coverage: [0-100]
+evidence: .sdrive/governance/[feature]/[version]/test-evidence.json
+---
 
 # Review Report: [Feature Name] ([version])
 
 ## 1. Audit Summary
 - **Status:** [PASS / FAIL]
 - **Date:** [DATE]
-- **Reviewer:** AI Review Agent
+- **Reviewer:** [git user] (independent: [yes/no])
 - **Version:** [version]
+- **Commit:** [HEAD SHA]
+- **Branch / base:** [branch] / [base]
 
-## 2. Criteria Check
+## 2. Evidence
+- Test evidence: [path, exit code, passed/failed counts, commit]
+- Test report: [path]
+- Verification: [path, status]
+- Audit chain: [path, result]
+- CI: [run URL or "not verified"]
+
+## 3. Criteria Check
 - [ ] Spec Convergence: [Details]
 - [ ] Task Completion: [Details]
 - [ ] Traceability: [Details]
 - [ ] Coverage: [X]% ([X]/[X] ACs tested, [X]/[X] tests passing)
 - [ ] Test Report: [Details]
-- [ ] Code Quality: [Details] (or "Not automatically verified")
-- [ ] Security: [Details] (or "Not automatically verified")
-- [ ] Testing: [Details] (or "Not automatically verified")
+- [ ] Test Evidence: [Details]
+- [ ] Change Scope: [Details]
+- [ ] Test Quality: [Details]
+- [ ] Code Quality: [Details] (or "not_verified")
+- [ ] Security: [Details] (or "not_verified")
+- [ ] Testing: [Details]
 - [ ] Documentation: [Details]
+- [ ] NFR Evidence: [Details] (or "not_verified")
 - [ ] Definition of Done: [Details]
 - [ ] Spec-to-Code Verification: [Details]
+- [ ] CI: [Details] (or "not verified")
 - [ ] Permission: [Details]
+- [ ] Reviewer Independence: [Details]
 
-## 3. Issues Found (If any)
-| Severity | Issue | Location | Fix Required |
-|----------|-------|----------|--------------|
-| [High/Med/Low] | [Description] | [File:Line] | [Yes/No] |
+## 4. Change Scope
+- Files changed: [count]
+- Planned files changed: [count]
+- Unplanned files: [list or "none"]
+- Other-feature commits: [list or "none"]
+- Working tree: [clean/dirty]
 
-## 4. Recommendations
-- [List any non-blocking suggestions for future improvements]
+## 5. Issues Found (If any)
+| Severity | Issue | Location | AC | Fix Required |
+|----------|-------|----------|----|--------------|
+| [High/Med/Low] | [Description] | [File:Line] | [AC-###] | [Yes/No] |
+
+## 6. Recommendations
+- [Non-blocking suggestions]
+
+## 7. Handoff
+- [If PASS] Run `/sdrive:archive [feature]` to merge and archive.
+- [If FAIL] Fix the findings, then re-run `/sdrive:review [feature]`.
+```
 </review-template>
 
 <definition-of-done>
 The review phase is NOT complete until:
 - [ ] Permission check passed for review.
 - [ ] Constitution read, or fallback handled.
-- [ ] Current version detected from `workflow-state.json`.
+- [ ] Current version, branch, base, and `HEAD` recorded.
+- [ ] Working tree clean and current branch matches `feature.branch`.
 - [ ] All SpecDrive and governance files read from the current version folder, or fallback handled.
+- [ ] `sdrive check`, `sdrive validate`, `sdrive verify`, and `sdrive audit:verify` results read as structured output.
+- [ ] Test evidence exists, passes, and matches `HEAD`.
+- [ ] Diff against `base` reviewed; unplanned files and other-feature commits recorded.
 - [ ] All audit criteria evaluated using deterministic checks where possible.
-- [ ] Coverage percentage computed and recorded in review.md.
+- [ ] Coverage percentage computed and recorded in both `review.md` and `review.json`.
 - [ ] Coverage is 100% (all ACs tested and passing).
 - [ ] Test report exists (with version in filename) and is newer than `spec.md` and `plan.md`.
-- [ ] Review report generated inside the current version folder with honest pass/fail status.
-- [ ] Canonical `review.md` written to `.sdrive/specs/<lifecycle>/<feature>/<version>/review.md` (not only to `.sdrive/reports/reviews/`).
+- [ ] Test quality checks run (`.only`, `xit`, skips, empty assertions, AC IDs).
+- [ ] Security, NFR, docs, and CI evidence recorded or marked `not_verified`.
+- [ ] Reviewer independence checked; human confirmed the verdict before PASS was written.
+- [ ] `review.md` (spec folder) and `review.json` (governance folder) written with the same verdict.
 - [ ] Feature's actual lifecycle location resolved (`backlog/`, `ongoing/`, or `completed/`) before reading.
-- [ ] If pass: review report written with `Status: PASS` and the user was told to run `/sdrive:archive <feature>`.
+- [ ] If pass: review artifacts record `PASS` and the user was told to run `/sdrive:archive <feature>`.
 - [ ] If fail: fix tasks added, release blocked, user notified.
 - [ ] No criterion was marked passed unless actually verified.
 - [ ] The feature folder was NOT moved and no merge was performed (that is `/sdrive:archive`'s job).
@@ -246,10 +324,29 @@ The review phase is NOT complete until:
 
 <deliverables>
 At the end of your work, provide:
-1. ✅ Detailed `review.md` in the current version folder with honest statuses, coverage percentage, and permission result.
-2. ✅ (If passed) A clear handoff instruction: run `/sdrive:archive <feature>` to merge and archive.
-3. ✅ (If failed) List of blocking issues and updated tasks.
-4. ✅ Confirmation that no merge was performed and the feature folder was not moved.
-5. ✅ (If `--all`) An aggregate report at `.sdrive/reports/reviews/review-report-all-<date>.md` covering every ongoing feature.
-6. ✅ Confirmation that only the current version was reviewed and other versions preserved.
+1. ✅ `review.md` (spec folder) and `review.json` (governance folder) with the same honest status, coverage, commit, branch/base, evidence paths, and permission result.
+2. ✅ The reviewed commit SHA, branch, and a summary of planned vs unplanned changed files.
+3. ✅ (If passed) A clear handoff instruction: run `/sdrive:archive <feature>` to merge and archive.
+4. ✅ (If failed) List of blocking issues and updated tasks.
+5. ✅ Confirmation that no merge was performed and the feature folder was not moved.
+6. ✅ (If `--all`) An aggregate report at `.sdrive/reports/reviews/review-report-all-<date>.md` covering every ongoing feature.
+7. ✅ Confirmation that only the current version was reviewed and other versions preserved.
 </deliverables>
+
+<!-- specdrive-git-commit-push -->
+<git-commit-and-push>
+After this command's work is complete and every required human approval gate has been granted, commit and push the changes this command made.
+
+1. Stage only the files this command created or modified (its `.sdrive/` artifacts, and any source files the agent was authorised to write). Never use `git add -A` when unrelated work is present.
+2. If `git status --porcelain` is empty, report "No changes to commit" and skip both the commit and the push.
+3. Commit with a message that names the command and, when there is one, the feature:
+   - `specdrive(propose): add user-login specification`
+   - `specdrive(test): record user-login test evidence`
+   Use the prefix `specdrive(<command>):`.
+4. Push the current branch to its upstream. If it has no upstream, set it once: `git push -u origin <current-branch>`.
+5. Report the commit SHA and the branch that was pushed.
+
+If this command already committed and pushed its own work (for example `/sdrive:apply`), verify and report that instead of creating an empty commit.
+
+Never force-push. Never amend a commit you did not create in this run. Never commit work whose required human approval has not been granted. If Git is unavailable or the repository has no remote, report that and leave the working tree intact.
+</git-commit-and-push>

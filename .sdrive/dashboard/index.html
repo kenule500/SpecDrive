@@ -6,24 +6,8 @@
   <title>SpecDrive Dashboard</title>
   <link rel="icon" href="/logo.png" />
   <link rel="stylesheet" href="/style.css" />
-  <script>
-    /* Set the theme before first paint, so the page never flashes the wrong one.
-       Order of precedence: saved choice -> OS preference -> light. */
-    (function () {
-      var theme = "light";
-      try {
-        var saved = window.localStorage.getItem("sdrive-theme");
-        if (saved === "light" || saved === "dark") {
-          theme = saved;
-        } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-          theme = "dark";
-        }
-      } catch (error) {
-        /* localStorage can be blocked; light is a safe default. */
-      }
-      document.documentElement.setAttribute("data-theme", theme);
-    })();
-  </script>
+  <!-- External, so the Content-Security-Policy can forbid inline script. -->
+  <script src="/theme.js"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -51,6 +35,9 @@
         </a>
         <a class="nav-item" href="/features" data-nav="features">
           <span class="nav-icon">▤</span><span>Features</span>
+        </a>
+        <a class="nav-item" href="/quality" data-nav="quality">
+          <span class="nav-icon">✓</span><span>Quality</span>
         </a>
         <a class="nav-item" href="/skills" data-nav="skills">
           <span class="nav-icon">✦</span><span>Skills</span>
@@ -275,6 +262,18 @@
               <span id="detail-tab-tasks-count" class="detail-tab-count"></span>
             </button>
             <button
+              id="detail-tab-evidence"
+              class="detail-tab"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="detail-panel-evidence"
+              data-detail-tab="evidence"
+            >
+              Evidence
+              <span id="detail-tab-evidence-count" class="detail-tab-count"></span>
+            </button>
+            <button
               id="detail-tab-reports"
               class="detail-tab"
               type="button"
@@ -327,6 +326,16 @@
             </div>
           </div>
 
+          <div id="detail-panel-evidence" class="detail-panel" role="tabpanel" aria-labelledby="detail-tab-evidence">
+            <div class="detail-reports-head">
+              <h3>Evidence</h3>
+              <span class="section-hint">Test evidence, structured review, and archive readiness</span>
+            </div>
+            <div id="detail-evidence" class="detail-reports">
+              <div class="skeleton-card"></div>
+            </div>
+          </div>
+
           <div id="detail-panel-reports" class="detail-panel" role="tabpanel" aria-labelledby="detail-tab-reports">
             <div class="detail-reports-head">
               <h3>Reports</h3>
@@ -345,6 +354,18 @@
             <div id="detail-specs" class="detail-specs">
               <div class="skeleton-card"></div>
             </div>
+          </div>
+        </section>
+
+        <!-- ===== QUALITY ===== -->
+        <section id="quality" class="section">
+          <div class="section-head">
+            <h2>Quality &amp; Migration</h2>
+            <span class="section-hint">Schema validation, evidence health, and imported frameworks</span>
+          </div>
+          <div id="quality-panel" class="overview-page">
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
           </div>
         </section>
 

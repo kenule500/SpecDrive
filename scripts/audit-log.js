@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+const { appendEvent } = require("./lib/audit-chain");
 
 const projectRoot = process.cwd();
 const auditLogPath = path.join(projectRoot, ".sdrive", "audit-log.json");
@@ -10,6 +11,8 @@ const auditLogPath = path.join(projectRoot, ".sdrive", "audit-log.json");
 // uses for role checks) and falls back to the OS username so events are never
 // left anonymous.
 function getActor() {
+  if (process.env.SDRIVE_ACTOR) return process.env.SDRIVE_ACTOR.trim();
+
   try {
     const name = execSync("git config user.name", { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
     if (name) return name;
@@ -34,13 +37,17 @@ function loadAuditLog() {
 }
 
 function saveAuditLog(log) {
-  fs.writeFileSync(auditLogPath, JSON.stringify(log, null, 2));
+  fs.mkdirSync(path.dirname(auditLogPath), { recursive: true });
+
+  const temp = `${auditLogPath}.${process.pid}.tmp`;
+  fs.writeFileSync(temp, `${JSON.stringify(log, null, 2)}\n`);
+  fs.renameSync(temp, auditLogPath);
 }
 
 function logEvent(event, details = {}) {
   const log = loadAuditLog();
 
-  log.events.push({
+  appendEvent(log, {
     timestamp: new Date().toISOString(),
     actor: getActor(),
     ...details,

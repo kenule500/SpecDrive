@@ -1,111 +1,52 @@
-const fs = require("fs");
+// Router checks: known/unknown commands, required feature, and kebab-case
+// conversion. Runs against a temp project with its own installed commands.
 const path = require("path");
-const { execSync } = require("child_process");
+const { spawnSync } = require("child_process");
+const { initProject, seedTeam, cleanup, TEST_ENV } = require("./helpers/sandbox");
 
-const projectRoot = process.cwd();
-const routerPath = path.join(projectRoot, ".sdrive", "commands", "router.js");
+const root = initProject({ prefix: "sdrive-router-" });
+const router = path.join(root, ".sdrive", "commands", "router.js");
+let failures = 0;
 
-function runRouter(command, feature) {
-  try {
-    const args = feature ? ` ${feature}` : "";
-    execSync(`node "${routerPath}" ${command}${args}`, { stdio: "pipe" });
-    return true;
-  } catch (error) {
-    return false;
-  }
+function runRouter(args) {
+  return spawnSync(process.execPath, [router, ...args], {
+    cwd: root,
+    env: TEST_ENV,
+    encoding: "utf8",
+    timeout: 60000
+  });
 }
 
-function testKnownCommand() {
-  console.log("\n🧪 Test 1: Known command should pass");
-
-  const passed = runRouter("/sdrive:skills");
-
-  if (passed) {
-    console.log("✅ PASS: Router accepted the ungated /sdrive:skills command.");
-    return true;
-  }
-
-  console.log("❌ FAIL: Router rejected /sdrive:skills.");
-  return false;
+function check(label, condition, detail = "") {
+  console.log(`${condition ? "✅ PASS" : "❌ FAIL"}: ${label}${condition || !detail ? "" : `\n   ${detail}`}`);
+  if (!condition) failures += 1;
 }
 
-function testUnknownCommand() {
-  console.log("\n🧪 Test 2: Unknown command should fail");
+try {
+  seedTeam(root);
 
-  const passed = runRouter("/sdrive:unknown");
+  const known = runRouter(["/sdrive:skills"]);
+  check("Known, ungated command is accepted", known.status === 0, known.stdout + known.stderr);
 
-  if (!passed) {
-    console.log("✅ PASS: Router rejected unknown command.");
-    return true;
-  }
+  const unknown = runRouter(["/sdrive:unknown"]);
+  check("Unknown command is rejected", unknown.status !== 0);
 
-  console.log("❌ FAIL: Router accepted unknown command.");
-  return false;
+  const missingFeature = runRouter(["/sdrive:propose"]);
+  check("Feature command without a feature is rejected", missingFeature.status !== 0);
+
+  const conversion = runRouter(["/sdrive:propose", "User login with email"]);
+  check(
+    "Natural description becomes a kebab-case feature",
+    (conversion.stdout || "").includes("user-login-with-email"),
+    conversion.stdout + conversion.stderr
+  );
+} finally {
+  cleanup(root);
 }
 
-function testMissingFeatureForGatedCommand() {
-  console.log("\n🧪 Test 3: Gated command without feature should fail");
-
-  const passed = runRouter("/sdrive:propose");
-
-  if (!passed) {
-    console.log("✅ PASS: Router blocked gated command without feature.");
-    return true;
-  }
-
-  console.log("❌ FAIL: Router allowed gated command without feature.");
-  return false;
+if (failures > 0) {
+  console.error(`\n❌ ${failures} router check(s) failed.`);
+  process.exit(1);
 }
 
-function testFeatureConversion() {
-  console.log("\n🧪 Test 4: Natural feature description should convert to kebab-case");
-
-  try {
-    const output = execSync(
-      `node "${routerPath}" /sdrive:propose "User login with email"`,
-      { stdio: "pipe", encoding: "utf8" }
-    );
-
-    if (output.includes("user-login-with-email")) {
-      console.log("✅ PASS: Feature converted to kebab-case.");
-      return true;
-    }
-
-    console.log("❌ FAIL: Feature not converted correctly.");
-    return false;
-  } catch (error) {
-    if (error.stdout && error.stdout.includes("user-login-with-email")) {
-      console.log("✅ PASS: Feature converted to kebab-case.");
-      return true;
-    }
-
-    if (error.stdout && error.stdout.includes("user-login-with-email")) {
-      console.log("✅ PASS: Feature converted to kebab-case.");
-      return true;
-    }
-
-    console.log("❌ FAIL: Feature not converted correctly.");
-    return false;
-  }
-}
-
-function main() {
-  console.log("=== SpecDrive Router Tests ===\n");
-
-  let allPassed = true;
-
-  allPassed &= testKnownCommand();
-  allPassed &= testUnknownCommand();
-  allPassed &= testMissingFeatureForGatedCommand();
-  allPassed &= testFeatureConversion();
-
-  if (allPassed) {
-    console.log("\n✅ All router tests passed.");
-    process.exit(0);
-  } else {
-    console.log("\n❌ Some router tests failed.");
-    process.exit(1);
-  }
-}
-
-main();
+console.log("\n✅ All router checks passed.");

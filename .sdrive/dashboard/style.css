@@ -633,6 +633,14 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.quality-card {
+  padding: 18px;
+}
+
+.quality-card > .detail-block-label:first-child {
+  margin-top: 0;
+}
+
 .panel-loading {
   color: var(--text-3);
   font-size: 13px;

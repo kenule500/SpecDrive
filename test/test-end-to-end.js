@@ -1,139 +1,54 @@
+// End-to-end: initialise a project, create a feature, confirm the scaffold, and
+// confirm the governance validator rejects an incomplete spec.
+//
+// Everything happens in a temp directory. The old version reset the repository's
+// own workflow-state.json and invoked a CLI path that does not exist.
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { initProject, runCli, cleanup } = require("./helpers/sandbox");
 
-const projectRoot = process.cwd();
+const root = initProject({ prefix: "sdrive-e2e-" });
+let failures = 0;
 
-function runCommand(command) {
-  try {
-    execSync(command, { stdio: "pipe" });
-    return true;
-  } catch (error) {
-    return false;
+function check(label, condition, detail = "") {
+  if (condition) {
+    console.log(`✅ PASS: ${label}`);
+    return;
   }
+
+  console.log(`❌ FAIL: ${label}${detail ? `\n   ${detail}` : ""}`);
+  failures += 1;
 }
 
-function resetEnvironment() {
-  console.log("🧹 Resetting test environment...");
+try {
+  const created = runCli(["create", "test-feature"], { cwd: root });
+  check("Feature creation exits 0", created.status === 0, created.stderr);
 
-  const specDir = path.join(projectRoot, ".sdrive", "specs", "backlog", "test-feature");
-  const govDir = path.join(projectRoot, ".sdrive", "governance", "test-feature");
+  const specPath = path.join(root, ".sdrive", "specs", "backlog", "test-feature", "spec.md");
+  const govPath = path.join(root, ".sdrive", "governance", "test-feature", "spec.json");
+  const tracePath = path.join(root, ".sdrive", "governance", "test-feature", "traceability.json");
 
-  if (fs.existsSync(specDir)) {
-    fs.rmSync(specDir, { recursive: true, force: true });
-  }
-  if (fs.existsSync(govDir)) {
-    fs.rmSync(govDir, { recursive: true, force: true });
-  }
+  check("Spec and governance files exist", fs.existsSync(specPath) && fs.existsSync(govPath));
+  check("Traceability matrix exists", fs.existsSync(tracePath));
 
-  const workflowStatePath = path.join(projectRoot, ".sdrive", "workflow-state.json");
-  fs.writeFileSync(workflowStatePath, JSON.stringify({ features: [] }, null, 2));
+  const validation = runCli(["validate", "--json"], { cwd: root });
+  check(
+    "Incomplete scaffold is rejected by governance validation",
+    validation.status === 4,
+    `exit ${validation.status}`
+  );
+
+  const state = JSON.parse(
+    fs.readFileSync(path.join(root, ".sdrive", "workflow-state.json"), "utf8")
+  );
+  check("Workflow state has a features array", Array.isArray(state.features));
+} finally {
+  cleanup(root);
 }
 
-function testFeatureCreation() {
-  console.log("\n🧪 Test 1: Feature creation");
-
-  const createTestPath = path.join(__dirname, "test-create.js");
-  const passed = runCommand(`node "${createTestPath}"`);
-
-  if (passed) {
-    console.log("✅ PASS: Feature created.");
-    return true;
-  }
-
-  console.log("❌ FAIL: Feature creation failed.");
-  return false;
+if (failures > 0) {
+  console.error(`\n❌ ${failures} end-to-end check(s) failed.`);
+  process.exit(1);
 }
 
-function testSpecGeneration() {
-  console.log("\n🧪 Test 2: Spec generation");
-
-  const specPath = path.join(projectRoot, ".sdrive", "specs", "backlog", "test-feature", "spec.md");
-  const govPath = path.join(projectRoot, ".sdrive", "governance", "test-feature", "spec.json");
-
-  const specExists = fs.existsSync(specPath);
-  const govExists = fs.existsSync(govPath);
-
-  if (specExists && govExists) {
-    console.log("✅ PASS: Spec and governance files exist.");
-    return true;
-  }
-
-  console.log("❌ FAIL: Spec or governance files missing.");
-  return false;
-}
-
-function testTraceabilityGenerated() {
-  console.log("\n🧪 Test 3: Traceability matrix generated");
-
-  const tracePath = path.join(projectRoot, ".sdrive", "governance", "test-feature", "traceability.json");
-
-  if (fs.existsSync(tracePath)) {
-    console.log("✅ PASS: Traceability matrix exists.");
-    return true;
-  }
-
-  console.log("❌ FAIL: Traceability matrix missing.");
-  return false;
-}
-
-function testIncompleteScaffoldFailsValidation() {
-  console.log("\n🧪 Test 4: Incomplete scaffold is rejected by governance validation");
-
-  const passed = runCommand("node .sdrive/scripts/validate-governance.js");
-
-  if (!passed) {
-    console.log("✅ PASS: Validator rejected the incomplete scaffold as expected.");
-    return true;
-  }
-
-  console.log("❌ FAIL: Validator accepted an incomplete scaffold.");
-  return false;
-}
-
-function testWorkflowState() {
-  console.log("\n🧪 Test 5: Workflow state updated");
-
-  const workflowStatePath = path.join(projectRoot, ".sdrive", "workflow-state.json");
-
-  if (!fs.existsSync(workflowStatePath)) {
-    console.log("❌ FAIL: workflow-state.json missing.");
-    return false;
-  }
-
-  const state = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
-
-  if (state.features && Array.isArray(state.features)) {
-    console.log("✅ PASS: Workflow state has features array.");
-    return true;
-  }
-
-  console.log("❌ FAIL: Workflow state invalid.");
-  return false;
-}
-
-function main() {
-  console.log("=== SpecDrive End-to-End Tests ===\n");
-
-  resetEnvironment();
-
-  let allPassed = true;
-
-  allPassed &= testFeatureCreation();
-  allPassed &= testSpecGeneration();
-  allPassed &= testTraceabilityGenerated();
-  allPassed &= testIncompleteScaffoldFailsValidation();
-  allPassed &= testWorkflowState();
-
-  resetEnvironment();
-
-  if (allPassed) {
-    console.log("\n✅ All end-to-end tests passed.");
-    process.exit(0);
-  } else {
-    console.log("\n❌ Some end-to-end tests failed.");
-    process.exit(1);
-  }
-}
-
-main();
+console.log("\n✅ All end-to-end checks passed.");

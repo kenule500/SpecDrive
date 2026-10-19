@@ -210,3 +210,21 @@ At the end of your work, provide:
 6. ✅ Confirmation that only the current version was modified.
 7. ✅ (If `--all`) An aggregate report at `.sdrive/reports/security/security-audit-all-<date>.md` covering every ongoing feature.
 </deliverables>
+
+<!-- specdrive-git-commit-push -->
+<git-commit-and-push>
+After this command's work is complete and every required human approval gate has been granted, commit and push the changes this command made.
+
+1. Stage only the files this command created or modified (its `.sdrive/` artifacts, and any source files the agent was authorised to write). Never use `git add -A` when unrelated work is present.
+2. If `git status --porcelain` is empty, report "No changes to commit" and skip both the commit and the push.
+3. Commit with a message that names the command and, when there is one, the feature:
+   - `specdrive(propose): add user-login specification`
+   - `specdrive(test): record user-login test evidence`
+   Use the prefix `specdrive(<command>):`.
+4. Push the current branch to its upstream. If it has no upstream, set it once: `git push -u origin <current-branch>`.
+5. Report the commit SHA and the branch that was pushed.
+
+If this command already committed and pushed its own work (for example `/sdrive:apply`), verify and report that instead of creating an empty commit.
+
+Never force-push. Never amend a commit you did not create in this run. Never commit work whose required human approval has not been granted. If Git is unavailable or the repository has no remote, report that and leave the working tree intact.
+</git-commit-and-push>

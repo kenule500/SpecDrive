@@ -20,7 +20,9 @@ const FEATURE_FILES = [
   { file: "spec.json", schema: "spec.schema.json" },
   { file: "plan.json", schema: "plan.schema.json" },
   { file: "tasks.json", schema: "tasks.schema.json" },
-  { file: "traceability.json", schema: "traceability.schema.json" }
+  { file: "traceability.json", schema: "traceability.schema.json" },
+  { file: "test-evidence.json", schema: "test-evidence.schema.json" },
+  { file: "review.json", schema: "review.schema.json" }
 ];
 
 // The installed script lives at <project>/.sdrive/scripts/, so two levels up is the

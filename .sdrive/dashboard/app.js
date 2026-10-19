@@ -1,4 +1,4 @@
-﻿async function fetchJson(url) {
+async function fetchJson(url) {
   try {
     const res = await fetch(url);
     return await res.json();
@@ -145,9 +145,9 @@ const GATE_DEFS = [
 ];
 
 function gateStatusMeta(status) {
-  if (status === "approved") return { icon: "âœ“", text: "approved" };
-  if (status === "in_progress") return { icon: "â—", text: "in progress" };
-  return { icon: "â—‹", text: "pending" };
+  if (status === "approved") return { icon: "✓", text: "approved" };
+  if (status === "in_progress") return { icon: "●", text: "in progress" };
+  return { icon: "○", text: "pending" };
 }
 
 function phaseTone(phase) {
@@ -175,7 +175,7 @@ function initials(name) {
 }
 
 function formatDate(iso) {
-  if (!iso) return "â€”";
+  if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, {
@@ -186,7 +186,7 @@ function formatDate(iso) {
 }
 
 function formatDateTime(iso) {
-  if (!iso) return "â€”";
+  if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleString(undefined, {
@@ -274,7 +274,7 @@ function renderGitInfo(git) {
   if (sidebar) {
     sidebar.innerHTML = `
       <div><span class="git-branch-name">${escapeHtml(git.branch)}</span></div>
-      <div class="git-meta">${escapeHtml(git.commit)} Â· ${escapeHtml(git.author || "")}</div>
+      <div class="git-meta">${escapeHtml(git.commit)} · ${escapeHtml(git.author || "")}</div>
       ${git.mergedFrom ? `<div class="git-meta">merged from ${escapeHtml(git.mergedFrom)}</div>` : ""}
     `;
   }
@@ -282,7 +282,7 @@ function renderGitInfo(git) {
   if (chip) {
     const sync =
       git.ahead || git.behind
-        ? ` Â· â†‘${git.ahead} â†“${git.behind}`
+        ? ` · ↑${git.ahead} ↓${git.behind}`
         : "";
     chip.innerHTML = `
       <span class="dot ${git.dirty === true ? "dirty" : git.dirty === null ? "unknown" : ""}"></span>
@@ -858,19 +858,19 @@ function renderProduct(product, productType) {
   div.innerHTML = `
     <div class="product-plan-wrap">
       <div class="stat-card tone-accent">
-        <span class="stat-icon">â–¤</span>
+        <span class="stat-icon">▤</span>
         <span class="stat-label">Backlog Items</span>
         <span class="stat-value">${backlog.length}</span>
         <span class="stat-sub">product-level candidates</span>
       </div>
       <div class="stat-card tone-amber">
-        <span class="stat-icon">â³</span>
+        <span class="stat-icon">⏳</span>
         <span class="stat-label">Pending</span>
         <span class="stat-value">${pending}</span>
         <span class="stat-sub">awaiting promotion</span>
       </div>
       <div class="stat-card tone-slate">
-        <span class="stat-icon">ðŸ’¤</span>
+        <span class="stat-icon">💤</span>
         <span class="stat-label">Deferred</span>
         <span class="stat-value">${deferred}</span>
         <span class="stat-sub">parked for later</span>
@@ -880,10 +880,10 @@ function renderProduct(product, productType) {
     <div class="product-plan-panel">
       <div class="detail-block-label">Artifacts</div>
       <div class="product-plan-artifacts">
-        ${product.overview ? `<span class="artifact-chip">ðŸ“„ overview.md</span>` : ""}
-        ${product.mockup ? `<span class="artifact-chip">ðŸ—ºï¸ mockup.md</span>` : ""}
-        ${product.designSystem ? `<span class="artifact-chip">ðŸŽ¨ design-system.md</span>` : ""}
-        ${product.roadmap ? `<span class="artifact-chip">ðŸ›£ï¸ roadmap.md</span>` : ""}
+        ${product.overview ? `<span class="artifact-chip">📄 overview.md</span>` : ""}
+        ${product.mockup ? `<span class="artifact-chip">🗺️ mockup.md</span>` : ""}
+        ${product.designSystem ? `<span class="artifact-chip">🎨 design-system.md</span>` : ""}
+        ${product.roadmap ? `<span class="artifact-chip">🛣️ roadmap.md</span>` : ""}
       </div>
 
       <div class="table-scroll">
@@ -931,11 +931,11 @@ function renderVersionBlock(feature, version, isCurrent, traceability, verificat
   const vTone = verificationTone(vStatus);
   const vLabel =
     vStatus === "pass"
-      ? `PASS Â· ${verification.summary?.matched ?? 0} matched`
+      ? `PASS · ${verification.summary?.matched ?? 0} matched`
       : vStatus === "warn"
-      ? `WARN Â· ${verification.summary?.extra ?? 0} extra`
+      ? `WARN · ${verification.summary?.extra ?? 0} extra`
       : vStatus === "fail"
-      ? `FAIL Â· ${verification.summary?.missing ?? 0} missing`
+      ? `FAIL · ${verification.summary?.missing ?? 0} missing`
       : "NOT RUN";
 
   const tStatus = tests.status || "not_run";
@@ -943,7 +943,7 @@ function renderVersionBlock(feature, version, isCurrent, traceability, verificat
   const tLabel =
     tStatus === "not_run"
       ? "NOT RUN"
-      : `${tests.summary?.coverage ?? 0}% Â· ${tests.summary?.testedACs ?? 0}/${tests.summary?.totalACs ?? 0} ACs`;
+      : `${tests.summary?.coverage ?? 0}% · ${tests.summary?.testedACs ?? 0}/${tests.summary?.totalACs ?? 0} ACs`;
 
   const history = (version.history || []).filter((h) => h.event.endsWith("_approved"));
 
@@ -956,7 +956,7 @@ function renderVersionBlock(feature, version, isCurrent, traceability, verificat
         <span class="chip ${isCurrent ? "accent" : "slate"}">${isCurrent ? "current" : "past"}</span>
         ${escapeHtml(version.id)}
       </span>
-      <span class="version-phase">${escapeHtml(version.phase)} Â· ${escapeHtml(version.currentStep)}</span>
+      <span class="version-phase">${escapeHtml(version.phase)} · ${escapeHtml(version.currentStep)}</span>
     </div>
 
     <div class="gate-section">
@@ -1000,7 +1000,7 @@ function renderVersionBlock(feature, version, isCurrent, traceability, verificat
         ? `<div class="history-list">${history
             .map(
               (h) =>
-                `<div class="history-item"><span class="tick">âœ“</span>${escapeHtml(
+                `<div class="history-item"><span class="tick">✓</span>${escapeHtml(
                   h.event.replace("_approved", "")
                 )} approved by ${escapeHtml(h.by || "unknown")}</div>`
             )
@@ -1068,7 +1068,7 @@ function featureMembersEl(members) {
           (m) =>
             `<span class="feature-member-avatar role-${escapeHtml(m.role)}" title="${escapeHtml(
               m.username
-            )} Â· ${escapeHtml(m.role)}">${escapeHtml(initials(m.username))}</span>`
+            )} · ${escapeHtml(m.role)}">${escapeHtml(initials(m.username))}</span>`
         )
         .join("")}
     </div>
@@ -1127,7 +1127,7 @@ async function renderFeatures() {
         <span class="feature-name">${escapeHtml(f.name)}</span>
         <span class="chip accent">${escapeHtml(f.currentVersion)}</span>
       </div>
-      ${f.branch ? `<span class="feature-branch">âŽ‡ ${escapeHtml(f.branch)}</span>` : ""}
+      ${f.branch ? `<span class="feature-branch">⎇ ${escapeHtml(f.branch)}</span>` : ""}
     `;
     const assigneeEl = featureAssigneeEl(f, team);
     if (assigneeEl) {
@@ -1281,6 +1281,7 @@ async function openFeatureDetail(featureName) {
   renderDetailBody();
   renderDetailReports();
   renderDetailSpecs();
+  renderDetailEvidence();
 }
 
 /* ============================================================
@@ -1968,12 +1969,25 @@ function renderMarkdown(src) {
   const out = [];
   let i = 0;
 
+  const safeHref = (href) => {
+    const value = String(href || "").trim();
+
+    // Relative links and the three schemes the dashboard has any use for.
+    // Everything else (notably javascript:) becomes inert.
+    if (/^(https?:\/\/|mailto:|\/|\.{0,2}\/|#)/i.test(value)) return value;
+    return "#";
+  };
+
   const inline = (text) =>
     escapeHtml(text)
       .replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
       .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      .replace(
+        /\[([^\]]+)\]\(([^)]+)\)/g,
+        (match, label, href) =>
+          `<a href="${safeHref(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`
+      );
 
   while (i < lines.length) {
     const line = lines[i];
@@ -2130,6 +2144,180 @@ function populateDetailFilters(versionData) {
   if (Array.from(phaseSelect.options).some((o) => o.value === prevPhase)) {
     phaseSelect.value = prevPhase;
   }
+}
+
+async function renderDetailEvidence() {
+  const container = document.getElementById("detail-evidence");
+  if (!container || !detailFeature) return;
+
+  const version = detailFeature.currentVersion;
+  const feature = detailFeature.name;
+
+  const [evidence, review, archive, git] = await Promise.all([
+    fetchJson(`/api/test-evidence/${encodeURIComponent(feature)}/${encodeURIComponent(version)}`),
+    fetchJson(`/api/review/${encodeURIComponent(feature)}/${encodeURIComponent(version)}`),
+    fetchJson(`/api/archive-check/${encodeURIComponent(feature)}`),
+    fetchJson("/api/git-info")
+  ]);
+
+  const cards = [];
+  let count = 0;
+
+  const evidenceValue = evidence && evidence.found ? evidence.evidence : null;
+  const head = git && git.commit ? git.commit : "";
+
+  if (evidenceValue) {
+    count += 1;
+    const summary = evidenceValue.summary || {};
+    const passed = evidenceValue.exitCode === 0 && Number(summary.failed || 0) === 0;
+    const stale = head && evidenceValue.commit && evidenceValue.commit !== head;
+    cards.push(`
+      <div class="card quality-card">
+        <div class="detail-block-label">Test evidence</div>
+        <div class="detail-list">
+          <div><span class="chip ${passed ? "green" : "red"}">${passed ? "passing" : "failing"}</span>
+            <span class="chip ${stale ? "amber" : "slate"}">${stale ? "stale" : "current"}</span></div>
+          <div class="li-meta"><strong>Command:</strong> ${escapeHtml(evidenceValue.command || "")}</div>
+          <div class="li-meta"><strong>Counts:</strong> ${Number(summary.passed || 0)} passed · ${Number(summary.failed || 0)} failed · ${Number(summary.skipped || 0)} skipped</div>
+          <div class="li-meta"><strong>Commit:</strong> ${escapeHtml(String(evidenceValue.commit || "unknown").slice(0, 8))}${stale ? ` (HEAD ${escapeHtml(head.slice(0, 8))})` : ""}</div>
+          <div class="li-meta"><strong>Duration:</strong> ${Number(evidenceValue.durationMs || 0)} ms</div>
+        </div>
+      </div>
+    `);
+  } else {
+    cards.push(`
+      <div class="card quality-card">
+        <div class="detail-block-label">Test evidence</div>
+        <div class="panel-loading">No test evidence yet. Run <code>sdrive test ${escapeHtml(feature)}</code>.</div>
+      </div>
+    `);
+  }
+
+  const reviewValue = review && review.found ? review.review : null;
+
+  if (reviewValue) {
+    count += 1;
+    const findings = reviewValue.findings || [];
+    cards.push(`
+      <div class="card quality-card">
+        <div class="detail-block-label">Structured review</div>
+        <div class="detail-list">
+          <div><span class="chip ${reviewValue.status === "PASS" ? "green" : "red"}">${escapeHtml(reviewValue.status || "unknown")}</span>
+            <span class="chip slate">${Number(reviewValue.coverage || 0)}% coverage</span></div>
+          <div class="li-meta"><strong>Reviewer:</strong> ${escapeHtml(reviewValue.reviewedBy || "unknown")}</div>
+          <div class="li-meta"><strong>Commit:</strong> ${escapeHtml(String(reviewValue.commit || "unknown").slice(0, 8))}</div>
+          <div class="li-meta"><strong>Findings:</strong> ${findings.length}</div>
+          ${findings.length
+            ? `<ul class="detail-list">${findings
+                .slice(0, 8)
+                .map(
+                  (finding) =>
+                    `<li><span class="chip ${finding.severity === "high" ? "red" : finding.severity === "medium" ? "amber" : "slate"}">${escapeHtml(finding.severity || "info")}</span> ${escapeHtml(finding.issue || "")} <span class="li-meta">${escapeHtml(finding.location || "")}</span></li>`
+                )
+                .join("")}</ul>`
+            : ""}
+        </div>
+      </div>
+    `);
+  } else {
+    cards.push(`
+      <div class="card quality-card">
+        <div class="detail-block-label">Structured review</div>
+        <div class="panel-loading">No review.json yet. Run <code>/sdrive:review ${escapeHtml(feature)}</code>.</div>
+      </div>
+    `);
+  }
+
+  count += 1;
+  const blockers = (archive && archive.blockers) || [];
+  cards.push(`
+    <div class="card quality-card">
+      <div class="detail-block-label">Archive readiness</div>
+      <div class="detail-list">
+        <div><span class="chip ${archive && archive.ok ? "green" : "amber"}">${archive && archive.ok ? "archivable" : "blocked"}</span></div>
+        ${
+          blockers.length
+            ? `<ul class="detail-list">${blockers.map((blocker) => `<li>${escapeHtml(blocker)}</li>`).join("")}</ul>`
+            : `<div class="li-meta">All recorded gates and evidence are present.</div>`
+        }
+      </div>
+    </div>
+  `);
+
+  container.innerHTML = cards.join("");
+  setDetailTabCount("evidence", count);
+}
+
+async function renderQuality() {
+  const container = document.getElementById("quality-panel");
+  if (!container) return;
+
+  const [validation, migration] = await Promise.all([
+    fetchJson("/api/validate"),
+    fetchJson("/api/migrations")
+  ]);
+
+  const results = validation?.results || [];
+  const invalid = results.filter((result) => result.status === "invalid");
+  const valid = results.filter((result) => result.status === "valid");
+  const skipped = results.filter((result) => result.status === "skipped");
+  const detections = migration?.detections || [];
+  const runs = migration?.runs || [];
+
+  container.innerHTML = `
+    <div class="card quality-card">
+      <div class="detail-block-label">Schema validation
+        <span class="chip ${validation?.ok ? "green" : "red"}">${validation?.ok ? "valid" : "invalid"}</span>
+      </div>
+      ${
+        validation?.error
+          ? `<div class="panel-loading">Validation could not run: ${escapeHtml(validation.error)}</div>`
+          : `<div class="detail-list">
+              <div class="li-meta">${valid.length} valid · ${invalid.length} invalid · ${skipped.length} skipped</div>
+              ${invalid.length
+                ? `<ul class="detail-list">${invalid
+                    .map(
+                      (result) =>
+                        `<li><strong>${escapeHtml(result.file)}</strong><ul class="detail-list">${(result.errors || [])
+                          .slice(0, 6)
+                          .map((error) => `<li class="li-meta">${escapeHtml(typeof error === "string" ? error : JSON.stringify(error))}</li>`)
+                          .join("")}</ul></li>`
+                    )
+                    .join("")}</ul>`
+                : `<div class="li-meta">No schema errors.</div>`}
+            </div>`
+      }
+    </div>
+
+    <div class="card quality-card">
+      <div class="detail-block-label">Migration adapters</div>
+      <div class="detail-list">
+        ${
+          detections.length
+            ? detections
+                .map(
+                  (entry) =>
+                    `<div><span class="chip blue">${escapeHtml(entry.id)}</span> ${escapeHtml(entry.name)} — ${escapeHtml(entry.root || "")}</div>`
+                )
+                .join("")
+            : `<div class="li-meta">No supported external framework detected.</div>`
+        }
+      </div>
+      <div class="detail-block-label" style="margin-top:16px">Recent migrations</div>
+      <div class="detail-list">
+        ${
+          runs.length
+            ? runs
+                .map(
+                  (run) =>
+                    `<div><span class="chip slate">${escapeHtml(run.framework || "")}</span> ${escapeHtml(run.id)} — imported ${Number(run.counts?.imported || 0)}, skipped ${Number(run.counts?.skipped || 0)}, failed ${Number(run.counts?.failed || 0)}</div>`
+                )
+                .join("")
+            : `<div class="li-meta">No migration runs yet. Plan one with <code>sdrive migrate:plan &lt;framework&gt;</code>.</div>`
+        }
+      </div>
+    </div>
+  `;
 }
 
 function renderDetailSummary() {
@@ -2310,7 +2498,7 @@ function setupFeatureDetail() {
    detail page. Reports used to sit below the task list, which meant scrolling
    past every task to reach them. */
 function showDetailTab(name) {
-  const target = ["reports", "specs"].includes(name) ? name : "tasks";
+  const target = ["evidence", "reports", "specs"].includes(name) ? name : "tasks";
 
   document.querySelectorAll("[data-detail-tab]").forEach((tab) => {
     const active = tab.dataset.detailTab === target;
@@ -2474,9 +2662,9 @@ async function renderAudit() {
     const details = e.details || {};
     const detailParts = Object.entries(details)
       .map(([k, v]) => `${k}: ${v}`)
-      .join(" Â· ");
+      .join(" · ");
 
-    const scope = [e.feature, e.version].filter(Boolean).join(" Â· ");
+    const scope = [e.feature, e.version].filter(Boolean).join(" · ");
 
     // Actor attribution: older events predate actor capture, so fall back to a
     // muted "unknown" chip rather than hiding the row entirely.
@@ -2566,7 +2754,7 @@ async function renderSkills() {
       s.extraFiles ? `${s.extraFiles} extra file${s.extraFiles === 1 ? "" : "s"}` : ""
     ]
       .filter(Boolean)
-      .join(" Â· ");
+      .join(" · ");
 
     card.innerHTML = `
       <div class="skill-head">
@@ -2575,7 +2763,7 @@ async function renderSkills() {
             ? `<span class="skill-logo"><img src="${escapeHtml(s.logo)}" alt="${escapeHtml(
                 s.name
               )} logo" loading="lazy" /></span>`
-            : `<span class="skill-icon">âœ¦</span>`
+            : `<span class="skill-icon">✦</span>`
         }
         <div class="skill-title">
           <div class="skill-name">${escapeHtml(s.name)}</div>
@@ -3031,6 +3219,7 @@ const ROUTES = [
   "product-plan",
   "features",
   "feature-detail",
+  "quality",
   "skills",
   "team",
   "activity",
@@ -3072,6 +3261,8 @@ function showRoute(route) {
   const label = target === "feature-detail" ? "Feature" : target;
   document.title = `SpecDrive · ${label.charAt(0).toUpperCase()}${label.slice(1)}`;
   window.scrollTo({ top: 0, behavior: "auto" });
+
+  if (target === "quality") renderQuality();
 }
 
 function setupNav() {

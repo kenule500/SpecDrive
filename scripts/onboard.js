@@ -123,6 +123,25 @@ function scanSection(list) {
   return result;
 }
 
+function detectFrameworks() {
+  try {
+    const migrations = require(path.join(__dirname, "..", "migrations"));
+    return migrations
+      .detectAll(projectRoot)
+      .filter((entry) => entry.detected)
+      .map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        root: entry.root,
+        confidence: entry.confidence,
+        detected: true,
+        counts: entry.counts || {}
+      }));
+  } catch (error) {
+    return [];
+  }
+}
+
 function detectExternalSpecSystems() {
   const detection = {
     openspec: {
@@ -135,7 +154,8 @@ function detectExternalSpecSystems() {
       detected: false,
       specs: 0,
       hasConstitution: false
-    }
+    },
+    frameworks: []
   };
 
   // OpenSpec detection
@@ -184,6 +204,8 @@ function detectExternalSpecSystems() {
       detection.speckit.hasConstitution = true;
     }
   }
+
+  detection.frameworks = detectFrameworks();
 
   return detection;
 }
@@ -854,7 +876,11 @@ function buildReport(inventory) {
 
   // External Spec Systems
   const ext = inventory.detectedSystems || {};
-  if (ext.openspec?.detected || ext.speckit?.detected) {
+  const extraFrameworks = (ext.frameworks || []).filter(
+    (framework) => !["openspec", "speckit"].includes(framework.id)
+  );
+
+  if (ext.openspec?.detected || ext.speckit?.detected || extraFrameworks.length > 0) {
     lines.push("## Detected External Spec Systems");
     if (ext.openspec?.detected) {
       lines.push(`- ✅ OpenSpec`);
@@ -867,8 +893,18 @@ function buildReport(inventory) {
       lines.push(`  - Specs: ${ext.speckit.specs}`);
       lines.push(`  - Constitution: ${ext.speckit.hasConstitution ? "found" : "missing"}`);
     }
+    for (const framework of extraFrameworks) {
+      lines.push(`- ✅ ${framework.name} (${framework.id})`);
+      lines.push(`  - Root: ${framework.root}`);
+      lines.push(`  - Confidence: ${framework.confidence}`);
+      const counts = Object.entries(framework.counts || {})
+        .map(([key, value]) => `${key}=${value}`)
+        .join(", ");
+      if (counts) lines.push(`  - Counts: ${counts}`);
+    }
     lines.push("");
     lines.push("> These can be migrated into SpecDrive during onboarding via the Onboarding Agent.");
+    lines.push("> Plan first: `sdrive migrate:plan <framework>`; apply with `sdrive migrate:apply <framework> --yes`.");
     lines.push("");
   }
 
@@ -1027,7 +1063,11 @@ function main() {
   }
 
   const ext = inventory.detectedSystems || {};
-  if (ext.openspec?.detected || ext.speckit?.detected) {
+  const extraFrameworks = (ext.frameworks || []).filter(
+    (framework) => !["openspec", "speckit"].includes(framework.id)
+  );
+
+  if (ext.openspec?.detected || ext.speckit?.detected || extraFrameworks.length > 0) {
     console.log("");
     console.log("🔍 External Spec Systems Detected:");
     if (ext.openspec?.detected) {
@@ -1036,8 +1076,12 @@ function main() {
     if (ext.speckit?.detected) {
       console.log(`   - Spec-Kit (${ext.speckit.specs} specs)`);
     }
+    for (const framework of extraFrameworks) {
+      console.log(`   - ${framework.name} (${framework.id})`);
+    }
     console.log("");
-    console.log("   Run /sdrive:onboard to migrate them.");
+    console.log("   Run /sdrive:onboard to migrate them, or plan first:");
+    console.log("   sdrive migrate:plan <framework>");
   }
 }
 

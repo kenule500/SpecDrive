@@ -1198,6 +1198,113 @@ function gateAccessors() {
   return gates;
 }
 
+function apiValidateProject() {
+  try {
+    const { validateArtifacts } = require(path.join(__dirname, "..", "scripts", "validate-governance"));
+    const verdict = validateArtifacts(projectRoot, {});
+    return { ok: verdict.ok, results: verdict.results, skipped: verdict.skipped };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error.message,
+      results: [],
+      skipped: []
+    };
+  }
+}
+
+function apiTestEvidence(feature, version) {
+  if (!feature || !version) {
+    return { found: false, evidence: null, error: "feature and version are required" };
+  }
+
+  const file = governanceFile(feature, version, "test-evidence.json");
+  const evidence = loadJson(file, null);
+
+  return {
+    found: Boolean(evidence),
+    evidence,
+    path: path.relative(projectRoot, file)
+  };
+}
+
+function apiReviewRecord(feature, version) {
+  if (!feature || !version) {
+    return { found: false, review: null, reviewMd: null, error: "feature and version are required" };
+  }
+
+  const file = governanceFile(feature, version, "review.json");
+  const review = loadJson(file, null);
+  const { dir } = resolveSpecDir(feature, version);
+  let reviewMd = null;
+
+  if (dir) {
+    try {
+      reviewMd = fs.readFileSync(path.join(dir, "review.md"), "utf8");
+    } catch (error) {
+      reviewMd = null;
+    }
+  }
+
+  return {
+    found: Boolean(review),
+    review,
+    reviewMd,
+    path: path.relative(projectRoot, file)
+  };
+}
+
+function apiArchiveCheck(feature) {
+  if (!feature) {
+    return { ok: false, blockers: ["feature is required"] };
+  }
+
+  const check = archivableChecker();
+
+  if (!check) {
+    return { ok: false, blockers: ["Archive rules are not available in this installation."] };
+  }
+
+  try {
+    return check(projectRoot, feature);
+  } catch (error) {
+    return { ok: false, blockers: [error.message] };
+  }
+}
+
+function apiMigrations() {
+  let detections = [];
+
+  try {
+    const migrations = require(path.join(__dirname, "..", "migrations"));
+    detections = migrations.detectAll(projectRoot).filter((entry) => entry.detected);
+  } catch (error) {
+    detections = [];
+  }
+
+  const runsDir = path.join(sdriveRoot, "migration-runs");
+  const runs = [];
+
+  if (fs.existsSync(runsDir)) {
+    for (const name of fs.readdirSync(runsDir).slice(0, 20)) {
+      const report = loadJson(path.join(runsDir, name, "report.json"), null);
+      if (!report) continue;
+      runs.push({
+        id: report.migrationId || name,
+        framework: report.framework,
+        appliedAt: report.appliedAt,
+        counts: report.counts,
+        features: (report.features || []).map((feature) => ({
+          feature: feature.feature,
+          status: feature.status
+        }))
+      });
+    }
+  }
+
+  return { detections, runs };
+}
+
 function apiHealth() {
   // Every open tab polls on a timer, so several requests can land within a second of
   // each other and each one would rebuild the whole breakdown from disk. A short memo
@@ -1510,7 +1617,7 @@ async function apiStamp() {
   }
 
   const files = ["workflow-state.json", "audit-log.json", "team.json", "config.json"];
-  const dirs = ["specs", "governance", "product", "onboarding", "reports", "context"];
+  const dirs = ["specs", "governance", "product", "onboarding", "reports", "context", "migration-runs"];
 
   const parts = await Promise.all([
     ...files.map((name) => fileStamp(path.join(sdriveRoot, name))),
@@ -2201,8 +2308,32 @@ async function handleRequest(req, res) {
   }
 }
 
+function setSecurityHeaders(res) {
+  // The dashboard is a local read-only view. These headers cost nothing and
+  // close the obvious browser-side gaps if someone sets SDRIVE_HOST.
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader(
+    "Content-Security-Policy",
+    [
+      "default-src 'self'",
+      "img-src 'self' data:",
+      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self'",
+      "connect-src 'self'",
+      "font-src 'self' data:",
+      "object-src 'none'",
+      "base-uri 'none'",
+      "frame-ancestors 'none'"
+    ].join("; ")
+  );
+}
+
 async function routeRequest(req, res) {
   const url = req.url;
+
+  setSecurityHeaders(res);
 
   // Skill logos are binary assets, so they are served before the JSON API block
   // (which sets a JSON content-type header for everything under /api/).
@@ -2217,6 +2348,7 @@ async function routeRequest(req, res) {
     // and terminated the process on any unrecognised /api/ path.
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json");
+    res.setHeader("Cache-Control", "no-store");
 
     if (url === "/api/workflow-state") {
       return res.end(JSON.stringify(apiWorkflowState()));
@@ -2299,6 +2431,29 @@ async function routeRequest(req, res) {
       return res.end(JSON.stringify(apiHealth()));
     }
 
+    if (url === "/api/validate") {
+      return res.end(JSON.stringify(apiValidateProject()));
+    }
+
+    if (url === "/api/migrations") {
+      return res.end(JSON.stringify(apiMigrations()));
+    }
+
+    if (url.startsWith("/api/test-evidence/")) {
+      const { feature, version } = parseFeatureVersion(url);
+      return res.end(JSON.stringify(apiTestEvidence(feature, version)));
+    }
+
+    if (url.startsWith("/api/review/")) {
+      const { feature, version } = parseFeatureVersion(url);
+      return res.end(JSON.stringify(apiReviewRecord(feature, version)));
+    }
+
+    if (url.startsWith("/api/archive-check/")) {
+      const { feature } = parseFeatureVersion(url);
+      return res.end(JSON.stringify(apiArchiveCheck(feature)));
+    }
+
     if (url.startsWith("/api/file")) {
       const params = new URL(url, "http://localhost").searchParams;
       return res.end(
@@ -2321,7 +2476,7 @@ async function routeRequest(req, res) {
   // Path-based page routes. Each dashboard view is its own URL (e.g.
   // /product-plan, /features, /team). They all serve the same single-page shell;
   // the client router in app.js decides which section to display.
-  const PAGE_ROUTES = ["/overview", "/product-plan", "/features", "/team", "/activity", "/commands", "/skills"];
+  const PAGE_ROUTES = ["/overview", "/product-plan", "/features", "/quality", "/team", "/activity", "/commands", "/skills"];
   if (PAGE_ROUTES.includes(url)) {
     return serveStatic(res, path.join(__dirname, "index.html"), "text/html");
   }
@@ -2338,6 +2493,10 @@ async function routeRequest(req, res) {
 
   if (url === "/app.js") {
     return serveStatic(res, path.join(__dirname, "app.js"), "application/javascript");
+  }
+
+  if (url === "/theme.js") {
+    return serveStatic(res, path.join(__dirname, "theme.js"), "application/javascript");
   }
 
   if (url === "/logo.png") {
@@ -2364,16 +2523,26 @@ async function routeRequest(req, res) {
 const PREFERRED_PORT = Number(process.env.SDRIVE_PORT) || 4747;
 const MAX_PORT_ATTEMPTS = 20;
 
+// Loopback by default. The dashboard has no authentication, so binding it to
+// every interface (the old `listen(port)` behaviour) exposed project specs and
+// source files to the local network.
+const PREFERRED_HOST = process.env.SDRIVE_HOST || "127.0.0.1";
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+
+function isLoopback(host) {
+  return LOOPBACK_HOSTS.has(host);
+}
+
 // A fresh server is created for every attempt. Reusing one server across
 // listen() calls leaves stale "listening" callbacks queued, which makes the
 // success message print once per failed attempt.
-function listenOnFreePort(port, attemptsLeft) {
+function listenOnFreePort(port, attemptsLeft, host = PREFERRED_HOST) {
   const server = http.createServer(handleRequest);
 
   server.once("error", (error) => {
     if (error.code === "EADDRINUSE" && attemptsLeft > 0) {
       console.log(`⚠️  Port ${port} is in use, trying ${port + 1}...`);
-      listenOnFreePort(port + 1, attemptsLeft - 1);
+      listenOnFreePort(port + 1, attemptsLeft - 1, host);
       return;
     }
 
@@ -2381,9 +2550,21 @@ function listenOnFreePort(port, attemptsLeft) {
     process.exit(1);
   });
 
-  server.listen(port, () => {
-    console.log(`\n🚀 SpecDrive Dashboard running at http://localhost:${port}\n`);
+  server.listen(port, host, () => {
+    const shown = isLoopback(host) ? "localhost" : host;
+    console.log(`\n🚀 SpecDrive Dashboard running at http://${shown}:${port}\n`);
+
+    if (!isLoopback(host)) {
+      console.warn(
+        `⚠️  Bound to ${host} with no authentication. Anyone who can reach this port can read project files.`
+      );
+      console.warn("   Use 127.0.0.1 (the default) unless you are on a trusted network.\n");
+    }
   });
 }
 
-listenOnFreePort(PREFERRED_PORT, MAX_PORT_ATTEMPTS);
+if (!isLoopback(PREFERRED_HOST)) {
+  console.warn(`⚠️  SDRIVE_HOST=${PREFERRED_HOST}: the dashboard is reachable beyond this machine.`);
+}
+
+listenOnFreePort(PREFERRED_PORT, MAX_PORT_ATTEMPTS, PREFERRED_HOST);

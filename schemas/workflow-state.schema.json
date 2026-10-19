@@ -122,6 +122,22 @@
               },
               "required": ["detected"],
               "additionalProperties": false
+            },
+            "frameworks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "name": { "type": "string" },
+                  "root": { "type": "string" },
+                  "confidence": { "enum": ["high", "medium", "low", "none"] },
+                  "detected": { "type": "boolean" },
+                  "counts": { "type": "object" }
+                },
+                "required": ["id", "name", "detected"],
+                "additionalProperties": false
+              }
             }
           },
           "additionalProperties": false
@@ -149,7 +165,7 @@
             "properties": {
               "feature": { "type": "string" },
               "from": {
-                "enum": ["openspec", "speckit", "other"]
+                "enum": ["openspec", "speckit", "kiro", "agent-os", "bmad", "generic", "other"]
               },
               "date": {
                 "type": "string",
@@ -167,7 +183,7 @@
             "type": "object",
             "properties": {
               "system": {
-                "enum": ["openspec", "speckit", "other"]
+                "enum": ["openspec", "speckit", "kiro", "agent-os", "bmad", "generic", "other"]
               },
               "reason": { "type": "string" }
             },

@@ -1,153 +1,74 @@
+// Governance validation accepts a complete feature and rejects an incomplete
+// one. Runs in a temp project; no repository files are touched or deleted.
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { initProject, runCli, writeJson, cleanup } = require("./helpers/sandbox");
 
-const projectRoot = process.cwd();
-const govDir = path.join(projectRoot, ".sdrive", "governance", "test-feature");
-const validatorPath = path.join(projectRoot, ".sdrive", "scripts", "validate-governance.js");
+const root = initProject({ prefix: "sdrive-validator-" });
+const govDir = path.join(root, ".sdrive", "governance", "test-feature");
+let failures = 0;
 
-function createValidFiles() {
-  fs.mkdirSync(govDir, { recursive: true });
+function check(label, condition, detail = "") {
+  console.log(`${condition ? "✅ PASS" : "❌ FAIL"}: ${label}${condition || !detail ? "" : `\n   ${detail}`}`);
+  if (!condition) failures += 1;
+}
 
-  fs.writeFileSync(
-    path.join(govDir, "spec.json"),
-    JSON.stringify(
+try {
+  writeJson(path.join(govDir, "spec.json"), {
+    feature: "test-feature",
+    title: "Test Feature",
+    version: 1,
+    overview: {
+      problemStatement: "A sufficiently long problem statement.",
+      proposedSolution: "A sufficiently long proposed solution.",
+      targetAudience: "Test users"
+    },
+    userStories: [
       {
-        feature: "test-feature",
-        title: "Test Feature",
-        version: 1,
-        overview: {
-          problemStatement: "Test problem statement",
-          proposedSolution: "Test proposed solution",
-          targetAudience: "Test users"
-        },
-        userStories: [
-          {
-            id: "US-001",
-            title: "Test story",
-            role: "user",
-            want: "test",
-            benefit: "test",
-            acceptanceCriteria: [
-              {
-                id: "AC-001",
-                text: "Given test, when test, then test"
-              }
-            ]
-          }
-        ],
-        functionalRequirements: [
-          {
-            id: "FR-001",
-            text: "The system MUST test"
-          }
+        id: "US-001",
+        title: "Test story",
+        role: "user",
+        want: "test",
+        benefit: "test",
+        acceptanceCriteria: [
+          { id: "AC-001", text: "Given a test, when it runs, then it passes." }
         ]
-      },
-      null,
-      2
-    )
-  );
+      }
+    ],
+    functionalRequirements: [{ id: "FR-001", text: "The system MUST test." }]
+  });
 
-  fs.writeFileSync(
-    path.join(govDir, "traceability.json"),
-    JSON.stringify(
+  writeJson(path.join(govDir, "traceability.json"), {
+    feature: "test-feature",
+    version: 1,
+    rows: [
       {
-        feature: "test-feature",
-        version: 1,
-        rows: [
-          {
-            requirementId: "FR-001",
-            acceptanceCriteriaIds: ["AC-001"],
-            taskIds: ["T1.1"],
-            status: "not_started"
-          }
-        ]
-      },
-      null,
-      2
-    )
-  );
+        requirementId: "FR-001",
+        acceptanceCriteriaIds: ["AC-001"],
+        taskIds: ["T1.1"],
+        status: "not_started"
+      }
+    ]
+  });
+
+  const valid = runCli(["validate", "--json"], { cwd: root });
+  check("Valid governance files pass", valid.status === 0, valid.stdout || valid.stderr);
+
+  writeJson(path.join(govDir, "spec.json"), {
+    feature: "test-feature",
+    version: 1,
+    overview: {},
+    userStories: []
+  });
+
+  const invalid = runCli(["validate", "--json"], { cwd: root });
+  check("Invalid governance files fail with exit 4", invalid.status === 4, invalid.stdout || invalid.stderr);
+} finally {
+  cleanup(root);
 }
 
-function createInvalidFiles() {
-  fs.writeFileSync(
-    path.join(govDir, "spec.json"),
-    JSON.stringify(
-      {
-        feature: "test-feature",
-        version: 1,
-        overview: {},
-        userStories: []
-      },
-      null,
-      2
-    )
-  );
+if (failures > 0) {
+  process.exit(1);
 }
 
-function runValidator() {
-  try {
-    execSync(`node "${validatorPath}"`, { stdio: "pipe" });
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
-function testValidFiles() {
-  console.log("\n🧪 Test 1: Valid governance files should pass");
-  createValidFiles();
-
-  const passed = runValidator();
-
-  if (passed) {
-    console.log("✅ PASS: Validator accepted valid files.");
-  } else {
-    console.log("❌ FAIL: Validator rejected valid files.");
-  }
-
-  return passed;
-}
-
-function testInvalidFiles() {
-  console.log("\n🧪 Test 2: Invalid governance files should fail");
-  createInvalidFiles();
-
-  const passed = runValidator();
-
-  if (!passed) {
-    console.log("✅ PASS: Validator rejected invalid files.");
-  } else {
-    console.log("❌ FAIL: Validator accepted invalid files.");
-  }
-
-  return !passed;
-}
-
-function cleanup() {
-  if (fs.existsSync(govDir)) {
-    fs.rmSync(govDir, { recursive: true, force: true });
-  }
-  console.log("\n🧹 Cleaned up test files.");
-}
-
-function main() {
-  console.log("=== SpecDrive Validator Tests ===\n");
-
-  let allPassed = true;
-
-  allPassed &= testValidFiles();
-  allPassed &= testInvalidFiles();
-
-  cleanup();
-
-  if (allPassed) {
-    console.log("\n✅ All validator tests passed.");
-    process.exit(0);
-  } else {
-    console.log("\n❌ Some validator tests failed.");
-    process.exit(1);
-  }
-}
-
-main();
+console.log("\n✅ All validator checks passed.");

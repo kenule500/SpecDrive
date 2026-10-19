@@ -15,6 +15,10 @@ You do NOT audit code. `/sdrive:review` owns the audit. If the review has not pa
 
 You operate within the current version folder only.
 
+<git-merge-behaviour>
+Archive is the one command that does NOT use the generic post-command commit-and-push rule. Its delivery is the merge into the confirmed target branch, followed by pushing that target branch. Do not add a separate commit-and-push step before or after the merge, and do not push the feature branch as a substitute for landing the merge.
+</git-merge-behaviour>
+
 <rules>
 - **Feature Selection Rule:** If this command is invoked WITHOUT a feature name, do NOT guess and do NOT silently pick one. Detect the ongoing features by listing `.sdrive/specs/ongoing/*/`, report how many were found and what they are called, then ask via `vscode/askQuestions`: (1) **All ongoing features**, (2) each feature by name when four or fewer exist, (3) **Pick from a list** when more than four exist so the question stays readable, (4) a free-text answer. If no ongoing feature exists, STOP and say so instead of asking. `/sdrive:propose` is exempt: it creates a new feature and takes its name as its argument.
 - **Review-First Rule:** Before doing anything, run `sdrive archive:check <feature>`. It re-verifies the feature's approvals and the evidence behind them, and writes nothing. If it exits non-zero, STOP and report its blockers verbatim — they are the reason archiving is refused. NEVER archive an unaudited feature, and never work around a refusal by editing `workflow-state.json` or `review.md` by hand.
@@ -45,6 +49,18 @@ You operate within the current version folder only.
   - Only run the remote delete if the branch still exists there: `git ls-remote --exit-code --heads origin <feature-branch>`.
   - If the branch is checked out in another worktree, `git branch -d` will fail — report it and continue. Never force.
 - **Merge Decision Rule:** BEFORE resolving the target branch or asking about any branch, ask the user whether they want to merge at all: "Do you want to merge `<feature>` into a branch now?" If the user declines and the merge has NOT already happened outside this agent, STOP: do not merge, do not finalize, and leave the feature in `ongoing/` with its passing review intact so `/sdrive:archive` can be re-run later.
+- **Merge Conflict Rule:** Conflicts are resolved only when the resolution is mechanical and verifiable. Before merging, check `gh pr view --json mergeable,mergeStateStatus` (or a local `git merge-tree <target-branch>...<feature-branch>`). If the PR is `CONFLICTING`/`DIRTY`:
+  1. NEVER use `--admin`, force-push, or bypass branch protection to make the conflict disappear.
+  2. Check out `<feature-branch>`, pull it, then merge `<target-branch>` into it: `git checkout <feature-branch> && git pull origin <feature-branch> && git merge <target-branch>`. List conflicts with `git diff --name-only --diff-filter=U`.
+  3. Resolve only clear conflicts:
+     - unrelated target-branch changes and the feature's additions: combine both;
+     - the feature's own `.sdrive/specs/<feature>/` and `.sdrive/governance/<feature>/` artifacts: keep the feature's version;
+     - generated lockfiles: regenerate with the project's package manager, never hand-edit;
+     - formatting-only or import-order conflicts: apply the project formatter.
+  4. STOP and ask the user for any semantic conflict (the same logic changed differently on both sides), schema/data migration, security/auth/payment configuration, secret or environment file, or anything you cannot verify. Never guess a business decision.
+  5. After resolving: `git add <resolved-files>`, run `sdrive validate`, `sdrive verify <feature>`, the test suite, and the relevant build/lint checks. Commit the merge resolution, push `<feature-branch>`, and re-check `mergeable`.
+  6. Record the conflicted files, resolution commit, and verification results in the feature history and the archive report.
+  7. If resolution fails or is ambiguous: `git merge --abort`, leave the branch and PR untouched, and STOP. The feature remains in `ongoing/`.
 - NEVER merge to the target branch unless the review report shows `PASS` and the user explicitly approves.
 - Use GitHub CLI (`gh`) for PR and merge operations. If `gh` is not available in your environment, use native Git commands and explicitly report this fallback.
 - ALWAYS read `.sdrive/constitution.md`. If it does not exist, STOP and ask the user to run the Constitution Agent first. Do not merge without governance.
@@ -196,10 +212,16 @@ When invoked as `/sdrive:archive --all`, archive every ongoing feature that has 
      2. **Resolve the destination** per the Target Branch Rule. With `feature.base` recorded, `<target-branch>` IS that branch — announce it (`Merging into <target-branch>, the branch this feature came from`) and continue. Do NOT ask "which branch?" as a menu. The only questions in this flow are the merge yes/no in step 1, the fallback confirmation when `base` is absent, and the keep-or-delete decision after the merge.
      3. Create PR if not exists: `gh pr create --title "feat: <feature>" --base <target-branch>`.
      4. Approve PR: `gh pr review --approve`.
-     5. **Confirm again:** "Do you approve merging into `<target-branch>` and archiving this feature?" via `vscode/askQuestions`.
-     6. Only if user says yes, merge: `gh pr merge --squash` (or `--merge`).
-     7. Verify PR state is `MERGED`.
-     8. If merge not confirmed, STOP and report.
+     5. **Check mergeability before asking for final approval:** `gh pr view <number> --json mergeable,mergeStateStatus,baseRefName,headRefName`. If the state is `CONFLICTING`/`DIRTY`, follow the Merge Conflict Rule:
+        - merge `<target-branch>` into `<feature-branch>` locally;
+        - resolve only mechanical conflicts;
+        - run `sdrive validate`, `sdrive verify <feature>`, the test suite, and the relevant build/lint checks;
+        - commit and push the resolution, then re-check `mergeable`;
+        - if the conflict is semantic or cannot be verified, `git merge --abort` and STOP.
+     6. **Confirm again:** "Do you approve merging into `<target-branch>` and archiving this feature?" via `vscode/askQuestions`.
+     7. Only if user says yes, merge: `gh pr merge --squash` (or `--merge`).
+     8. Verify PR state is `MERGED`.
+     9. If merge not confirmed, STOP and report.
 
 4. **FINALIZE LIFECYCLE (after merge is confirmed — by this agent OR by the human)**
    - **Resume check first (Resume Rule):** Determine whether the merge already happened before assuming you must merge, using the `git log <target-branch>..<feature-branch> --oneline` result from step 2 — an empty range means the merge is already on `<target-branch>`, so skip step 3 entirely and continue here. Never decide this with `--grep`: a previous archive's `feat: <feature>` commit matches forever, which is exactly how a second cycle gets its work stranded.
@@ -242,6 +264,7 @@ The archive phase is NOT complete until:
 - [ ] `/sdrive:review` had actually run: `review.md` for this version records `Status: PASS`.
 - [ ] The merge destination was `feature.base` — the branch this feature came from — not the default branch and not a branch chosen from a menu. Any fallback (stacked parent, spent/absent base) was stated and confirmed.
 - [ ] Feature's actual lifecycle location resolved (`backlog/`, `ongoing/`, or `completed/`) before any move.
+- [ ] Merge conflicts were resolved only mechanically, re-verified with `sdrive validate`, `sdrive verify`, and the test suite, and recorded; ambiguous conflicts stopped the archive with `git merge --abort`.
 - [ ] Human approved merge, PR merged, and `sdrive archive:finalize <feature>` marked the current version `completed` and moved the feature folder to `completed/`.
 - [ ] No gate and no `workflow-state.json` field was hand-edited at any point.
 - [ ] If the merge was performed by the human outside this agent, the Resume Rule was applied and the lifecycle was still finalized in this run.
@@ -264,5 +287,6 @@ At the end of your work, provide:
 4. ✅ Confirmation that the merge decision and the branch deletion decision were BOTH asked, and the outcome honoured — the branch deleted locally and remotely if approved (name it), or explicitly left untouched if declined — with `<target-branch>` never deleted.
 5. ✅ Confirmation that only the current version was archived and other versions preserved.
 6. ✅ Confirmation of the source lifecycle folder the feature was moved from (e.g. `backlog/` → `completed/`).
-7. ✅ (If `--all`) The pre-flight plan and merge order, the aggregate report at `.sdrive/reports/reviews/archive-report-all-<date>.md` covering every ongoing feature, and (where the recorded `base` disagreed with the range check) which one was trusted.
+7. ✅ (If conflicts occurred) The conflicted files, the resolution commit, and the verification commands that passed — or the reason the archive stopped and aborted the merge.
+8. ✅ (If `--all`) The pre-flight plan and merge order, the aggregate report at `.sdrive/reports/reviews/archive-report-all-<date>.md` covering every ongoing feature, and (where the recorded `base` disagreed with the range check) which one was trusted.
 </deliverables>

@@ -5,7 +5,19 @@ const path = require("path");
 const { execSync } = require("child_process");
 
 const SERVER_NAME = "specdrive";
-const PROTOCOL_VERSION = "2024-11-05";
+const PROTOCOL_VERSION = "2025-06-18";
+const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+
+// Gate state comes from the same rules module the CLI uses. The MCP server can
+// run from the package (`mcp/../commands`) or from an installed project
+// (`.sdrive/mcp/../commands`), so this resolves relative to this file.
+let gateRules = null;
+
+try {
+  gateRules = require(path.join(__dirname, "..", "commands", "gates.js"));
+} catch (error) {
+  logDebug(`gate rules unavailable: ${error.message}`);
+}
 
 function getServerVersion() {
   try {
@@ -105,6 +117,113 @@ function runValidator() {
   }
 }
 
+function currentVersion(feature) {
+  if (!feature) return null;
+  const versions = feature.versions || [];
+  return versions.find((version) => version.id === feature.currentVersion) || versions[0] || null;
+}
+
+// Mirrors the CLI's `sdrive status` next-action rule so an AI client can ask
+// "what now?" instead of guessing from the gates.
+function nextAction(feature) {
+  const version = currentVersion(feature);
+
+  if (!version) {
+    return {
+      command: `sdrive version:new ${feature.name}`,
+      reason: "The feature has no versions."
+    };
+  }
+
+  const order = gateRules
+    ? gateRules.GATE_ORDER
+    : ["specification", "planning", "implementation", "review"];
+  const gates = version.gates || {};
+  const pending = gateRules
+    ? order.find((gate) => !gateRules.isGateApprovedFor(version, gate))
+    : order[0];
+
+  if (!pending) {
+    return {
+      command: `sdrive archive:check ${feature.name}`,
+      reason: "Every gate is approved; check whether the feature can be archived."
+    };
+  }
+
+  if (pending === "review") {
+    return {
+      command: `sdrive test ${feature.name}`,
+      reason: "Review needs passing test evidence; run the tests, then approve review."
+    };
+  }
+
+  return {
+    command: `sdrive approve ${feature.name} ${pending}`,
+    reason: `The "${pending}" gate is ${gates[pending] || "pending"}.`
+  };
+}
+
+function featureStatus(feature) {
+  const version = currentVersion(feature);
+
+  return {
+    name: feature.name,
+    currentVersion: feature.currentVersion || null,
+    assignee: feature.assignee || null,
+    branch: feature.branch || null,
+    base: feature.base || null,
+    phase: version ? version.phase : null,
+    currentStep: version ? version.currentStep : null,
+    gates: version ? version.gates || {} : {},
+    nextAction: nextAction(feature)
+  };
+}
+
+function listResources() {
+  const resources = [];
+
+  for (const feature of listFeatures()) {
+    const version = currentVersion(feature);
+    if (!version) continue;
+
+    for (const kind of ["spec", "plan", "tasks", "traceability"]) {
+      resources.push({
+        uri: `specdrive://features/${feature.name}/${kind}`,
+        name: `${feature.name} ${kind}`,
+        description: `${kind}.json for ${feature.name} ${version.id}`,
+        mimeType: "application/json"
+      });
+    }
+  }
+
+  return resources;
+}
+
+function readResource(uri) {
+  const match = /^specdrive:\/\/features\/([^/]+)\/(spec|plan|tasks|traceability)$/.exec(uri || "");
+
+  if (!match) return null;
+
+  const [, featureName, kind] = match;
+  const feature = getFeature(featureName);
+  if (!feature) return null;
+
+  const version = currentVersion(feature);
+  const value = readGovernanceJson(featureName, version ? version.id : null, `${kind}.json`);
+
+  if (!value) return null;
+
+  return {
+    contents: [
+      {
+        uri,
+        mimeType: "application/json",
+        text: JSON.stringify(value, null, 2)
+      }
+    ]
+  };
+}
+
 const TOOLS = [
   {
     name: "specdrive.list_features",
@@ -164,10 +283,22 @@ const TOOLS = [
   },
   {
     name: "specdrive.status",
-    description: "Get the feature status summary",
+    description: "Get the feature status summary, including the next action",
     inputSchema: {
       type: "object",
       properties: {},
+      additionalProperties: false
+    }
+  },
+  {
+    name: "specdrive.next_action",
+    description: "Get the next command to run for a feature",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" }
+      },
+      required: ["name"],
       additionalProperties: false
     }
   }
@@ -199,19 +330,27 @@ function handleRequest(message) {
   const { id, method, params = {} } = message;
 
   if (method === "initialize") {
+    const requested = params.protocolVersion;
+    const protocolVersion = SUPPORTED_PROTOCOL_VERSIONS.includes(requested)
+      ? requested
+      : PROTOCOL_VERSION;
+
     return {
-      protocolVersion: PROTOCOL_VERSION,
+      protocolVersion,
       capabilities: {
-        tools: {}
+        tools: {},
+        resources: {}
       },
       serverInfo: {
         name: SERVER_NAME,
         version: SERVER_VERSION
-      }
+      },
+      instructions:
+        "SpecDrive governs features through gates. Use specdrive.status / specdrive.next_action to see what is blocking a feature, specdrive.get_spec and the specdrive:// resources to read its artifacts, and specdrive.validate to check governance."
     };
   }
 
-  if (method === "notifications/initialized") {
+  if (method === "notifications/initialized" || method === "notifications/cancelled") {
     return null;
   }
 
@@ -221,6 +360,20 @@ function handleRequest(message) {
 
   if (method === "tools/list") {
     return { tools: TOOLS };
+  }
+
+  if (method === "resources/list") {
+    return { resources: listResources() };
+  }
+
+  if (method === "resources/read") {
+    const resource = readResource(params.uri);
+
+    if (!resource) {
+      throw new Error(`Unknown or unreadable resource: ${params.uri}`);
+    }
+
+    return resource;
   }
 
   if (method === "tools/call") {
@@ -233,12 +386,13 @@ function handleRequest(message) {
       "specdrive.validate": () => runValidator(),
       "specdrive.status": () => ({
         count: listFeatures().length,
-        features: listFeatures().map((feature) => ({
-          name: feature.name,
-          phase: feature.phase,
-          currentVersion: feature.currentVersion || null
-        }))
-      })
+        features: listFeatures().map(featureStatus)
+      }),
+      "specdrive.next_action": () => {
+        const feature = getFeature(args.name);
+        if (!feature) throw new Error(`Feature not found: ${args.name}`);
+        return { feature: feature.name, nextAction: nextAction(feature) };
+      }
     };
 
     const handler = toolMap[name];
@@ -271,20 +425,29 @@ process.stdin.on("data", (chunk) => {
 
     if (!line) continue;
 
-    try {
-      const message = JSON.parse(line);
-      if (message.method === "notifications/initialized") {
-        continue;
-      }
+    let message;
 
+    try {
+      message = JSON.parse(line);
+    } catch (error) {
+      // A malformed line must not kill the server. The old code called
+      // JSON.parse(line) again inside the catch, which threw again and exited.
+      sendError(null, -32700, "Parse error: the request was not valid JSON");
+      continue;
+    }
+
+    if (message.method === "notifications/initialized" || message.method === "notifications/cancelled") {
+      continue;
+    }
+
+    try {
       const result = handleRequest(message);
       if (result !== null) {
         sendResult(message.id, result);
       }
     } catch (error) {
-      const id = JSON.parse(line).id ?? null;
-      sendError(id, -32603, error.message || "Internal error", {
-        stack: error.stack
+      sendError(message.id ?? null, -32603, error.message || "Internal error", {
+        stack: process.env.SPECDRIVE_DEBUG === "1" ? error.stack : undefined
       });
     }
   }

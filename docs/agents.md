@@ -2,6 +2,24 @@
 
 SpecDrive uses 16 specialized agents. Each agent has one slash command.
 
+## Git behaviour
+
+Every chat command commits and pushes the changes it made after its work is
+complete and any required human approval has been granted. The commit message
+uses the `specdrive(<command>):` prefix, for example:
+
+```text
+specdrive(propose): add user-login specification
+specdrive(test): record user-login test evidence
+```
+
+The agent stages only its own files, skips the commit when there is nothing to
+commit, never force-pushes, and reports the commit SHA and branch.
+
+`/sdrive:archive` is the exception. It does not create a separate
+commit-and-push step: it merges the feature into its confirmed target branch and
+pushes that branch.
+
 ---
 
 ## Agent List
@@ -31,7 +49,7 @@ SpecDrive uses 16 specialized agents. Each agent has one slash command.
 
 **Command:** `/sdrive:onboard`
 
-**Purpose:** Adopt SpecDrive into an existing project (brownfield) without breaking it, and migrate OpenSpec or Spec-Kit specs. This is the only command needed for brownfield onboarding.
+**Purpose:** Adopt SpecDrive into an existing project (brownfield) without breaking it, and migrate OpenSpec, Spec Kit, Kiro, Agent OS, BMAD, or generic spec folders. This is the only command needed for brownfield onboarding.
 
 **What it does:**
 
@@ -42,8 +60,8 @@ SpecDrive uses 16 specialized agents. Each agent has one slash command.
 - Asks the user what to fill vs. defer
 - Generates a baseline constitution from discovered facts (if approved)
 - Generates retroactive specs for existing features (if approved)
-- Migrates OpenSpec specs when detected and approved
-- Migrates Spec-Kit specs and constitution when detected and approved
+- Plans and applies migrations through `sdrive migrate:detect/plan/apply/verify/rollback` for OpenSpec, Spec Kit, Kiro, Agent OS, BMAD, and generic spec folders
+- Reports partial mappings, conflicts, and placeholder requirements instead of claiming a migration is complete
 - Records missing, deferred, migrated, and skipped items in `workflow-state.json` under `onboarding`
 - Never overwrites, deletes, or fabricates
 
@@ -58,9 +76,9 @@ SpecDrive uses 16 specialized agents. Each agent has one slash command.
 
 **Migration rules:**
 
-- Original `openspec/` and `.specify/` folders are never deleted
+- Original `openspec/`, `.specify/`, `.kiro/`, `.agent-os/`, `docs/stories/`, and `specs/` folders are never deleted
 - Every migrated feature is marked `retroactive: true`
-- Every migrated feature records `migratedFrom: openspec | speckit`
+- Every migrated feature records `migratedFrom: <framework-id>`
 - Every migration is logged in `workflow-state.json` under `onboarding.migrated`
 - Skipped migrations are logged under `onboarding.skipped`
 
@@ -308,11 +326,18 @@ SpecDrive uses 16 specialized agents. Each agent has one slash command.
 **What it does:**
 
 - Requires `sdrive verify <feature>` to return `pass` or `warn`
+- Runs `sdrive check`, `sdrive validate`, `sdrive verify`, and `sdrive audit:verify` as structured CLI checks
 - Verifies coverage: every AC has a linked, existing, passing test
 - Requires the test report for the current version
+- **Requires `sdrive test` evidence** — `test-evidence.json` must record a zero-exit run with no failures, at least one result, and a commit matching `HEAD`
+- Binds the verdict to a commit: records `HEAD`, the feature branch/base, and requires a clean working tree
+- Audits the diff against `base`, flagging unplanned files, untracked files, and commits from another feature
+- Checks test quality (`.only`, `xit`, unjustified skips, empty assertions, AC IDs)
+- Checks security, NFR evidence, docs, and CI status; unverified items are recorded as `not_verified`, not passed
 - Audits code against spec
-- Writes a `review.md` report with `Status: PASS` or `Status: FAIL`
-- On failure: records the findings in `review.md`, adds fix tasks, and stops (no PR, no branch, no merge)
+- Writes `review.md` (human report) and `review.json` (machine-readable verdict) with `Status: PASS` or `Status: FAIL`
+- Asks the human to confirm a PASS verdict and records reviewer independence
+- On failure: records the findings, adds fix tasks, and stops (no PR, no branch, no merge)
 - On pass: notifies the user to run `/sdrive:archive <feature>`
 - Verifies permission before and after the audit
 
@@ -333,6 +358,7 @@ SpecDrive uses 16 specialized agents. Each agent has one slash command.
 - **Refuses until `/sdrive:test` has run** — a `test-report-<feature>-<version>-<date>.md` must exist in `.sdrive/reports/tests/`; coverage alone is not evidence that tests ran
 - **Refuses until `/sdrive:review` has run** — `review.md` for the current version must record `Status: PASS`
 - **Merges into `feature.base`**, the branch `/sdrive:propose` created the feature from — no branch menu; stacked and deleted-base cases are stated explicitly
+- **Detects and resolves merge conflicts** before merging: only mechanical resolutions are allowed, on the feature branch; `sdrive validate`, `sdrive verify`, and the test suite must pass; semantic, migration, security, or secret conflicts stop the archive with `git merge --abort`
 - Requires human merge approval
 - Merges the current version and marks it as `completed`
 - Preserves other versions
@@ -384,6 +410,7 @@ SpecDrive uses 16 specialized agents. Each agent has one slash command.
 - Updates `traceability.json` with test IDs and status in the current version
 - Generates a coverage report at `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md`
 - Writes all artifacts (reports, logs, captured output) under `.sdrive/` — never to the project root
+- Runs `sdrive test <feature>` so the run is recorded as `test-evidence.json` (command, exit code, counts, commit, output hash)
 - Runs `sdrive verify <feature>` and the governance validator
 - Does NOT write production code
 

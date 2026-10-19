@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
 
 const projectRoot = process.cwd();
 
@@ -157,6 +158,34 @@ function readJsonIfPresent(file) {
     return JSON.parse(fs.readFileSync(file, "utf8"));
   } catch (error) {
     return null;
+  }
+}
+
+// `sdrive test` writes test-evidence.json next to the governance artifacts.
+// Projects initialised before evidence enforcement existed do not have the
+// config key; they keep the old behaviour until they opt in (init writes true
+// for new projects, `sdrive config:set governance.requireTestEvidence true`
+// opts an existing one in).
+function testEvidencePolicy(root) {
+  const config = readJsonIfPresent(path.join(root, ".sdrive", "config.json")) || {};
+  const governance = config.governance || {};
+
+  return {
+    required: governance.requireTestEvidence === true,
+    allowStale: governance.allowStaleEvidence === true,
+    structuredReview: governance.requireStructuredReview === true
+  };
+}
+
+function headCommit(root) {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch (error) {
+    return "";
   }
 }
 
@@ -373,6 +402,7 @@ function checkGateRequirements(root, feature, version, gate) {
   }
 
   if (gate === "review") {
+    const reviewPolicy = testEvidencePolicy(root);
     const reviewPath = location ? path.join(location.dir, "review.md") : null;
 
     if (!reviewPath || !fs.existsSync(reviewPath)) {
@@ -381,6 +411,49 @@ function checkGateRequirements(root, feature, version, gate) {
       blockers.push(
         `review.md does not record \`Status: PASS\` - a failing or torn verdict cannot be approved.`
       );
+    }
+
+    // Structured review record. New projects require it; existing projects may
+    // still approve a prose-only verdict until they opt in with
+    // `sdrive config:set governance.requireStructuredReview true`.
+    const reviewJson = readJsonIfPresent(govFile("review.json"));
+
+    if (!reviewJson && reviewPolicy.structuredReview) {
+      blockers.push(
+        `Missing review.json for ${feature.name} ${version.id} - run /sdrive:review ${feature.name} to record the structured verdict.`
+      );
+    }
+
+    if (reviewJson) {
+      if (reviewJson.status !== "PASS") {
+        blockers.push(
+          `review.json records status "${reviewJson.status || "missing"}", not "PASS".`
+        );
+      }
+
+      if (reviewJson.feature !== feature.name || reviewJson.version !== version.id) {
+        blockers.push(
+          `review.json belongs to "${reviewJson.feature || "unknown"}" ${reviewJson.version || "unknown"}, not "${feature.name}" ${version.id}.`
+        );
+      }
+
+      if (!reviewJson.reviewedBy) {
+        blockers.push("review.json does not record who performed the review.");
+      }
+
+      const head = headCommit(root);
+
+      if (head && reviewJson.commit !== head) {
+        blockers.push(
+          `review.json is for commit ${String(reviewJson.commit || "unknown").slice(0, 8)}, HEAD is ${head.slice(0, 8)} - re-run the review.`
+        );
+      }
+
+      if (feature.assignee && reviewJson.reviewedBy === feature.assignee) {
+        warnings.push(
+          `"${reviewJson.reviewedBy}" is both the assignee and the reviewer. Prefer an independent reviewer for the record.`
+        );
+      }
     }
 
     // Coverage is the whole point of this gate. Approving review is what unlocks
@@ -411,6 +484,53 @@ function checkGateRequirements(root, feature, version, gate) {
             .slice(0, 6)
             .join(", ")}${untested.length > 6 ? ", ..." : ""}) - run \`/sdrive:test ${feature.name}\` first, then re-run the review.`
         );
+      }
+    }
+
+    // Evidence is a fact, not a claim: `sdrive test` records the command, exit
+    // code, counts, commit, and output hash. When the project opts in, a review
+    // cannot be approved on hand-written JSON alone.
+    const policy = reviewPolicy;
+
+    if (policy.required) {
+      const evidence = readJsonIfPresent(govFile("test-evidence.json"));
+
+      if (!evidence) {
+        blockers.push(
+          `No test-evidence.json for ${feature.name} ${version.id} - run \`sdrive test ${feature.name}\` before approving review.`
+        );
+      } else {
+        if (evidence.exitCode !== 0) {
+          blockers.push(
+            `test-evidence.json records a failing test run (exit ${evidence.exitCode}${evidence.timedOut ? ", timed out" : ""}).`
+          );
+        }
+
+        if (evidence.summary && Number(evidence.summary.failed) > 0) {
+          blockers.push(
+            `test-evidence.json records ${evidence.summary.failed} failing test(s).`
+          );
+        }
+
+        const noResults =
+          (!evidence.summary || Number(evidence.summary.total) === 0) &&
+          (!Array.isArray(evidence.testIds) || evidence.testIds.length === 0);
+
+        if (noResults) {
+          blockers.push(
+            "test-evidence.json contains no recognisable test results - configure a reporter (JUnit/Jest/pytest/node:test output) or print TEST-### IDs."
+          );
+        }
+
+        if (!policy.allowStale) {
+          const head = headCommit(root);
+
+          if (head && evidence.commit !== head) {
+            blockers.push(
+              `test-evidence.json is from commit ${String(evidence.commit || "unknown").slice(0, 8)}, HEAD is ${head.slice(0, 8)} - re-run \`sdrive test ${feature.name}\`.`
+            );
+          }
+        }
       }
     }
 

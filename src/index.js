@@ -7,6 +7,19 @@ const path = require("path");
 const os = require("os");
 const readline = require("readline");
 
+const output = require("./lib/output");
+const { EXIT } = require("./lib/exit");
+const stateStore = require("./lib/state");
+const permissions = require("./lib/permissions");
+const manifest = require("./lib/manifest");
+const evidence = require("./lib/evidence");
+const doctor = require("./lib/doctor");
+const auditLog = require("./lib/audit");
+const execute = require("./lib/execute");
+const migrations = require("../migrations");
+const migrationApply = require("../migrations/lib/apply");
+const migrationLifecycle = require("../migrations/lib/lifecycle");
+
 // Shared with `scripts/generate-adapters.js` and the tests so `init`,
 // `update`, and `adapters:*` can never disagree about what a tool needs.
 const {
@@ -108,6 +121,47 @@ function pruneRecursive(src, dest, removed = [], relBase = "", dryRun = false) {
   return removed;
 }
 
+// Refresh the rules layer (`commands/*.js`) without touching the three registry
+// files that `update` merges instead of replacing (manifest.json,
+// permissions.json, tools.json). Before this existed, a fix to gates.js or
+// archive.js never reached an existing project.
+function refreshCommandModules(packageRoot, sdriveRoot) {
+  const srcDir = path.join(packageRoot, "commands");
+  const destDir = path.join(sdriveRoot, "commands");
+
+  if (!fs.existsSync(srcDir)) return { written: 0, backedUp: [] };
+
+  fs.mkdirSync(destDir, { recursive: true });
+
+  const backupDir = path.join(sdriveRoot, ".backups", "commands");
+  const backedUp = [];
+  let written = 0;
+
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    if (!entry.isFile() || path.extname(entry.name) !== ".js") continue;
+
+    const src = path.join(srcDir, entry.name);
+    const dest = path.join(destDir, entry.name);
+    const incoming = fs.readFileSync(src);
+
+    if (fs.existsSync(dest)) {
+      const current = fs.readFileSync(dest);
+
+      if (current.equals(incoming)) continue;
+
+      fs.mkdirSync(backupDir, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      fs.copyFileSync(dest, path.join(backupDir, `${entry.name}.${stamp}`));
+      backedUp.push(entry.name);
+    }
+
+    fs.copyFileSync(src, dest);
+    written += 1;
+  }
+
+  return { written, backedUp };
+}
+
 function mergeBundledSlashCommands(packageRoot, sdriveRoot) {
   const packagedManifestPath = path.join(packageRoot, "commands", "manifest.json");
   const installedManifestPath = path.join(sdriveRoot, "commands", "manifest.json");
@@ -148,10 +202,13 @@ function mergeBundledSlashCommands(packageRoot, sdriveRoot) {
     }
 
     let installedPermissions;
-    if ((addedCommands.length > 0 || updatedCommands > 0) && fs.existsSync(packagedPermissionsPath) && fs.existsSync(installedPermissionsPath)) {
+    let addedCliRules = 0;
+
+    if (fs.existsSync(packagedPermissionsPath) && fs.existsSync(installedPermissionsPath)) {
       const packagedPermissions = JSON.parse(fs.readFileSync(packagedPermissionsPath, "utf8"));
       installedPermissions = JSON.parse(fs.readFileSync(installedPermissionsPath, "utf8"));
       installedPermissions.rules = installedPermissions.rules || {};
+      installedPermissions.cli = installedPermissions.cli || {};
 
       for (const command of addedCommands) {
         const roles = packagedPermissions.rules?.[command.command];
@@ -159,10 +216,23 @@ function mergeBundledSlashCommands(packageRoot, sdriveRoot) {
           installedPermissions.rules[command.command] = roles;
         }
       }
+
+      // New CLI commands need rules too, or `sdrive update` would install a
+      // command that is deny-by-default and therefore unusable. Existing rules
+      // are preserved: they may carry a team's own role choices.
+      for (const [command, roles] of Object.entries(packagedPermissions.cli || {})) {
+        if (!installedPermissions.cli[command]) {
+          installedPermissions.cli[command] = roles;
+          addedCliRules += 1;
+        }
+      }
     }
 
     if (installedPermissions) {
       fs.writeFileSync(installedPermissionsPath, JSON.stringify(installedPermissions, null, 2));
+      if (addedCliRules > 0) {
+        console.log(`  Updated: .sdrive/commands/permissions.json (${addedCliRules} new CLI rule(s))`);
+      }
     }
 
     if (addedCommands.length > 0 || updatedCommands > 0) {
@@ -238,18 +308,18 @@ function mergeBundledToolRegistry(packageRoot, sdriveRoot) {
 }
 
 function requirePermission(cliCommand) {
-  const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "check-permission.js");
+  const verdict = permissions.check(process.cwd(), cliCommand);
 
-  if (!fs.existsSync(scriptPath)) return;
-
-  try {
-    execSync(`node "${scriptPath}" cli "${cliCommand}"`, { stdio: "pipe" });
-  } catch (error) {
-    console.error(`❌ Permission denied for 'sdrive ${cliCommand}'.`);
-    if (error.stdout) console.error(error.stdout.toString());
-    if (error.stderr) console.error(error.stderr.toString());
-    process.exit(1);
+  if (verdict.ok) {
+    if (verdict.skipped) {
+      console.error(`⚠️  Permissions skipped for '${cliCommand}' (SDRIVE_SKIP_PERMISSIONS=1).`);
+    }
+    return;
   }
+
+  console.error(`❌ Permission denied for 'sdrive ${cliCommand}'.`);
+  console.error(`   ${verdict.reason}`);
+  process.exit(verdict.code || EXIT.PERMISSION);
 }
 
 function audit(event, details = {}) {
@@ -543,6 +613,14 @@ program
     // Every successful exit from `init` funnels through here, so the dashboard
     // auto-launch cannot be forgotten on one of the four completion paths.
     const finishInit = () => {
+      // Record what was installed so `update --check` and `doctor` can detect
+      // drift instead of guessing which files are framework-owned.
+      try {
+        manifest.writeManifest(projectRoot, { cliVersion: getCliVersion() });
+      } catch (error) {
+        console.warn(`⚠️  Could not write framework-manifest.json: ${error.message}`);
+      }
+
       console.log("\n✅ SpecDrive initialized successfully.");
 
       if (options.dashboard === false) {
@@ -591,7 +669,8 @@ program
       "commands",
       "dashboard",
       "mcp",
-      "templates"
+      "templates",
+      "migrations"
     ];
 
     dirsToCopy.forEach((dir) => {
@@ -626,7 +705,7 @@ program
 
     const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
     if (!fs.existsSync(workflowStatePath)) {
-      fs.writeFileSync(workflowStatePath, JSON.stringify({ features: [] }, null, 2));
+      stateStore.writeState(projectRoot, { features: [] });
       console.log("  Created: .sdrive/workflow-state.json");
     }
 
@@ -642,17 +721,38 @@ program
 
     const configPath = path.join(sdriveRoot, "config.json");
     if (!fs.existsSync(configPath)) {
-      fs.writeFileSync(configPath, JSON.stringify({ defaultTemplate: "generic" }, null, 2));
+      fs.writeFileSync(
+        configPath,
+        JSON.stringify(
+          {
+            defaultTemplate: "generic",
+            governance: {
+              // New projects start with evidence-backed review gates. Existing
+              // projects keep the old behaviour until they opt in with
+              // `sdrive config:set governance.requireTestEvidence true`.
+              requireTestEvidence: true,
+              allowStaleEvidence: false,
+              requireStructuredReview: true
+            },
+            test: {}
+          },
+          null,
+          2
+        )
+      );
       console.log("  Created: .sdrive/config.json");
     }
 
     const teamPath = path.join(sdriveRoot, "team.json");
     if (!fs.existsSync(teamPath)) {
+      const actor = currentActor();
+      const hasActor = actor && actor !== "unknown";
+
       fs.writeFileSync(
         teamPath,
         JSON.stringify(
           {
-            members: [],
+            members: hasActor ? [{ username: actor, role: "admin" }] : [],
             rules: {
               approval_required: ["admin", "reviewer"],
               implementation_allowed: ["developer", "admin"]
@@ -663,8 +763,13 @@ program
         )
       );
       console.log("  Created: .sdrive/team.json");
-      console.log("  ⚠️  team.json has no members. Gated commands (/sdrive:review, /sdrive:apply, etc.) will be denied.");
-      console.log("      Run: sdrive team:add <your-git-username> admin");
+
+      if (hasActor) {
+        console.log(`  Added:   "${actor}" as admin (from git config user.name)`);
+      } else {
+        console.log("  ⚠️  team.json has no members. Gated commands (/sdrive:review, /sdrive:apply, etc.) will be denied.");
+        console.log("      Run: sdrive team:add <your-git-username> admin");
+      }
     }
 
     const mcpConfigPath = path.join(sdriveRoot, "mcp", "mcp.json");
@@ -778,15 +883,56 @@ program
 // ---------- UPDATE COMMAND ----------
 program
   .command("update")
-  .description("Refresh SpecDrive framework files (dashboard, mcp, scripts, schemas) without touching your specs or governance")
+  .description("Refresh SpecDrive framework files (dashboard, mcp, scripts, schemas, commands) without touching your specs or governance")
   .option("--dry-run", "Show what would be updated without writing any files")
+  .option("--check", "Report drift between .sdrive/ and the installed framework manifest")
+  .option("--json", "Print the result as JSON")
   .action((options) => {
+    output.setJson(options.json);
+
     const projectRoot = process.cwd();
     const sdriveRoot = path.join(projectRoot, ".sdrive");
 
     if (!fs.existsSync(sdriveRoot)) {
-      console.error("❌ No .sdrive folder found. Run `sdrive init` first.");
-      process.exit(1);
+      process.exit(
+        output.fail("update", EXIT.NOT_INITIALIZED, "❌ No .sdrive folder found. Run `sdrive init` first.")
+      );
+    }
+
+    if (options.check) {
+      const verdict = manifest.checkManifest(projectRoot, { expectedVersion: getCliVersion() });
+      const drift =
+        verdict.modified.length + verdict.missing.length + verdict.extra.length;
+      const needsUpdate = !verdict.present || drift > 0;
+
+      if (output.isJson()) {
+        output.printJson({
+          ok: !needsUpdate,
+          command: "update",
+          code: needsUpdate ? EXIT.DRIFT : EXIT.OK,
+          data: verdict
+        });
+      } else {
+        console.log("\n🔎 SpecDrive framework check\n");
+
+        if (!verdict.present) {
+          console.log("⚠️  No framework-manifest.json. Run `sdrive update` to create one.\n");
+        } else {
+          console.log(`   Installed: ${verdict.cliVersion}   CLI: ${verdict.expectedVersion}`);
+          console.log(`   Files:     ${verdict.files}\n`);
+
+          if (drift === 0) {
+            console.log("✅ No drift. .sdrive/ matches the installed framework.\n");
+          } else {
+            verdict.modified.forEach((file) => console.log(`   modified: ${file}`));
+            verdict.missing.forEach((file) => console.log(`   missing:  ${file}`));
+            verdict.extra.forEach((file) => console.log(`   extra:    ${file}`));
+            console.log("");
+          }
+        }
+      }
+
+      process.exit(needsUpdate ? EXIT.DRIFT : EXIT.OK);
     }
 
     const packageRoot = path.join(__dirname, "..");
@@ -794,7 +940,7 @@ program
     // Framework-owned directories: safe to overwrite because they contain code,
     // not user content. User data (specs, governance, constitution, config,
     // team, workflow-state) is deliberately excluded.
-    const frameworkDirs = ["dashboard", "mcp", "scripts", "schemas", "agents", "templates"];
+    const frameworkDirs = ["dashboard", "mcp", "scripts", "schemas", "agents", "templates", "migrations"];
 
     console.log("\n🔄 SpecDrive Update\n");
     console.log(`   From: ${packageRoot}`);
@@ -842,6 +988,27 @@ program
       pruned.forEach((rel) => console.log(`      - removed ${rel}`));
     });
 
+    // The rules layer is code, not user configuration: gates.js, archive.js and
+    // router.js must match the CLI that is running. Registry files are merged
+    // below, never blindly replaced.
+    if (options.dryRun) {
+      console.log("  Would refresh: .sdrive/commands/*.js (gate/archive/router rules)");
+    } else {
+      const commandRefresh = refreshCommandModules(packageRoot, sdriveRoot);
+
+      if (commandRefresh.written > 0) {
+        console.log(
+          `  ✅ Refreshed: .sdrive/commands/ (${commandRefresh.written} rule file${
+            commandRefresh.written === 1 ? "" : "s"
+          })`
+        );
+        commandRefresh.backedUp.forEach((file) =>
+          console.log(`      - backed up previous ${file}`)
+        );
+        totalWritten += commandRefresh.written;
+      }
+    }
+
     // Repairs projects initialised before this marker existed. Existing ESM projects
     // are exactly the ones broken by its absence, so update has to add it.
     if (!options.dryRun && ensureCommonJsScope(sdriveRoot)) {
@@ -866,6 +1033,13 @@ program
     // Merge any new slash commands added since the project was initialized.
     if (!options.dryRun) {
       mergeBundledSlashCommands(packageRoot, sdriveRoot);
+
+      try {
+        manifest.writeManifest(projectRoot, { cliVersion: getCliVersion() });
+        console.log("  ✅ Refreshed: .sdrive/framework-manifest.json");
+      } catch (error) {
+        console.warn(`  ⚠️  Could not write framework-manifest.json: ${error.message}`);
+      }
     }
 
     console.log("");
@@ -914,7 +1088,7 @@ program
 
     const config = loadConfig();
     config.defaultTemplate = name;
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    stateStore.writeJsonAtomic(configPath, config);
 
     console.log(`✅ Default template set to: ${name}`);
   });
@@ -923,40 +1097,83 @@ program
 program
   .command("config:validate")
   .description("Validate .sdrive/config.json")
-  .action(() => {
-    const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "validate-config.js");
+  .option("--json", "Print the validation result as JSON")
+  .action((options) => {
+    output.setJson(options.json);
 
-    if (!fs.existsSync(scriptPath)) {
-      console.error("❌ validate-config.js not found. Run `sdrive init` first.");
-      process.exit(1);
+    const projectRoot = process.cwd();
+    const config = stateStore.readJson(stateStore.configPath(projectRoot), null);
+
+    if (!config) {
+      process.exit(
+        output.fail("config:validate", EXIT.NOT_INITIALIZED, "❌ config.json not found. Run `sdrive init` first.")
+      );
     }
 
-    try {
-      execSync(`node "${scriptPath}"`, { stdio: "inherit" });
-    } catch (error) {
-      process.exit(1);
-    }
+    const verdict = stateStore.validateData(projectRoot, "config.schema.json", config);
+    const ok = verdict.ok;
+
+    output.finish({
+      command: "config:validate",
+      ok,
+      code: ok ? EXIT.OK : EXIT.VALIDATION,
+      data: { errors: verdict.errors },
+      blockers: ok ? [] : verdict.errors,
+      suppressAuto: true,
+      human: () => {
+        if (ok) console.log("✅ config.json is valid.");
+        else {
+          console.error("❌ config.json is invalid:");
+          verdict.errors.forEach((error) => console.error(`   • ${error}`));
+        }
+      }
+    });
+
+    process.exit(ok ? EXIT.OK : EXIT.VALIDATION);
   });
 
 // ---------- VALIDATE COMMAND ----------
 program
   .command("validate")
   .description("Validate SpecDrive governance files")
-  .action(() => {
+  .option("--json", "Print the validation result as JSON")
+  .action((options) => {
+    output.setJson(options.json);
+
     const projectRoot = process.cwd();
-    const validatorPath = path.join(projectRoot, ".sdrive", "scripts", "validate-governance.js");
 
-    if (!fs.existsSync(validatorPath)) {
-      console.error("❌ Validator not found. Run `sdrive init` first.");
-      process.exit(1);
+    if (!fs.existsSync(path.join(projectRoot, ".sdrive"))) {
+      process.exit(
+        output.fail("validate", EXIT.NOT_INITIALIZED, "❌ No .sdrive folder found. Run `sdrive init` first.")
+      );
     }
 
-    try {
-      execSync(`node "${validatorPath}"`, { stdio: "inherit" });
-    } catch (error) {
-      console.error("\n❌ Validation failed.");
-      process.exit(1);
+    // Validate in-process: the CLI already depends on ajv, so this works in a
+    // project that has no node_modules of its own.
+    const { validateArtifacts } = require("../scripts/validate-governance");
+    const verdict = validateArtifacts(projectRoot, {
+      log: output.isJson() ? undefined : (line) => console.log(line)
+    });
+
+    if (output.isJson()) {
+      output.printJson({
+        ok: verdict.ok,
+        command: "validate",
+        code: verdict.ok ? EXIT.OK : EXIT.VALIDATION,
+        data: { results: verdict.results, skipped: verdict.skipped },
+        blockers: verdict.ok
+          ? []
+          : verdict.results
+              .filter((entry) => entry.status === "invalid")
+              .map((entry) => `${entry.file}: ${entry.errors.length} schema error(s)`)
+      });
+    } else if (!verdict.ok) {
+      console.error("\n❌ Validation failed. Fix the errors above.");
+    } else {
+      console.log("\n✅ Governance validation complete. All files are valid.");
     }
+
+    process.exit(verdict.ok ? EXIT.OK : EXIT.VALIDATION);
   });
 
 // ---------- VERIFY COMMAND ----------
@@ -964,21 +1181,58 @@ program
   .command("verify <feature>")
   .description("Verify code matches the plan (spec-to-code diff)")
   .option("--version <version>", "Feature version to verify (defaults to the latest)")
+  .option("--json", "Print the verification result as JSON")
   .action((feature, options) => {
+    output.setJson(options.json);
+
+    if (!/^[a-z0-9-]+$/.test(feature)) {
+      process.exit(
+        output.fail("verify", EXIT.USAGE, "❌ Feature name must be lowercase letters, numbers, and hyphens only.")
+      );
+    }
+
     const scriptPath = path.join(process.cwd(), ".sdrive", "scripts", "verify.js");
 
     if (!fs.existsSync(scriptPath)) {
-      console.error("❌ verify.js not found. Run `sdrive init` first.");
-      process.exit(1);
+      process.exit(
+        output.fail("verify", EXIT.NOT_INITIALIZED, "❌ verify.js not found. Run `sdrive init` first.")
+      );
     }
 
-    const versionArg = options.version ? ` "${options.version}"` : "";
+    const args = [feature];
+    if (options.version) args.push(options.version);
 
-    try {
-      execSync(`node "${scriptPath}" "${feature}"${versionArg}`, { stdio: "inherit" });
-    } catch (error) {
-      process.exit(1);
+    if (!output.isJson()) {
+      const result = execute.nodeScript(scriptPath, args, { capture: false });
+      process.exit(result.status === 0 ? EXIT.OK : EXIT.DRIFT);
     }
+
+    const result = execute.nodeScript(scriptPath, args, { capture: true });
+    const resolved = evidence.resolveFeaturedVersion(process.cwd(), feature);
+    const version = options.version || (resolved && resolved.version ? resolved.version.id : "v1");
+    const reportFile = path.join(
+      evidence.governanceDir(process.cwd(), feature, version),
+      "verification.json"
+    );
+    const report = stateStore.readJson(reportFile, null);
+    const ok = result.status === 0;
+
+    output.printJson({
+      ok,
+      command: "verify",
+      code: ok ? EXIT.OK : EXIT.DRIFT,
+      data: { report },
+      blockers: ok
+        ? []
+        : (report && report.items && report.items.missing
+            ? report.items.missing.map((item) => `missing ${item.type}: ${item.name || item.path}`)
+            : [(result.stderr || result.stdout || "verification failed").trim().split("\n").slice(-3).join(" ")]),
+      warnings: report && report.items && report.items.extra
+        ? report.items.extra.map((item) => `extra ${item.type}: ${item.name || item.path}`)
+        : []
+    });
+
+    process.exit(ok ? EXIT.OK : EXIT.DRIFT);
   });
 
 // ---------- CREATE COMMAND ----------
@@ -1098,77 +1352,186 @@ program
 program
   .command("assign <feature> <username>")
   .description("Assign a team member as the owner of a feature")
-  .action((feature, username) => {
+  .option("--json", "Print the result as JSON")
+  .action((feature, username, options) => {
+    output.setJson(options.json);
+    requirePermission("assign");
+
     const projectRoot = process.cwd();
-    const sdriveRoot = path.join(projectRoot, ".sdrive");
-    const workflowStatePath = path.join(sdriveRoot, "workflow-state.json");
 
-    if (!fs.existsSync(workflowStatePath)) {
-      console.error("❌ workflow-state.json not found. Run `sdrive init` first.");
-      process.exit(1);
-    }
-
-    const state = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
-    const target = (state.features || []).find((f) => f.name === feature);
-
-    if (!target) {
-      console.error(`❌ Feature "${feature}" not found in workflow-state.json.`);
-      process.exit(1);
+    if (!fs.existsSync(stateStore.statePath(projectRoot))) {
+      process.exit(
+        output.fail("assign", EXIT.NOT_INITIALIZED, "❌ workflow-state.json not found. Run `sdrive init` first.")
+      );
     }
 
     // Warn (but don't block) if the username isn't on the team roster.
-    const teamPath = path.join(sdriveRoot, "team.json");
-    if (fs.existsSync(teamPath)) {
-      const team = JSON.parse(fs.readFileSync(teamPath, "utf8"));
-      const known = (team.members || []).some((m) => m.username === username);
-      if (!known) {
-        console.warn(`⚠️  "${username}" is not in team.json. Assigning anyway.`);
-      }
+    const team = stateStore.readJson(stateStore.teamPath(projectRoot), null);
+    const warnings = [];
+
+    if (team && !(team.members || []).some((member) => member.username === username)) {
+      warnings.push(`"${username}" is not in team.json. Assigned anyway.`);
     }
 
-    target.assignee = username;
-    fs.writeFileSync(workflowStatePath, JSON.stringify(state, null, 2));
+    let outcome;
+
+    try {
+      outcome = stateStore.mutateState(projectRoot, (state) => {
+        const target = (state.features || []).find((entry) => entry.name === feature);
+
+        if (!target) {
+          const error = new Error(`Feature "${feature}" not found in workflow-state.json.`);
+          error.code = "ENOFEATURE";
+          throw error;
+        }
+
+        target.assignee = username;
+        return state;
+      });
+    } catch (error) {
+      process.exit(
+        output.fail(
+          "assign",
+          error.code === "ENOFEATURE" ? EXIT.USAGE : EXIT.ERROR,
+          `❌ ${error.message}`
+        )
+      );
+    }
 
     audit("feature_assigned", { feature, assignee: username });
-    console.log(`✅ Feature "${feature}" assigned to "${username}".`);
+
+    output.finish({
+      command: "assign",
+      ok: true,
+      code: EXIT.OK,
+      data: { feature, assignee: username, features: outcome.features.length },
+      warnings,
+      human: () => console.log(`✅ Feature "${feature}" assigned to "${username}".`)
+    });
+
+    process.exit(EXIT.OK);
   });
 
 // ---------- STATUS COMMAND ----------
+// The next action is derived from the current version's gates, in order. It is
+// the same information the dashboard's health panel shows, exposed where CI and
+// agents can read it.
+function nextActionFor(feature, version) {
+  // Gate state is read through the shared accessors, never by comparing the
+  // stored string here. A second copy of "what approved means" is exactly the
+  // drift commands/gates.js exists to prevent.
+  const { GATE_ORDER, isGateApprovedFor } = require("../commands/gates");
+  const gates = (version && version.gates) || {};
+  const pending = GATE_ORDER.find((gate) => !isGateApprovedFor(version, gate));
+
+  if (!pending) {
+    return {
+      command: `sdrive archive:check ${feature.name}`,
+      reason: "Every gate is approved; check whether the feature can be archived."
+    };
+  }
+
+  if (pending === "review") {
+    return {
+      command: `sdrive test ${feature.name}`,
+      reason: "Review needs passing test evidence; run the tests, then approve review."
+    };
+  }
+
+  return {
+    command: `sdrive approve ${feature.name} ${pending}`,
+    reason: `The "${pending}" gate is ${gates[pending] || "pending"}.`
+  };
+}
+
 program
   .command("status")
   .description("Show feature lifecycle state")
-  .action(() => {
+  .option("--json", "Print the status as JSON")
+  .action((options) => {
+    output.setJson(options.json);
+
     const projectRoot = process.cwd();
     const workflowStatePath = path.join(projectRoot, ".sdrive", "workflow-state.json");
 
     if (!fs.existsSync(workflowStatePath)) {
-      console.error("❌ workflow-state.json not found. Run `sdrive init` first.");
-      process.exit(1);
+      process.exit(
+        output.fail("status", EXIT.NOT_INITIALIZED, "❌ workflow-state.json not found. Run `sdrive init` first.")
+      );
     }
 
-    const state = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
+    const state = stateStore.readJson(workflowStatePath, null);
 
-    if (!state.features || state.features.length === 0) {
+    if (!state) {
+      process.exit(
+        output.fail("status", EXIT.VALIDATION, "❌ workflow-state.json is not valid JSON.")
+      );
+    }
+
+    const features = (state.features || []).map((feature) => {
+      const versions = (feature.versions || []).map((version) => {
+        const action = nextActionFor(feature, version);
+        return {
+          id: version.id,
+          phase: version.phase,
+          currentStep: version.currentStep,
+          gates: version.gates || {},
+          nextAction: action,
+          history: version.history || []
+        };
+      });
+
+      const current = versions.find((version) => version.id === feature.currentVersion) || versions[0] || null;
+
+      return {
+        name: feature.name,
+        currentVersion: feature.currentVersion || null,
+        assignee: feature.assignee || null,
+        branch: feature.branch || null,
+        base: feature.base || null,
+        versions,
+        nextAction: current ? current.nextAction : null
+      };
+    });
+
+    if (output.isJson()) {
+      output.printJson({
+        ok: true,
+        command: "status",
+        code: EXIT.OK,
+        data: { features }
+      });
+      process.exit(EXIT.OK);
+    }
+
+    if (features.length === 0) {
       console.log("No features found.");
       return;
     }
 
     console.log("\nSpecDrive Feature Status\n");
 
-    state.features.forEach((f) => {
-      console.log(`📁 ${f.name}`);
-      console.log(`   Current Version: ${f.currentVersion}`);
+    features.forEach((feature) => {
+      console.log(`📁 ${feature.name}`);
+      console.log(`   Current Version: ${feature.currentVersion}`);
+      if (feature.assignee) console.log(`   Assignee:        ${feature.assignee}`);
+      if (feature.branch) console.log(`   Branch:          ${feature.branch}${feature.base ? ` (base ${feature.base})` : ""}`);
 
-      (f.versions || []).forEach((v) => {
-        console.log(`   Version ${v.id}:`);
-        console.log(`     Phase:        ${v.phase}`);
-        console.log(`     Current Step: ${v.currentStep}`);
+      feature.versions.forEach((version) => {
+        console.log(`   Version ${version.id}:`);
+        console.log(`     Phase:        ${version.phase}`);
+        console.log(`     Current Step: ${version.currentStep}`);
         console.log(`     Gates:`);
-        console.log(`       specification: ${v.gates?.specification ?? "pending"}`);
-        console.log(`       planning:      ${v.gates?.planning ?? "pending"}`);
-        console.log(`       implementation: ${v.gates?.implementation ?? "pending"}`);
-        console.log(`       review:        ${v.gates?.review ?? "pending"}`);
+        console.log(`       specification: ${version.gates.specification ?? "pending"}`);
+        console.log(`       planning:      ${version.gates.planning ?? "pending"}`);
+        console.log(`       implementation: ${version.gates.implementation ?? "pending"}`);
+        console.log(`       review:        ${version.gates.review ?? "pending"}`);
       });
+
+      if (feature.nextAction) {
+        console.log(`   Next: ${feature.nextAction.command}`);
+        console.log(`         ${feature.nextAction.reason}`);
+      }
       console.log("");
     });
   });
@@ -1177,7 +1540,9 @@ program
 program
   .command("approve <feature> <gate>")
   .description("Approve a workflow gate (specification, planning, implementation, review)")
-  .action((featureName, gate) => {
+  .option("--json", "Print the result as JSON")
+  .action((featureName, gate, options) => {
+    output.setJson(options.json);
     requirePermission("approve");
 
     const {
@@ -1189,96 +1554,159 @@ program
     } = require("../commands/gates");
 
     if (!GATE_ORDER.includes(gate)) {
-      console.error(`❌ Invalid gate "${gate}". Allowed: ${GATE_ORDER.join(", ")}`);
-      process.exit(1);
+      process.exit(
+        output.fail(
+        "approve",
+        EXIT.USAGE,
+        `❌ Invalid gate "${gate}". Allowed: ${GATE_ORDER.join(", ")}`
+        )
+      );
     }
 
     const projectRoot = process.cwd();
-    const workflowStatePath = path.join(projectRoot, ".sdrive", "workflow-state.json");
 
-    if (!fs.existsSync(workflowStatePath)) {
-      console.error("❌ workflow-state.json not found. Run `sdrive init` first.");
-      process.exit(1);
+    if (!fs.existsSync(stateStore.statePath(projectRoot))) {
+      process.exit(
+        output.fail("approve", EXIT.NOT_INITIALIZED, "❌ workflow-state.json not found. Run `sdrive init` first.")
+      );
     }
 
-    const state = JSON.parse(fs.readFileSync(workflowStatePath, "utf8"));
+    let outcome;
 
-    // The feature is explicit. NEVER fall back to state.features[0] - approving
-    // the wrong feature writes a false record while reporting success.
-    const feature = findFeature(state, featureName);
+    try {
+      outcome = stateStore.withLock(projectRoot, () => {
+        const state = stateStore.readState(projectRoot);
 
-    if (!feature) {
-      console.error(`❌ Feature "${featureName}" not found.`);
+        if (!state) {
+          return { ok: false, code: EXIT.VALIDATION, blockers: ["workflow-state.json is not valid JSON."] };
+        }
 
-      const known = (state.features || []).map((f) => f.name);
+        // The feature is explicit. NEVER fall back to state.features[0] - approving
+        // the wrong feature writes a false record while reporting success.
+        const feature = findFeature(state, featureName);
 
-      if (known.length > 0) {
-        console.error(`   Known features: ${known.join(", ")}`);
+        if (!feature) {
+          const known = (state.features || []).map((entry) => entry.name);
+          return {
+            ok: false,
+            code: EXIT.USAGE,
+            blockers: [
+              `Feature "${featureName}" not found.${known.length ? ` Known features: ${known.join(", ")}.` : ""}`
+            ]
+          };
+        }
+
+        const version = resolveVersion(feature);
+
+        if (!version) {
+          return { ok: false, code: EXIT.USAGE, blockers: [`Feature "${featureName}" has no versions.`] };
+        }
+
+        version.gates = version.gates || {};
+
+        // Verify BEFORE writing anything. A gate may only be approved when the work
+        // it certifies actually exists.
+        const verdict = checkGateRequirements(projectRoot, feature, version, gate);
+
+        if (!verdict.ok) {
+          return {
+            ok: false,
+            code: EXIT.GATE_BLOCKED,
+            blockers: verdict.blockers,
+            warnings: verdict.warnings,
+            data: { feature: featureName, version: version.id, gate }
+          };
+        }
+
+        if (verdict.approved) {
+          return {
+            ok: true,
+            already: true,
+            warnings: verdict.warnings,
+            data: { feature: featureName, version: version.id, gate }
+          };
+        }
+
+        const actor = currentActor();
+
+        // The stored value is the schema's business. Naming it here would recreate the
+        // duplication this command was just moved off of, one line lower down.
+        version.gates[gate] = GATE_APPROVED;
+        version.history = version.history || [];
+        version.history.push({
+          event: `${gate}_approved`,
+          // `by` is the schema's field; `actor` is retained for existing readers.
+          by: actor,
+          actor,
+          previousValue: verdict.current || "pending",
+          timestamp: new Date().toISOString()
+        });
+
+        // Atomic replace + schema validation + a backup of the previous state.
+        stateStore.writeState(projectRoot, state);
+
+        return {
+          ok: true,
+          already: false,
+          warnings: verdict.warnings,
+          previous: verdict.current || "pending",
+          data: { feature: featureName, version: version.id, gate, actor }
+        };
+      });
+    } catch (error) {
+      const code = error.code === "ELOCKED" ? EXIT.GATE_BLOCKED : EXIT.ERROR;
+      process.exit(output.fail("approve", code, `❌ ${error.message}`));
+    }
+
+    if (!outcome.ok) {
+      output.finish({
+        command: "approve",
+        ok: false,
+        code: outcome.code,
+        data: outcome.data || {},
+        blockers: outcome.blockers || [],
+        warnings: outcome.warnings || [],
+        suppressAuto: true,
+        human: () => {
+          console.error(`\n❌ Refusing to approve "${gate}" for "${featureName}".`);
+          outcome.blockers.forEach((blocker) => console.error(`   • ${blocker}`));
+          console.error("\nNothing was written. Approving an unmet gate would falsify the governance record.\n");
+        }
+      });
+      process.exit(outcome.code);
+    }
+
+    if (!outcome.already) {
+      audit("gate_approved", {
+        feature: featureName,
+        version: outcome.data.version,
+        gate,
+        previousValue: outcome.previous
+      });
+    }
+
+    output.finish({
+      command: "approve",
+      ok: true,
+      code: EXIT.OK,
+      data: outcome.data,
+      warnings: outcome.warnings || [],
+      suppressAuto: true,
+      human: () => {
+        (outcome.warnings || []).forEach((warning) => console.warn(`⚠️  ${warning}`));
+
+        if (outcome.already) {
+          console.log(`\n✅ Gate "${gate}" is already approved for "${featureName}" version "${outcome.data.version}". Nothing changed.\n`);
+          return;
+        }
+
+        console.log(`\n✅ Gate "${gate}" approved for feature "${featureName}" version "${outcome.data.version}".`);
+        console.log(`   "${outcome.previous}" → "${GATE_APPROVED}"`);
+        console.log("");
       }
-
-      process.exit(1);
-    }
-
-    const version = resolveVersion(feature);
-
-    if (!version) {
-      console.error(`❌ Feature "${featureName}" has no versions.`);
-      process.exit(1);
-    }
-
-    version.gates = version.gates || {};
-
-    // Verify BEFORE writing anything. A gate may only be approved when the work
-    // it certifies actually exists.
-    const { ok, blockers, warnings, current, approved } = checkGateRequirements(
-      projectRoot,
-      feature,
-      version,
-      gate
-    );
-
-    warnings.forEach((warning) => console.warn(`⚠️  ${warning}`));
-
-    if (!ok) {
-      console.error(`\n❌ Refusing to approve "${gate}" for "${featureName}" version "${version.id}".`);
-
-      blockers.forEach((blocker) => console.error(`   • ${blocker}`));
-
-      console.error("\nNothing was written. Approving an unmet gate would falsify the governance record.\n");
-      process.exit(1);
-    }
-
-    if (approved) {
-      console.log(`\n✅ Gate "${gate}" is already approved for "${featureName}" version "${version.id}". Nothing changed.\n`);
-      return;
-    }
-
-    const actor = currentActor();
-
-    // The stored value is the schema's business. Naming it here would recreate the
-    // duplication this command was just moved off of, one line lower down.
-    version.gates[gate] = GATE_APPROVED;
-    version.history = version.history || [];
-    version.history.push({
-      event: `${gate}_approved`,
-      // `by` is the schema's field; `actor` is retained for existing readers.
-      by: actor,
-      actor,
-      previousValue: current || "pending",
-      timestamp: new Date().toISOString()
     });
 
-    fs.writeFileSync(workflowStatePath, JSON.stringify(state, null, 2));
-    audit("gate_approved", {
-      feature: feature.name,
-      version: version.id,
-      gate,
-      previousValue: current || "pending"
-    });
-
-    console.log(`\n✅ Gate "${gate}" approved for feature "${feature.name}" version "${version.id}".`);
-    console.log(`   "${current || "pending"}" → "${GATE_APPROVED}"`);
-    console.log("");
+    process.exit(EXIT.OK);
   });
 
 // ---------- ARCHIVE COMMANDS ----------
@@ -1289,31 +1717,51 @@ program
 program
   .command("archive:check <feature>")
   .description("Report whether a feature may be archived. Changes nothing")
-  .action((featureName) => {
+  .option("--json", "Print the result as JSON")
+  .action((featureName, options) => {
+    output.setJson(options.json);
     requirePermission("archive:check");
 
     const { checkArchivable } = require("../commands/archive");
     const verdict = checkArchivable(process.cwd(), featureName);
+    const ok = Boolean(verdict.alreadyFinalized || verdict.ok);
 
-    verdict.warnings.forEach((warning) => console.warn(`⚠️  ${warning}`));
+    output.finish({
+      command: "archive:check",
+      ok,
+      code: ok ? EXIT.OK : EXIT.GATE_BLOCKED,
+      data: {
+        feature: featureName,
+        alreadyFinalized: Boolean(verdict.alreadyFinalized),
+        version: verdict.version ? verdict.version.id : null
+      },
+      blockers: verdict.blockers || [],
+      warnings: verdict.warnings || [],
+      suppressAuto: true,
+      human: () => {
+        (verdict.warnings || []).forEach((warning) => console.warn(`⚠️  ${warning}`));
 
-    if (verdict.alreadyFinalized) {
-      console.log(
-        `\n✅ "${featureName}" is already finalized - ${verdict.version.id} is in specs/completed/.\n`
-      );
-      return;
-    }
+        if (verdict.alreadyFinalized) {
+          console.log(
+            `\n✅ "${featureName}" is already finalized - ${verdict.version.id} is in specs/completed/.\n`
+          );
+          return;
+        }
 
-    if (!verdict.ok) {
-      console.error(`\n❌ "${featureName}" cannot be archived yet.`);
-      verdict.blockers.forEach((blocker) => console.error(`   • ${blocker}`));
-      console.error("");
-      process.exit(1);
-    }
+        if (!verdict.ok) {
+          console.error(`\n❌ "${featureName}" cannot be archived yet.`);
+          verdict.blockers.forEach((blocker) => console.error(`   • ${blocker}`));
+          console.error("");
+          return;
+        }
 
-    console.log(`\n✅ "${featureName}" ${verdict.version.id} is archivable.`);
-    console.log("   All four gates are approved and the evidence behind them is still present.");
-    console.log("");
+        console.log(`\n✅ "${featureName}" ${verdict.version.id} is archivable.`);
+        console.log("   All four gates are approved and the evidence behind them is still present.");
+        console.log("");
+      }
+    });
+
+    process.exit(ok ? EXIT.OK : EXIT.GATE_BLOCKED);
   });
 
 program
@@ -1322,7 +1770,9 @@ program
     "Close a feature's lifecycle: move its spec to completed/ and mark the version completed. Refuses unless every gate is already approved"
   )
   .option("--merge-commit <sha>", "Record the merge commit in the feature history")
+  .option("--json", "Print the result as JSON")
   .action((featureName, options) => {
+    output.setJson(options.json);
     requirePermission("archive:finalize");
 
     const { finalizeArchive } = require("../commands/archive");
@@ -1331,140 +1781,275 @@ program
       mergeCommit: options.mergeCommit
     });
 
-    result.warnings.forEach((warning) => console.warn(`⚠️  ${warning}`));
-
     if (result.alreadyFinalized) {
-      console.log(`\n✅ "${featureName}" is already finalized. Nothing changed.\n`);
-      return;
+      output.finish({
+        command: "archive:finalize",
+        ok: true,
+        code: EXIT.OK,
+        data: { feature: featureName, alreadyFinalized: true, version: result.version },
+        warnings: result.warnings || [],
+        human: () => console.log(`\n✅ "${featureName}" is already finalized. Nothing changed.\n`)
+      });
+      process.exit(EXIT.OK);
     }
 
     if (!result.ok) {
-      console.error(`\n❌ Refusing to finalize "${featureName}".`);
-      result.blockers.forEach((blocker) => console.error(`   • ${blocker}`));
-      console.error(
-        "\nNothing was written. A lifecycle may only be closed on approvals that already exist.\n"
-      );
-      process.exit(1);
+      output.finish({
+        command: "archive:finalize",
+        ok: false,
+        code: EXIT.GATE_BLOCKED,
+        data: { feature: featureName, version: result.version || null },
+        blockers: result.blockers || [],
+        warnings: result.warnings || [],
+        suppressAuto: true,
+        human: () => {
+          (result.warnings || []).forEach((warning) => console.warn(`⚠️  ${warning}`));
+          console.error(`\n❌ Refusing to finalize "${featureName}".`);
+          result.blockers.forEach((blocker) => console.error(`   • ${blocker}`));
+          console.error(
+            "\nNothing was written. A lifecycle may only be closed on approvals that already exist.\n"
+          );
+        }
+      });
+      process.exit(EXIT.GATE_BLOCKED);
     }
 
     audit("feature_archived", { feature: featureName, version: result.version });
 
-    console.log(`\n✅ Feature "${featureName}" finalized (${result.version}).`);
-    console.log(
-      `   Spec moved: specs/${result.from}/${featureName} → specs/completed/${featureName}`
-    );
-    console.log("   Governance left in place at .sdrive/governance/<feature>/<version>/.");
-    console.log("   Commit the move, then let /sdrive:archive delete the branch.\n");
+    output.finish({
+      command: "archive:finalize",
+      ok: true,
+      code: EXIT.OK,
+      data: { feature: featureName, version: result.version, from: result.from },
+      warnings: result.warnings || [],
+      human: () => {
+        console.log(`\n✅ Feature "${featureName}" finalized (${result.version}).`);
+        console.log(
+          `   Spec moved: specs/${result.from}/${featureName} → specs/completed/${featureName}`
+        );
+        console.log("   Governance left in place at .sdrive/governance/<feature>/<version>/.");
+        console.log("   Commit the move, then let /sdrive:archive delete the branch.\n");
+      }
+    });
+
+    process.exit(EXIT.OK);
   });
 
 // ---------- TEAM COMMANDS ----------
+const TEAM_ROLES = ["admin", "reviewer", "developer"];
+
+function updateTeam(projectRoot, mutator) {
+  return stateStore.withLock(projectRoot, () => {
+    const file = stateStore.teamPath(projectRoot);
+    const team = stateStore.readJson(file, null);
+
+    if (!team) {
+      const error = new Error("team.json not found. Run `sdrive init` first.");
+      error.code = "ENOENT";
+      throw error;
+    }
+
+    const next = mutator(team) || team;
+    stateStore.writeJsonAtomic(file, next);
+    return next;
+  });
+}
+
 program
   .command("team:add <username> <role>")
   .description("Add a new team member")
-  .action((username, role) => {
+  .option("--json", "Print the result as JSON")
+  .action((username, role, options) => {
+    output.setJson(options.json);
     requirePermission("team:add");
 
-    const teamPath = path.join(process.cwd(), ".sdrive", "team.json");
-
-    if (!fs.existsSync(teamPath)) {
-      console.error("❌ team.json not found. Run `sdrive init` first.");
-      process.exit(1);
+    if (!TEAM_ROLES.includes(role)) {
+      process.exit(
+        output.fail("team:add", EXIT.USAGE, `❌ Invalid role "${role}". Allowed: ${TEAM_ROLES.join(", ")}`)
+      );
     }
 
-    const team = JSON.parse(fs.readFileSync(teamPath, "utf8"));
+    // The first member must be the acting Git user. Otherwise a typo in the
+    // username creates a roster that does not include the person adding it,
+    // locking every mutating command (including team:add) out of the project.
+    const existingTeam = stateStore.readJson(stateStore.teamPath(process.cwd()), null);
 
-    if (!team.members) team.members = [];
+    if (existingTeam && (existingTeam.members || []).length === 0) {
+      const who = permissions.actor(process.cwd());
 
-    const existing = team.members.find((m) => m.username === username);
-    if (existing) {
-      console.error(`❌ User "${username}" already exists. Use team:update to change role.`);
-      process.exit(1);
+      if (who !== username) {
+        process.exit(
+          output.fail(
+            "team:add",
+            EXIT.USAGE,
+            `❌ The first team member must be the acting Git user ("${who}"), not "${username}".`,
+            { blockers: [`Run: sdrive team:add "${who}" admin`] }
+          )
+        );
+      }
     }
 
-    team.members.push({ username, role });
-    fs.writeFileSync(teamPath, JSON.stringify(team, null, 2));
+    let team;
 
-    console.log(`✅ Added ${username} as ${role}.`);
+    try {
+      team = updateTeam(process.cwd(), (current) => {
+        current.members = current.members || [];
+
+        if (current.members.some((member) => member.username === username)) {
+          const error = new Error(`User "${username}" already exists. Use team:update to change role.`);
+          error.code = "EEXISTS";
+          throw error;
+        }
+
+        current.members.push({ username, role });
+        return current;
+      });
+    } catch (error) {
+      process.exit(
+        output.fail(
+          "team:add",
+          error.code === "ENOENT" ? EXIT.NOT_INITIALIZED : EXIT.USAGE,
+          `❌ ${error.message}`
+        )
+      );
+    }
+
+    output.finish({
+      command: "team:add",
+      ok: true,
+      code: EXIT.OK,
+      data: { username, role, members: team.members.length },
+      human: () => console.log(`✅ Added ${username} as ${role}.`)
+    });
+
+    process.exit(EXIT.OK);
   });
 
 program
   .command("team:remove <username>")
   .description("Remove a team member")
-  .action((username) => {
+  .option("--json", "Print the result as JSON")
+  .action((username, options) => {
+    output.setJson(options.json);
     requirePermission("team:remove");
 
-    const teamPath = path.join(process.cwd(), ".sdrive", "team.json");
+    let team;
 
-    if (!fs.existsSync(teamPath)) {
-      console.error("❌ team.json not found. Run `sdrive init` first.");
-      process.exit(1);
+    try {
+      team = updateTeam(process.cwd(), (current) => {
+        const before = current.members ? current.members.length : 0;
+        current.members = (current.members || []).filter((member) => member.username !== username);
+
+        if (current.members.length === before) {
+          const error = new Error(`User "${username}" not found.`);
+          error.code = "ENOUSER";
+          throw error;
+        }
+
+        return current;
+      });
+    } catch (error) {
+      process.exit(
+        output.fail(
+          "team:remove",
+          error.code === "ENOENT" ? EXIT.NOT_INITIALIZED : EXIT.USAGE,
+          `❌ ${error.message}`
+        )
+      );
     }
 
-    const team = JSON.parse(fs.readFileSync(teamPath, "utf8"));
+    output.finish({
+      command: "team:remove",
+      ok: true,
+      code: EXIT.OK,
+      data: { username, members: team.members.length },
+      human: () => console.log(`✅ Removed ${username}.`)
+    });
 
-    const before = team.members?.length || 0;
-    team.members = (team.members || []).filter((m) => m.username !== username);
-    const after = team.members.length;
-
-    if (before === after) {
-      console.error(`❌ User "${username}" not found.`);
-      process.exit(1);
-    }
-
-    fs.writeFileSync(teamPath, JSON.stringify(team, null, 2));
-    console.log(`✅ Removed ${username}.`);
+    process.exit(EXIT.OK);
   });
 
 program
   .command("team:list")
   .description("List all team members")
-  .action(() => {
-    const teamPath = path.join(process.cwd(), ".sdrive", "team.json");
+  .option("--json", "Print the team as JSON")
+  .action((options) => {
+    output.setJson(options.json);
 
-    if (!fs.existsSync(teamPath)) {
-      console.error("❌ team.json not found. Run `sdrive init` first.");
-      process.exit(1);
+    const team = stateStore.readJson(stateStore.teamPath(process.cwd()), null);
+
+    if (!team) {
+      process.exit(
+        output.fail("team:list", EXIT.NOT_INITIALIZED, "❌ team.json not found. Run `sdrive init` first.")
+      );
     }
 
-    const team = JSON.parse(fs.readFileSync(teamPath, "utf8"));
+    const members = team.members || [];
 
-    if (!team.members || team.members.length === 0) {
+    if (output.isJson()) {
+      output.printJson({ ok: true, command: "team:list", code: EXIT.OK, data: { members } });
+      process.exit(EXIT.OK);
+    }
+
+    if (members.length === 0) {
       console.log("No team members found.");
       return;
     }
 
     console.log("\nSpecDrive Team Members\n");
-    team.members.forEach((m) => {
-      console.log(`👤 ${m.username} — ${m.role}`);
+    members.forEach((member) => {
+      console.log(`👤 ${member.username} — ${member.role}`);
     });
   });
 
 program
   .command("team:update <username> <role>")
   .description("Update a team member's role")
-  .action((username, role) => {
+  .option("--json", "Print the result as JSON")
+  .action((username, role, options) => {
+    output.setJson(options.json);
     requirePermission("team:update");
 
-    const teamPath = path.join(process.cwd(), ".sdrive", "team.json");
-
-    if (!fs.existsSync(teamPath)) {
-      console.error("❌ team.json not found. Run `sdrive init` first.");
-      process.exit(1);
+    if (!TEAM_ROLES.includes(role)) {
+      process.exit(
+        output.fail("team:update", EXIT.USAGE, `❌ Invalid role "${role}". Allowed: ${TEAM_ROLES.join(", ")}`)
+      );
     }
 
-    const team = JSON.parse(fs.readFileSync(teamPath, "utf8"));
+    let team;
 
-    const member = team.members?.find((m) => m.username === username);
+    try {
+      team = updateTeam(process.cwd(), (current) => {
+        const member = (current.members || []).find((entry) => entry.username === username);
 
-    if (!member) {
-      console.error(`❌ User "${username}" not found.`);
-      process.exit(1);
+        if (!member) {
+          const error = new Error(`User "${username}" not found.`);
+          error.code = "ENOUSER";
+          throw error;
+        }
+
+        member.role = role;
+        return current;
+      });
+    } catch (error) {
+      process.exit(
+        output.fail(
+          "team:update",
+          error.code === "ENOENT" ? EXIT.NOT_INITIALIZED : EXIT.USAGE,
+          `❌ ${error.message}`
+        )
+      );
     }
 
-    member.role = role;
-    fs.writeFileSync(teamPath, JSON.stringify(team, null, 2));
+    output.finish({
+      command: "team:update",
+      ok: true,
+      code: EXIT.OK,
+      data: { username, role, members: team.members.length },
+      human: () => console.log(`✅ Updated ${username} to ${role}.`)
+    });
 
-    console.log(`✅ Updated ${username} to ${role}.`);
+    process.exit(EXIT.OK);
   });
 
 program
@@ -1480,11 +2065,11 @@ program
       process.exit(1);
     }
 
-    try {
-      execSync(`node "${scriptPath}"`, { stdio: "inherit" });
-    } catch (error) {
+    const result = execute.nodeScript(scriptPath, [], { capture: false });
+
+    if (result.status !== 0) {
       console.error("❌ Team sync failed.");
-      process.exit(1);
+      process.exit(result.status || EXIT.ERROR);
     }
   });
 
@@ -1502,11 +2087,11 @@ program
       process.exit(1);
     }
 
-    try {
-      execSync(`node "${scriptPath}"`, { stdio: "inherit" });
-    } catch (error) {
+    const result = execute.nodeScript(scriptPath, [], { capture: false });
+
+    if (result.status !== 0) {
       console.error("❌ Hook installation failed.");
-      process.exit(1);
+      process.exit(result.status || EXIT.ERROR);
     }
   });
 
@@ -1522,11 +2107,11 @@ program
       process.exit(1);
     }
 
-    try {
-      execSync(`node "${scriptPath}" "${oldFile}" "${newFile}"`, { stdio: "inherit" });
-    } catch (error) {
+    const result = execute.nodeScript(scriptPath, [oldFile, newFile], { capture: false });
+
+    if (result.status !== 0) {
       console.error("❌ Diff failed.");
-      process.exit(1);
+      process.exit(result.status || EXIT.ERROR);
     }
   });
 
@@ -1543,13 +2128,14 @@ program
       process.exit(1);
     }
 
-    const versionArg = options.version ? ` "${options.version}"` : "";
+    const args = [feature];
+    if (options.version) args.push(options.version);
 
-    try {
-      execSync(`node "${scriptPath}" "${feature}"${versionArg}`, { stdio: "inherit" });
-    } catch (error) {
+    const result = execute.nodeScript(scriptPath, args, { capture: false });
+
+    if (result.status !== 0) {
       console.error("❌ OpenAPI generation failed.");
-      process.exit(1);
+      process.exit(result.status || EXIT.ERROR);
     }
   });
 
@@ -2233,7 +2819,7 @@ program
       });
     }
 
-    fs.writeFileSync(workflowStatePath, JSON.stringify(state, null, 2));
+    stateStore.writeState(projectRoot, state);
 
     console.log(`✅ Feature "${feature}" amended (${versionId}).`);
     console.log(`   Reason: ${reason}`);
@@ -2256,7 +2842,7 @@ program
           freshTarget.base = applied.base;
         }
 
-        fs.writeFileSync(workflowStatePath, JSON.stringify(freshState, null, 2));
+        stateStore.writeState(projectRoot, freshState);
         console.log(
           `✅ Recorded branch "${applied.branch}"${applied.base ? ` (base "${applied.base}")` : ""} on feature "${feature}".`
         );
@@ -2318,25 +2904,25 @@ program
       process.exit(1);
     }
 
-    try {
-      execSync(`node "${scriptPath}"`, { stdio: "inherit" });
+    const scan = execute.nodeScript(scriptPath, [], { capture: false });
 
-      console.log("");
-      console.log("📋 The scan is complete.");
-      console.log("   You can now run `/sdrive:onboard` in your AI tool,");
-      console.log("   or the agent will run this scan for you if needed.");
-
-      if (options.dashboard === false) {
-        console.log("💡 Dashboard skipped (--no-dashboard).");
-        printDashboardHint("   Start it any time with:");
-        return;
-      }
-
-      launchDashboard();
-    } catch (error) {
+    if (scan.status !== 0) {
       console.error("❌ Onboarding scan failed.");
-      process.exit(1);
+      process.exit(scan.status || EXIT.ERROR);
     }
+
+    console.log("");
+    console.log("📋 The scan is complete.");
+    console.log("   You can now run `/sdrive:onboard` in your AI tool,");
+    console.log("   or the agent will run this scan for you if needed.");
+
+    if (options.dashboard === false) {
+      console.log("💡 Dashboard skipped (--no-dashboard).");
+      printDashboardHint("   Start it any time with:");
+      return;
+    }
+
+    launchDashboard();
   });
 
 // ---------- VERSION NEW ----------
@@ -2353,12 +2939,13 @@ program
       process.exit(1);
     }
 
-    try {
-      execSync(`node "${scriptPath}" "${feature}"`, { stdio: "inherit" });
-      audit("version_created", { feature });
-    } catch (error) {
-      process.exit(1);
+    const result = execute.nodeScript(scriptPath, [feature], { capture: false });
+
+    if (result.status !== 0) {
+      process.exit(result.status || EXIT.ERROR);
     }
+
+    audit("version_created", { feature });
   });
 
 // ---------- DIFF VERSION ----------
@@ -2373,10 +2960,12 @@ program
       process.exit(1);
     }
 
-    try {
-      execSync(`node "${scriptPath}" "${feature}" "${versionA}" "${versionB}"`, { stdio: "inherit" });
-    } catch (error) {
-      process.exit(1);
+    const result = execute.nodeScript(scriptPath, [feature, versionA, versionB], {
+      capture: false
+    });
+
+    if (result.status !== 0) {
+      process.exit(result.status || EXIT.ERROR);
     }
   });
 
@@ -2540,6 +3129,701 @@ program
     }
 
     console.log("\nNext: run /sdrive:* from your AI tool, or `sdrive adapters:list` to confirm.\n");
+  });
+
+// ---------- DOCTOR ----------
+program
+  .command("doctor")
+  .description("Diagnose a SpecDrive installation (layout, schemas, team, permissions, adapters, evidence)")
+  .option("--json", "Print the checks as JSON")
+  .option("--fix", "Apply safe fixes (CommonJS scope marker, framework manifest)")
+  .action((options) => {
+    output.setJson(options.json);
+
+    const projectRoot = process.cwd();
+    const fixes = options.fix ? doctor.applyFixes(projectRoot) : [];
+    const verdict = doctor.runChecks(projectRoot);
+
+    const failures = verdict.checks.filter((check) => check.status === "fail");
+    const warnings = verdict.checks.filter((check) => check.status === "warn");
+
+    output.finish({
+      command: "doctor",
+      ok: verdict.ok,
+      code: verdict.ok ? EXIT.OK : EXIT.DOCTOR,
+      data: { checks: verdict.checks, fixes },
+      blockers: failures.map((check) => `${check.id}: ${check.message}`),
+      warnings: warnings.map((check) => `${check.id}: ${check.message}`),
+      suppressAuto: true,
+      human: () => {
+        console.log("\n🩺 SpecDrive doctor\n");
+
+        verdict.checks.forEach((check) => {
+          const icon = check.status === "ok" ? "✅" : check.status === "warn" ? "⚠️ " : "❌";
+          console.log(`${icon} ${check.id.padEnd(18)} ${check.message}`);
+          if (check.fix && check.status !== "ok") console.log(`   fix: ${check.fix}`);
+        });
+
+        fixes.forEach((fix) => console.log(`🔧 ${fix}`));
+
+        console.log("");
+        if (verdict.ok) {
+          console.log(
+            `✅ No blocking problems${warnings.length ? ` (${warnings.length} warning${warnings.length === 1 ? "" : "s"})` : ""}.\n`
+          );
+        } else {
+          console.log(`❌ ${failures.length} blocking problem(s). Fix them and re-run \`sdrive doctor\`.\n`);
+        }
+      }
+    });
+
+    process.exit(verdict.ok ? EXIT.OK : EXIT.DOCTOR);
+  });
+
+// ---------- TEST EVIDENCE ----------
+program
+  .command("test <feature>")
+  .description("Run the project's tests and record test-evidence.json for a feature")
+  .option("--cmd <command>", "Test command to run (overrides config/package.json detection)")
+  .option("--version <version>", "Feature version (defaults to the current version)")
+  .option("--timeout <ms>", "Test timeout in milliseconds (default: 600000)")
+  .option("--json", "Print the result as JSON")
+  .action((feature, options) => {
+    output.setJson(options.json);
+    requirePermission("test");
+
+    const projectRoot = process.cwd();
+    const resolved = evidence.resolveFeaturedVersion(projectRoot, feature);
+
+    if (!resolved) {
+      process.exit(
+        output.fail("test", EXIT.USAGE, `❌ Feature "${feature}" not found in workflow-state.json.`)
+      );
+    }
+
+    const versionId = options.version || (resolved.version ? resolved.version.id : "v1");
+
+    let run;
+
+    try {
+      run = evidence.runTests(projectRoot, {
+        command: options.cmd,
+        timeoutMs: options.timeout ? Number(options.timeout) : undefined
+      });
+    } catch (error) {
+      process.exit(
+        output.fail("test", EXIT.USAGE, `❌ ${error.message}`, {
+          blockers: ["Set test.command in .sdrive/config.json or pass --cmd."]
+        })
+      );
+    }
+
+    const written = evidence.writeEvidence(projectRoot, feature, versionId, run);
+    const passed =
+      run.exitCode === 0 &&
+      Number(run.summary.failed) === 0 &&
+      evidence.hasRecognisableResults(run);
+
+    if (!passed) {
+      // The evidence is still written: a failing run is a fact worth recording,
+      // and the gate will read it and refuse on its own.
+      audit("test_failed", {
+        feature,
+        version: versionId,
+        exitCode: run.exitCode,
+        failed: run.summary.failed
+      });
+    } else {
+      audit("test_passed", {
+        feature,
+        version: versionId,
+        total: run.summary.total,
+        durationMs: run.durationMs
+      });
+    }
+
+    output.finish({
+      command: "test",
+      ok: passed,
+      code: passed ? EXIT.OK : EXIT.TEST_FAILED,
+      data: {
+        feature,
+        version: versionId,
+        command: run.command,
+        source: run.source,
+        exitCode: run.exitCode,
+        summary: run.summary,
+        durationMs: run.durationMs,
+        evidence: path.relative(projectRoot, written.file),
+        testIds: run.testIds,
+        acIds: run.acIds
+      },
+      blockers: passed
+        ? []
+        : [
+            run.exitCode !== 0
+              ? `The test command exited ${run.exitCode}${run.timedOut ? " (timed out)" : ""}.`
+              : null,
+            run.summary.failed > 0 ? `${run.summary.failed} test(s) failed.` : null,
+            !evidence.hasRecognisableResults(run)
+              ? "The test command produced no recognisable results. Configure a reporter (JUnit/Jest/pytest/node:test) or print TEST-### IDs."
+              : null
+          ].filter(Boolean),
+      human: () => {
+        console.log(`\n🧪 ${run.command}`);
+        console.log(`   ${run.summary.passed} passed, ${run.summary.failed} failed, ${run.summary.skipped} skipped (${run.durationMs} ms)`);
+        console.log(`   Evidence: ${path.relative(projectRoot, written.file)}`);
+
+        if (!passed) {
+          const tail = String(run.output || "").trim().split("\n").slice(-12).join("\n");
+          if (tail) console.error(`\n${tail}\n`);
+          console.error(
+            "❌ Tests did not produce passing evidence. The run was recorded so the gate will refuse review.\n"
+          );
+        } else {
+          console.log("✅ Tests passed. Review can now be approved.\n");
+        }
+      }
+    });
+
+    process.exit(passed ? EXIT.OK : EXIT.TEST_FAILED);
+  });
+
+// ---------- CHECK ----------
+program
+  .command("check")
+  .description("Run the project's governance checks in one pass (doctor, validate, optionally tests)")
+  .option("--json", "Print the result as JSON")
+  .option("--tests", "Also run tests for every ongoing feature and record evidence")
+  .option("--skip-doctor", "Skip the environment checks")
+  .action((options) => {
+    output.setJson(options.json);
+
+    // `check` is a CI/pre-push command, not an approval. It may record test
+    // evidence, but it never changes a gate, so it must work on a runner whose
+    // git identity is not on the team roster.
+    const projectRoot = process.cwd();
+    const data = { doctor: null, validation: null, tests: [] };
+    const blockers = [];
+    const blockingChecks = new Set([
+      "layout",
+      "config",
+      "state",
+      "permissions",
+      "adapters",
+      "commonjs"
+    ]);
+
+    if (!options.skipDoctor) {
+      const verdict = doctor.runChecks(projectRoot);
+      data.doctor = verdict.checks;
+
+      if (!verdict.ok) {
+        blockers.push(
+          ...verdict.checks
+            .filter((check) => check.status === "fail" && blockingChecks.has(check.id))
+            .map((check) => `doctor/${check.id}: ${check.message}`)
+        );
+      }
+    }
+
+    if (fs.existsSync(path.join(projectRoot, ".sdrive"))) {
+      const { validateArtifacts } = require("../scripts/validate-governance");
+      const validation = validateArtifacts(projectRoot, {});
+      data.validation = { ok: validation.ok, results: validation.results, skipped: validation.skipped };
+
+      if (!validation.ok) {
+        blockers.push(
+          ...validation.results
+            .filter((entry) => entry.status === "invalid")
+            .map((entry) => `validate/${entry.file}: ${entry.errors.length} schema error(s)`)
+        );
+      }
+    }
+
+    if (options.tests && blockers.length === 0) {
+      const state = stateStore.readState(projectRoot) || { features: [] };
+
+      for (const feature of state.features || []) {
+        const version =
+          (feature.versions || []).find((entry) => entry.id === feature.currentVersion) ||
+          (feature.versions || [])[0];
+
+        if (!version || version.phase === "completed") continue;
+
+        try {
+          const run = evidence.runTests(projectRoot, {});
+          const written = evidence.writeEvidence(projectRoot, feature.name, version.id, run);
+          const passed =
+            run.exitCode === 0 &&
+            Number(run.summary.failed) === 0 &&
+            evidence.hasRecognisableResults(run);
+
+          data.tests.push({
+            feature: feature.name,
+            version: version.id,
+            ok: passed,
+            summary: run.summary,
+            evidence: path.relative(projectRoot, written.file)
+          });
+
+          if (!passed) blockers.push(`test/${feature.name}: exited ${run.exitCode}`);
+        } catch (error) {
+          data.tests.push({ feature: feature.name, version: version.id, ok: false, error: error.message });
+          blockers.push(`test/${feature.name}: ${error.message}`);
+        }
+      }
+    }
+
+    const ok = blockers.length === 0;
+
+    output.finish({
+      command: "check",
+      ok,
+      code: ok ? EXIT.OK : EXIT.VALIDATION,
+      data,
+      blockers,
+      human: () => {
+        console.log("\n🔎 SpecDrive check\n");
+        if (data.doctor) {
+          const failed = data.doctor.filter((check) => check.status === "fail").length;
+          const warned = data.doctor.filter((check) => check.status === "warn").length;
+          console.log(
+            `${failed === 0 ? "✅" : "❌"} doctor: ${data.doctor.length - failed - warned}/${data.doctor.length} ok${
+              warned ? `, ${warned} warning(s)` : ""
+            }`
+          );
+        }
+        if (data.validation) {
+          console.log(`${data.validation.ok ? "✅" : "❌"} validate: ${data.validation.results.length} artifact(s) checked`);
+        }
+        data.tests.forEach((entry) => {
+          console.log(`${entry.ok ? "✅" : "❌"} test ${entry.feature}/${entry.version}: ${entry.error || `${entry.summary.passed} passed, ${entry.summary.failed} failed`}`);
+        });
+        console.log(ok ? "\n✅ All checks passed.\n" : "\n❌ Some checks failed.\n");
+      }
+    });
+
+    process.exit(ok ? EXIT.OK : EXIT.VALIDATION);
+  });
+
+// ---------- PERMISSIONS ----------
+program
+  .command("permissions:check")
+  .description("Verify every CLI and slash command has a permission rule")
+  .option("--json", "Print the result as JSON")
+  .action((options) => {
+    output.setJson(options.json);
+
+    const projectRoot = process.cwd();
+    const permissionsFile = path.join(projectRoot, ".sdrive", "commands", "permissions.json");
+    const rules = stateStore.readJson(permissionsFile, null);
+
+    if (!rules) {
+      process.exit(
+        output.fail("permissions:check", EXIT.NOT_INITIALIZED, "❌ commands/permissions.json not found. Run `sdrive init` first.")
+      );
+    }
+
+    const cliCommands = program.commands.map((command) => command.name());
+    const cliRules = rules.cli || {};
+    const slashRules = rules.rules || {};
+
+    const missing = [...permissions.MUTATING].filter(
+      (command) => cliCommands.includes(command) && !Array.isArray(cliRules[command])
+    );
+    const unknownCli = Object.keys(cliRules).filter((command) => !cliCommands.includes(command));
+    const manifest = stateStore.readJson(
+      path.join(projectRoot, ".sdrive", "commands", "manifest.json"),
+      null
+    );
+    const slashCommands = manifest ? (manifest.commands || []).map((command) => command.command) : [];
+    const missingSlash = slashCommands.filter((command) => !Array.isArray(slashRules[command]));
+
+    const ok = missing.length === 0 && missingSlash.length === 0;
+
+    output.finish({
+      command: "permissions:check",
+      ok,
+      code: ok ? EXIT.OK : EXIT.VALIDATION,
+      data: { missing, unknownCli, missingSlash },
+      blockers: [
+        ...missing.map((command) => `No CLI rule for mutating command: ${command}`),
+        ...missingSlash.map((command) => `No slash rule for: ${command}`)
+      ],
+      warnings: unknownCli.map((command) => `Rule names an unknown CLI command: ${command}`),
+      suppressAuto: true,
+      human: () => {
+        console.log("\n🔐 Permission coverage\n");
+        if (missing.length) missing.forEach((command) => console.log(`   ❌ no CLI rule: ${command}`));
+        if (missingSlash.length) missingSlash.forEach((command) => console.log(`   ❌ no slash rule: ${command}`));
+        if (unknownCli.length) unknownCli.forEach((command) => console.log(`   ⚠️  unknown CLI command in rules: ${command}`));
+        console.log(ok ? "\n✅ Every command has a rule.\n" : "\n❌ Permission coverage is incomplete.\n");
+      }
+    });
+
+    process.exit(ok ? EXIT.OK : EXIT.VALIDATION);
+  });
+
+// ---------- AUDIT ----------
+program
+  .command("audit:verify")
+  .description("Verify the hash chain of .sdrive/audit-log.json")
+  .option("--json", "Print the result as JSON")
+  .action((options) => {
+    output.setJson(options.json);
+    const verdict = auditLog.verifyAuditLog(process.cwd());
+
+    output.finish({
+      command: "audit:verify",
+      ok: verdict.ok,
+      code: verdict.ok ? EXIT.OK : EXIT.GATE_BLOCKED,
+      data: verdict,
+      blockers: verdict.ok ? [] : [verdict.reason],
+      suppressAuto: true,
+      human: () => {
+        if (verdict.ok) console.log(`\n✅ Audit log verified: ${verdict.reason}.\n`);
+        else console.error(`\n❌ Audit log verification failed: ${verdict.reason}.\n`);
+      }
+    });
+
+    process.exit(verdict.ok ? EXIT.OK : EXIT.GATE_BLOCKED);
+  });
+
+// ---------- CONFIG GET / SET ----------
+function parseConfigValue(raw) {
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+
+  if (/^-?\d+(\.\d+)?$/.test(raw)) return Number(raw);
+
+  if (/^[[{]/.test(raw)) {
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      return raw;
+    }
+  }
+
+  return raw;
+}
+
+function readConfigOrExit(command) {
+  const config = stateStore.readJson(stateStore.configPath(process.cwd()), null);
+
+  if (!config) {
+    process.exit(
+      output.fail(command, EXIT.NOT_INITIALIZED, "❌ config.json not found. Run `sdrive init` first.")
+    );
+  }
+
+  return config;
+}
+
+program
+  .command("config:get <key>")
+  .description("Read a value from .sdrive/config.json (dot path, e.g. governance.requireTestEvidence)")
+  .option("--json", "Print the result as JSON")
+  .action((key, options) => {
+    output.setJson(options.json);
+    const config = readConfigOrExit("config:get");
+    const value = key.split(".").reduce((current, part) => (current == null ? undefined : current[part]), config);
+
+    if (output.isJson()) {
+      output.printJson({ ok: true, command: "config:get", code: EXIT.OK, data: { key, value } });
+      return;
+    }
+
+    console.log(value === undefined ? `(not set)` : JSON.stringify(value));
+  });
+
+program
+  .command("config:set <key> <value>")
+  .description("Write a value to .sdrive/config.json (dot path; true/false/numbers/JSON are parsed)")
+  .option("--json", "Print the result as JSON")
+  .action((key, rawValue, options) => {
+    output.setJson(options.json);
+    requirePermission("config:set");
+
+    const projectRoot = process.cwd();
+    const config = readConfigOrExit("config:set");
+    const parts = key.split(".").filter(Boolean);
+
+    if (parts.length === 0) {
+      process.exit(output.fail("config:set", EXIT.USAGE, "❌ config:set needs a key."));
+    }
+
+    if (parts.some((part) => ["__proto__", "constructor", "prototype"].includes(part))) {
+      process.exit(output.fail("config:set", EXIT.USAGE, "❌ That config key is not allowed."));
+    }
+
+    let cursor = config;
+
+    for (let index = 0; index < parts.length - 1; index += 1) {
+      const part = parts[index];
+      if (typeof cursor[part] !== "object" || cursor[part] === null) cursor[part] = {};
+      cursor = cursor[part];
+    }
+
+    cursor[parts[parts.length - 1]] = parseConfigValue(rawValue);
+
+    const verdict = stateStore.validateData(projectRoot, "config.schema.json", config);
+
+    if (!verdict.ok) {
+      process.exit(
+        output.fail("config:set", EXIT.VALIDATION, `❌ Refusing to write an invalid config: ${verdict.errors.join("; ")}`)
+      );
+    }
+
+    stateStore.writeJsonAtomic(stateStore.configPath(projectRoot), config);
+
+    output.finish({
+      command: "config:set",
+      ok: true,
+      code: EXIT.OK,
+      data: { key, value: parseConfigValue(rawValue) },
+      human: () => console.log(`✅ ${key} = ${JSON.stringify(parseConfigValue(rawValue))}`)
+    });
+
+    process.exit(EXIT.OK);
+  });
+
+// ---------- MIGRATION ADAPTERS ----------
+program
+  .command("migrate:detect")
+  .description("Detect known spec-driven frameworks in this project")
+  .option("--json", "Print the detections as JSON")
+  .action((options) => {
+    output.setJson(options.json);
+
+    const detections = migrations.detectAll(process.cwd());
+    const found = detections.filter((entry) => entry.detected);
+
+    output.finish({
+      command: "migrate:detect",
+      ok: true,
+      code: EXIT.OK,
+      data: { detections, found: found.map((entry) => entry.id) },
+      human: () => {
+        console.log("\n🔎 Spec-driven frameworks\n");
+
+        for (const entry of detections) {
+          const icon = entry.detected ? "✅" : "—";
+          const counts = Object.entries(entry.counts || {})
+            .map(([key, value]) => `${key}=${value}`)
+            .join(", ");
+          console.log(`${icon} ${entry.id.padEnd(10)} ${entry.name}${counts ? ` (${counts})` : ""}`);
+        }
+
+        console.log(
+          found.length
+            ? `\nDetected: ${found.map((entry) => entry.id).join(", ")}\n`
+            : "\nNo known spec-driven framework detected.\n"
+        );
+      }
+    });
+
+    process.exit(EXIT.OK);
+  });
+
+program
+  .command("migrate:plan <framework>")
+  .description("Show the source→target mapping for a framework without writing anything")
+  .option("--json", "Print the plan as JSON")
+  .option("--out <file>", "Write the plan JSON to a file")
+  .action((framework, options) => {
+    output.setJson(options.json);
+
+    let plan;
+
+    try {
+      plan = migrations.buildPlan(process.cwd(), framework);
+    } catch (error) {
+      process.exit(output.fail("migrate:plan", EXIT.USAGE, `❌ ${error.message}`));
+    }
+
+    if (options.out) {
+      stateStore.writeJsonAtomic(path.resolve(process.cwd(), options.out), plan);
+    }
+
+    output.finish({
+      command: "migrate:plan",
+      ok: plan.summary.conflicts === 0,
+      code: plan.summary.conflicts === 0 ? EXIT.OK : EXIT.GATE_BLOCKED,
+      data: plan,
+      warnings: plan.features
+        .filter((feature) => feature.notes && feature.notes.length)
+        .flatMap((feature) => feature.notes.map((note) => `${feature.feature}: ${note}`)),
+      human: () => {
+        console.log(`\n🗺️  ${plan.name} → SpecDrive\n`);
+
+        if (plan.features.length === 0) {
+          console.log("No features found to migrate.\n");
+          return;
+        }
+
+        for (const feature of plan.features) {
+          console.log(`📁 ${feature.feature}  [${feature.status}]`);
+          console.log(`   source: ${feature.source}`);
+          console.log(`   target: ${feature.targetDir}`);
+          feature.files.forEach((file) => {
+            console.log(`   ${file.status.padEnd(11)} ${file.kind}: ${file.source || "(placeholder)"}`);
+          });
+          (feature.notes || []).forEach((note) => console.log(`   note: ${note}`));
+          console.log("");
+        }
+
+        console.log(
+          `Summary: ${plan.summary.ready} ready, ${plan.summary.partial} partial, ${plan.summary.conflicts} conflict(s).\n`
+        );
+      }
+    });
+
+    process.exit(plan.summary.conflicts === 0 ? EXIT.OK : EXIT.GATE_BLOCKED);
+  });
+
+program
+  .command("migrate:apply <framework>")
+  .description("Import a framework's specs as SpecDrive backlog/ongoing drafts (requires --yes)")
+  .option("--yes", "Apply the migration")
+  .option("--dry-run", "Show the plan without writing")
+  .option("--json", "Print the result as JSON")
+  .action((framework, options) => {
+    output.setJson(options.json);
+    requirePermission("migrate:apply");
+
+    let plan;
+
+    try {
+      plan = migrations.buildPlan(process.cwd(), framework);
+    } catch (error) {
+      process.exit(output.fail("migrate:apply", EXIT.USAGE, `❌ ${error.message}`));
+    }
+
+    if (plan.features.length === 0) {
+      process.exit(output.fail("migrate:apply", EXIT.GATE_BLOCKED, "❌ No features found to migrate."));
+    }
+
+    if (options.dryRun || !options.yes) {
+      output.finish({
+        command: "migrate:apply",
+        ok: true,
+        code: EXIT.OK,
+        data: { plan },
+        human: () => {
+          console.log(`\nPlanned migration: ${plan.summary.features} feature(s), ${plan.summary.conflicts} conflict(s).`);
+          console.log("Nothing was written. Re-run with --yes to apply.\n");
+        }
+      });
+      process.exit(EXIT.OK);
+    }
+
+    let applied;
+
+    try {
+      applied = migrationApply.applyPlan(process.cwd(), plan);
+    } catch (error) {
+      process.exit(output.fail("migrate:apply", EXIT.ERROR, `❌ Migration failed: ${error.message}`));
+    }
+
+    const verification = migrationLifecycle.verifyMigration(process.cwd(), applied.report.migrationId);
+    const failed = applied.report.counts.failed > 0 || !verification.ok;
+
+    output.finish({
+      command: "migrate:apply",
+      ok: !failed,
+      code: failed ? EXIT.VALIDATION : EXIT.OK,
+      data: { report: applied.report, verification },
+      blockers: verification.blockers,
+      warnings: verification.warnings,
+      human: () => {
+        console.log(`\n✅ Migration ${applied.report.migrationId}`);
+        console.log(`   Imported: ${applied.report.counts.imported}`);
+        console.log(`   Skipped:  ${applied.report.counts.skipped}`);
+        console.log(`   Failed:   ${applied.report.counts.failed}`);
+        console.log(`   Report:   ${path.relative(process.cwd(), applied.reportFile)}`);
+        console.log(`\nVerify:  sdrive migrate:verify ${applied.report.migrationId}`);
+        console.log(`Rollback: sdrive migrate:rollback ${applied.report.migrationId}\n`);
+      }
+    });
+
+    process.exit(failed ? EXIT.VALIDATION : EXIT.OK);
+  });
+
+program
+  .command("migrate:verify <migrationId>")
+  .description("Verify that a migration imported every expected file (and optionally validate schemas)")
+  .option("--strict", "Also validate the migrated governance JSON against the schemas")
+  .option("--json", "Print the result as JSON")
+  .action((migrationId, options) => {
+    output.setJson(options.json);
+
+    let verification;
+
+    try {
+      verification = migrationLifecycle.verifyMigration(process.cwd(), migrationId, {
+        strict: Boolean(options.strict)
+      });
+    } catch (error) {
+      process.exit(output.fail("migrate:verify", EXIT.USAGE, `❌ ${error.message}`));
+    }
+
+    output.finish({
+      command: "migrate:verify",
+      ok: verification.ok,
+      code: verification.ok ? EXIT.OK : EXIT.VALIDATION,
+      data: verification,
+      blockers: verification.blockers,
+      warnings: verification.warnings,
+      suppressAuto: true,
+      human: () => {
+        console.log(`\nMigration ${migrationId}: ${verification.ok ? "✅ verified" : "❌ failed"}\n`);
+        verification.features.forEach((feature) => {
+          console.log(`${feature.status === "present" ? "✅" : "❌"} ${feature.feature}${feature.missing.length ? ` - missing ${feature.missing.join(", ")}` : ""}`);
+        });
+        verification.blockers.forEach((blocker) => console.error(`❌ ${blocker}`));
+        verification.warnings.forEach((warning) => console.warn(`⚠️  ${warning}`));
+        console.log("");
+      }
+    });
+
+    process.exit(verification.ok ? EXIT.OK : EXIT.VALIDATION);
+  });
+
+program
+  .command("migrate:rollback <migrationId>")
+  .description("Restore workflow state and remove files created by a migration")
+  .option("--json", "Print the result as JSON")
+  .action((migrationId, options) => {
+    output.setJson(options.json);
+    requirePermission("migrate:rollback");
+
+    let result;
+
+    try {
+      result = migrationLifecycle.rollbackMigration(process.cwd(), migrationId);
+    } catch (error) {
+      process.exit(output.fail("migrate:rollback", EXIT.USAGE, `❌ ${error.message}`));
+    }
+
+    output.finish({
+      command: "migrate:rollback",
+      ok: result.ok,
+      code: result.ok ? EXIT.OK : EXIT.ERROR,
+      data: result,
+      blockers: result.blockers || [],
+      human: () => {
+        if (result.alreadyRolledBack) {
+          console.log(`\n✅ Migration ${migrationId} was already rolled back.\n`);
+          return;
+        }
+
+        console.log(`\n${result.ok ? "✅" : "❌"} Migration ${migrationId} rolled back.`);
+        console.log("   Workflow state restored; migration-created files removed.\n");
+      }
+    });
+
+    process.exit(result.ok ? EXIT.OK : EXIT.ERROR);
   });
 
 program.parse(process.argv);

@@ -1,6 +1,6 @@
 {
   "name": "specdrive-cli",
-  "version": "0.1.42",
+  "version": "0.1.43",
   "description": "SpecDrive enterprise spec-driven development CLI",
   "bin": {
     "sdrive": "src/index.js"
@@ -14,11 +14,28 @@
     "agents/",
     "dashboard/",
     "mcp/",
+    "migrations/",
     "templates/",
+    "docs/",
     "logo.png",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "LICENSE"
   ],
+  "scripts": {
+    "test": "node scripts/run-tests.js test",
+    "test:unit": "node scripts/run-tests.js test/unit",
+    "test:e2e": "node scripts/run-tests.js test e2e",
+    "lint": "node scripts/check-syntax.js",
+    "encoding:check": "node scripts/check-encoding.js",
+    "docs:check": "node scripts/check-docs.js",
+    "permissions:check": "node src/index.js permissions:check",
+    "pack:check": "npm pack --dry-run",
+    "dogfood": "node scripts/sync-sdrive.js",
+    "ci": "npm run lint && npm run encoding:check && npm test && npm run docs:check"
+  },
   "dependencies": {
     "commander": "^12.0.0",
     "ajv": "^8.12.0",
