@@ -2332,7 +2332,9 @@ async function reuseRunningDashboard() {
   if (result && result.ok) {
     console.log(`\n♻️  SpecDrive Dashboard is already running at ${url}`);
     console.log(`   It now shows ${path.basename(projectRoot)} — no second server was started.`);
-    console.log(`\n   To switch projects, open ${url} and click the project name\n   in the top bar.\n`);
+    console.log(`\n   To switch projects, open ${url} and either:`);
+    console.log('     • click the project name in the top bar, or');
+    console.log('     • choose "Projects" in the sidebar to see every project.\n');
     return true;
   }
 

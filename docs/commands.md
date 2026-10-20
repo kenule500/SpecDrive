@@ -472,7 +472,7 @@ when no dashboard answers does it start one, beginning on port `4747` and fallin
 back to the next free port (`4748`, `4749`, …). Override the starting port with
 the `SDRIVE_PORT` environment variable, or force a separate server with
 `SDRIVE_NO_REUSE=1`. Switch projects from the dashboard itself: click the project
-name in the top bar, or open the Projects page and pick a card.
+name in the top bar, or open **Projects** in the sidebar and pick a card.
 
 `sdrive init` and `sdrive onboard` **start the dashboard for you** when they finish, so a new project has something to look at immediately. Press `Ctrl+C` to stop it and get your prompt back — that is the normal way to stop a server, and it is reported as "Dashboard stopped", never as a failure.
 

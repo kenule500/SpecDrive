@@ -424,7 +424,7 @@ If a dashboard is already running, `sdrive dashboard` (and the auto-start) hands
 the current project to it instead of opening another port. One dashboard can show
 every project you have opened, so the second project does not need a second tab.
 Switch projects inside the dashboard: click the project name in the top bar, or
-pick a card on the Projects page.
+open **Projects** in the sidebar and pick a card.
 
 | Flag / variable | Effect |
 |-----------------|--------|
