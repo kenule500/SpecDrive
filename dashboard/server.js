@@ -1209,6 +1209,77 @@ function samePath(a, b) {
 // each needed its own dashboard tab. Recording a project the first time its
 // dashboard starts makes the registry a shared list: open each project once,
 // then switch between all of them from a single tab.
+//
+// A dashboard can start at the same time as another (one per project, opened
+// together). Read-merge-write is not atomic across processes: A reads {}, B
+// reads {}, A writes [a], B writes [b] and the last writer erases the other.
+// Re-reading only rescues the writer that notices; if A already returned, a is
+// gone. Serialize the whole read/write with an exclusive lock file instead.
+//
+// The wait is bounded and a stale lock (a process that died while holding it) is
+// broken after ten seconds, so a locked registry can never stop a dashboard from
+// starting. If the lock still cannot be taken, fall back to a best-effort write:
+// losing a registry entry is worse than not starting at all.
+const REGISTRY_LOCK_TIMEOUT_MS = 2000;
+const REGISTRY_LOCK_STALE_MS = 10000;
+
+// There is no synchronous sleep; Atomics.wait on a throwaway buffer gives one
+// without spinning the CPU.
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function withRegistryLock(callback) {
+  const file = registryPath();
+  const lockPath = `${file}.lock`;
+
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+  } catch (error) {
+    return callback();
+  }
+
+  const startedAt = Date.now();
+  let handle = null;
+
+  while (Date.now() - startedAt < REGISTRY_LOCK_TIMEOUT_MS) {
+    try {
+      handle = fs.openSync(lockPath, "wx");
+      break;
+    } catch (error) {
+      if (error.code !== "EEXIST") return callback();
+
+      try {
+        if (Date.now() - fs.statSync(lockPath).mtimeMs > REGISTRY_LOCK_STALE_MS) {
+          fs.unlinkSync(lockPath);
+        }
+      } catch (ignored) {
+        // The holder released it between the open and the stat.
+      }
+
+      sleepSync(25);
+    }
+  }
+
+  if (handle === null) return callback();
+
+  try {
+    return callback();
+  } finally {
+    try {
+      fs.closeSync(handle);
+    } catch (ignored) {
+      // Already closed.
+    }
+
+    try {
+      fs.unlinkSync(lockPath);
+    } catch (ignored) {
+      // Another process broke a stale lock and took over.
+    }
+  }
+}
+
 function registerProject(root) {
   if (process.env.SDRIVE_NO_REGISTRY === "1") return;
   if (!isSdriveProject(root)) return;
@@ -1217,11 +1288,7 @@ function registerProject(root) {
   const file = registryPath();
   const known = (paths) => paths.some((entry) => samePath(path.resolve(entry), resolved));
 
-  // Two dashboards can start at the same time (one tab per project, opened
-  // together). Each would read the same list and the later write would erase
-  // the other project. Re-read after writing and retry until our entry is
-  // actually on disk, so concurrent starts converge on the union.
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  withRegistryLock(() => {
     const { asArray, entries, paths } = readProjectRegistry();
     if (known(paths)) return;
 
@@ -1235,11 +1302,8 @@ function registerProject(root) {
       );
     } catch (error) {
       // A read-only home directory must not stop the dashboard.
-      return;
     }
-
-    if (known(readProjectRegistry().paths)) return;
-  }
+  });
 }
 
 // A dashboard can move between projects without restarting. Discovery is
