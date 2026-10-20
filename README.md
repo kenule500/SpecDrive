@@ -426,10 +426,36 @@ http://localhost:4747
 | `SDRIVE_NO_DASHBOARD=1` | Skip the auto-start everywhere, including inside scripts |
 | `SDRIVE_PORT` | Change the starting port (default `4747`) |
 | `SDRIVE_HOST` | Bind a different interface. Default is `127.0.0.1`; the server has no authentication, so a non-loopback value prints a warning |
+| `SDRIVE_PROJECTS` | Path-delimited list of additional projects shown in the project switcher |
 
 The dashboard binds to loopback by default. It is a read-only view: it cannot
 approve gates or change state. Its API is `no-store`, and responses carry a
 Content-Security-Policy that forbids inline script and framing.
+
+### Switching projects
+
+The project name in the topbar is a switcher. It discovers:
+
+- the project the dashboard was started in,
+- projects listed in `SDRIVE_PROJECTS`,
+- projects listed in `~/.sdrive/projects.json` (an array of paths or `{ "projects": [...] }`),
+- sibling directories that contain a `.sdrive/config.json`.
+
+Selecting a project reuses the same dashboard URL and port, clears the cached
+git/health/stamp data, and reloads the page. The server has one active project at
+a time, so every open tab follows the switch; close the per-project tabs you no
+longer need.
+
+To start one dashboard for several projects:
+
+```bash
+# Windows
+set SDRIVE_PROJECTS=C:\work\api;C:\work\web
+sdrive dashboard
+
+# macOS/Linux
+SDRIVE_PROJECTS=/work/api:/work/web sdrive dashboard
+```
 
 The auto-start is deliberately **skipped when there is no interactive terminal**. A script or CI run would otherwise block forever on a server that never exits, so in that case the command prints how to start it manually instead.
 

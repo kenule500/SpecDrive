@@ -87,7 +87,8 @@ It gives you a visual view of your specs, features, approval gates, team, and
 activity, plus a **Project Health** score with the one action most worth doing
 next. The **Quality** page shows schema validation and migration runs; each
 feature's **Evidence** tab shows test evidence, structured review findings, and
-archive readiness.
+archive readiness. Use the topbar project name to switch between projects
+without opening another dashboard tab.
 Start it any time later with:
 
 ```bash

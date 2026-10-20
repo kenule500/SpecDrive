@@ -477,6 +477,12 @@ the `SDRIVE_PORT` environment variable.
 | `--no-dashboard` | Skip the auto-start on `sdrive init` and `sdrive onboard` |
 | `SDRIVE_NO_DASHBOARD=1` | Skip the auto-start everywhere, including inside scripts |
 | `SDRIVE_HOST` | Bind a different interface; default `127.0.0.1`, with a warning because there is no authentication |
+| `SDRIVE_PROJECTS` | Path-delimited list of additional projects for the topbar project switcher |
+
+The topbar project name is a switcher. It discovers the current project,
+`SDRIVE_PROJECTS`, `~/.sdrive/projects.json`, and sibling projects with a
+`.sdrive/config.json`. Switching reuses the same URL and port, clears the
+git/health caches, and reloads; one server has one active project at a time.
 
 The auto-start is skipped by itself when there is no interactive terminal. A script or CI run would otherwise block forever on a server that never exits, so in that case the command prints how to start it manually instead.
 

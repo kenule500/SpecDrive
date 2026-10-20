@@ -372,6 +372,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 - Features (grouped by version)
 - Feature **Evidence** tab (test evidence, structured review, archive readiness)
 - **Quality** page (schema validation, detected frameworks, recent migration runs)
+- Topbar **project switcher** (current project, `SDRIVE_PROJECTS`, `~/.sdrive/projects.json`, sibling projects)
 - Filter bar (search + phase + verification + tests + current only)
 - Team members
 - Recent activity

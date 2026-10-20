@@ -7,6 +7,17 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
 
 ---
 
+## Unreleased
+
+### Added
+
+- Dashboard project switcher: the topbar project name switches between the
+  current project, `SDRIVE_PROJECTS`, `~/.sdrive/projects.json`, and sibling
+  projects with a `.sdrive/config.json`. Switching reuses the same URL and port
+  and clears cached git/health/stamp data.
+
+---
+
 ## 0.1.43 — 2026-10-19
 
 **Evidence-backed review, migration adapters, a safer install, and a richer

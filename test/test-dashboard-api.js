@@ -56,6 +56,39 @@ async function waitForServer(port) {
   throw lastError || new Error("dashboard did not start");
 }
 
+function post(port, route, payload) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(payload);
+    const request = http.request(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path: route,
+        method: "POST",
+        timeout: 10000,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body)
+        }
+      },
+      (response) => {
+        let responseBody = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          responseBody += chunk;
+        });
+        response.on("end", () =>
+          resolve({ status: response.statusCode, body: responseBody })
+        );
+      }
+    );
+
+    request.on("timeout", () => request.destroy(new Error("request timed out")));
+    request.on("error", reject);
+    request.end(body);
+  });
+}
+
 test("dashboard quality and evidence APIs return structured data", async () => {
   const root = initProject({ prefix: "sdrive-dash-api-" });
   const port = await freePort();
@@ -84,6 +117,16 @@ test("dashboard quality and evidence APIs return structured data", async () => {
 
     const archive = JSON.parse((await get(port, "/api/archive-check/demo")).body);
     assert.ok(Array.isArray(archive.blockers));
+
+    const projects = JSON.parse((await get(port, "/api/projects")).body);
+    assert.ok(Array.isArray(projects.projects));
+    assert.ok(projects.projects.some((project) => project.active));
+
+    const rejected = await post(port, "/api/switch-project", {
+      path: path.join(root, "not-a-project")
+    });
+    assert.strictEqual(rejected.status, 400);
+    assert.strictEqual(JSON.parse(rejected.body).ok, false);
 
     const quality = await get(port, "/quality");
     assert.strictEqual(quality.status, 200);
