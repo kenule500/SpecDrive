@@ -1263,8 +1263,8 @@ function featureMembersEl(members) {
 let featureRenderToken = 0;
 
 // Feature cards are tall (each carries its version blocks and metrics), so a
-// smaller page keeps the grid scannable and the KPI explainer within reach.
-const FEATURES_PER_PAGE = 20;
+// moderate page keeps the grid scannable while showing enough to compare.
+const FEATURES_PER_PAGE = 25;
 
 async function renderFeatures() {
   const token = ++featureRenderToken;
