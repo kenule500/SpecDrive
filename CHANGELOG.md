@@ -15,6 +15,10 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
   current project, `SDRIVE_PROJECTS`, `~/.sdrive/projects.json`, and sibling
   projects with a `.sdrive/config.json`. Switching reuses the same URL and port
   and clears cached git/health/stamp data.
+- A dashboard now **records the project it serves** in
+  `~/.sdrive/projects.json` on start (`SDRIVE_NO_REGISTRY=1` opts out). Projects
+  in different source trees stay switchable after being opened once, instead of
+  each needing its own dashboard tab.
 - Dashboard defaults to **dark mode**; an explicit Light choice is remembered,
   and the OS preference no longer overrides the default.
 

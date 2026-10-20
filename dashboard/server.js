@@ -1164,6 +1164,84 @@ function isSdriveProject(root) {
   return fs.existsSync(path.join(root, ".sdrive", "config.json"));
 }
 
+function registryPath() {
+  return path.join(os.homedir(), ".sdrive", "projects.json");
+}
+
+// The registry keeps its own shape: an array of paths or `{ "projects": [...] }`.
+// Rewriting it as the other shape would be a silent format change to a file the
+// user may also maintain by hand.
+function readProjectRegistry() {
+  const file = registryPath();
+
+  if (!fs.existsSync(file)) {
+    return { asArray: false, entries: [], paths: [] };
+  }
+
+  try {
+    const registry = JSON.parse(fs.readFileSync(file, "utf8"));
+    const entries = Array.isArray(registry) ? registry : registry.projects || [];
+
+    return {
+      asArray: Array.isArray(registry),
+      // Keep the raw entries so a registration write does not drop fields a
+      // hand-edited `{ "path": ..., "name": ... }` entry carries.
+      entries,
+      paths: entries
+        .map((entry) => (typeof entry === "string" ? entry : entry && entry.path))
+        .filter((entry) => typeof entry === "string" && entry.trim())
+    };
+  } catch (error) {
+    // A malformed registry must not break the dashboard or block a project.
+    return { asArray: false, entries: [], paths: [] };
+  }
+}
+
+function samePath(a, b) {
+  // Windows paths are case-insensitive; two spellings are one project.
+  return process.platform === "win32"
+    ? a.toLowerCase() === b.toLowerCase()
+    : a === b;
+}
+
+// Discovery can only see the current folder and its siblings, so projects that
+// live in different trees (one repo per client, the usual layout) never meet and
+// each needed its own dashboard tab. Recording a project the first time its
+// dashboard starts makes the registry a shared list: open each project once,
+// then switch between all of them from a single tab.
+function registerProject(root) {
+  if (process.env.SDRIVE_NO_REGISTRY === "1") return;
+  if (!isSdriveProject(root)) return;
+
+  const resolved = path.resolve(root);
+  const file = registryPath();
+  const known = (paths) => paths.some((entry) => samePath(path.resolve(entry), resolved));
+
+  // Two dashboards can start at the same time (one tab per project, opened
+  // together). Each would read the same list and the later write would erase
+  // the other project. Re-read after writing and retry until our entry is
+  // actually on disk, so concurrent starts converge on the union.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const { asArray, entries, paths } = readProjectRegistry();
+    if (known(paths)) return;
+
+    const next = [...entries, resolved];
+
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(
+        file,
+        `${JSON.stringify(asArray ? next : { projects: next }, null, 2)}\n`
+      );
+    } catch (error) {
+      // A read-only home directory must not stop the dashboard.
+      return;
+    }
+
+    if (known(readProjectRegistry().paths)) return;
+  }
+}
+
 // A dashboard can move between projects without restarting. Discovery is
 // deliberately local and explicit: the current project, SDRIVE_PROJECTS, an
 // optional ~/.sdrive/projects.json, and immediately sibling projects. The
@@ -1186,16 +1264,7 @@ function discoverProjectRoots() {
   const configured = process.env.SDRIVE_PROJECTS || "";
   for (const candidate of configured.split(path.delimiter)) add(candidate);
 
-  const registryPath = path.join(os.homedir(), ".sdrive", "projects.json");
-  if (fs.existsSync(registryPath)) {
-    try {
-      const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
-      const entries = Array.isArray(registry) ? registry : registry.projects || [];
-      for (const entry of entries) add(typeof entry === "string" ? entry : entry.path);
-    } catch (error) {
-      // A malformed registry must not break the dashboard.
-    }
-  }
+  for (const entry of readProjectRegistry().paths) add(entry);
 
   const parent = path.dirname(projectRoot);
   try {
@@ -1250,6 +1319,10 @@ function switchProject(target) {
   projectRoot = resolved;
   sdriveRoot = path.join(projectRoot, ".sdrive");
   projectsMemo = { at: 0, roots: [] };
+
+  // A project reached through SDRIVE_PROJECTS or a sibling scan joins the
+  // registry too, so it stays switchable after this server restarts.
+  registerProject(resolved);
 
   // Every cached answer was built from the previous project's files.
   gitCache.clear();
@@ -2697,6 +2770,10 @@ function listenOnFreePort(port, attemptsLeft, host = PREFERRED_HOST) {
 
   server.listen(port, host, () => {
     const shown = isLoopback(host) ? "localhost" : host;
+
+    // Only after the port is ours: a failed start should not leave a project
+    // in the shared list.
+    registerProject(projectRoot);
     console.log(`\n🚀 SpecDrive Dashboard running at http://${shown}:${port}\n`);
 
     if (!isLoopback(host)) {

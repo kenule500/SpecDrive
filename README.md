@@ -427,6 +427,7 @@ http://localhost:4747
 | `SDRIVE_PORT` | Change the starting port (default `4747`) |
 | `SDRIVE_HOST` | Bind a different interface. Default is `127.0.0.1`; the server has no authentication, so a non-loopback value prints a warning |
 | `SDRIVE_PROJECTS` | Path-delimited list of additional projects shown in the project switcher |
+| `SDRIVE_NO_REGISTRY` | Keep this dashboard from recording its project in `~/.sdrive/projects.json` |
 
 The dashboard binds to loopback by default. It is a read-only view: it cannot
 approve gates or change state. Its API is `no-store`, and responses carry a
@@ -440,6 +441,13 @@ The project name in the topbar is a switcher. It discovers:
 - projects listed in `SDRIVE_PROJECTS`,
 - projects listed in `~/.sdrive/projects.json` (an array of paths or `{ "projects": [...] }`),
 - sibling directories that contain a `.sdrive/config.json`.
+
+Every dashboard records the project it serves in `~/.sdrive/projects.json` when
+it starts, so a project you have opened once stays switchable from every other
+project's dashboard. That file is the shared list: projects in different source
+trees (one repo per client) meet there, which is what removes the need for one
+tab per project. Delete an entry to drop a project, or set
+`SDRIVE_NO_REGISTRY=1` to keep a dashboard out of the file.
 
 Selecting a project reuses the same dashboard URL and port, clears the cached
 git/health/stamp data, and reloads the page. The server has one active project at
