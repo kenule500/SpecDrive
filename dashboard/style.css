@@ -7,7 +7,7 @@
        <html data-theme="light">   |   <html data-theme="dark">
 
    index.html sets that attribute before first paint (saved choice ->
-   OS preference -> light), so there is never a flash of the wrong theme.
+   dark), so there is never a flash of the wrong theme.
    Add a new colour by defining it here, never as a literal further down.
    ============================================================ */
 

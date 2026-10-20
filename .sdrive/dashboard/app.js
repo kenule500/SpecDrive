@@ -3408,7 +3408,7 @@ function applyTheme(theme) {
 /* The button advertises the theme it switches TO, not the one you are in, so the
    label always describes the action a click will take. */
 function syncThemeToggle(theme) {
-  const current = theme || document.documentElement.getAttribute("data-theme") || "light";
+  const current = theme || document.documentElement.getAttribute("data-theme") || "dark";
   const button = document.getElementById("theme-toggle");
   if (!button) return;
 
@@ -3427,41 +3427,19 @@ function setupThemeToggle() {
   const button = document.getElementById("theme-toggle");
   if (button) {
     button.addEventListener("click", () => {
-      const current = document.documentElement.getAttribute("data-theme") || "light";
+      const current = document.documentElement.getAttribute("data-theme") || "dark";
       applyTheme(current === "dark" ? "light" : "dark");
     });
   }
 
-  // Keep in step when the theme changes elsewhere: another tab, or the OS
-  // switching while the user has not made an explicit choice yet.
+  // Keep in step when the theme changes in another tab. The OS preference is
+  // intentionally not watched: dark is the default, and an explicit choice wins.
   window.addEventListener("storage", (event) => {
     if (event.key === THEME_KEY && (event.newValue === "light" || event.newValue === "dark")) {
       document.documentElement.setAttribute("data-theme", event.newValue);
       syncThemeToggle(event.newValue);
     }
   });
-
-  if (window.matchMedia) {
-    const query = window.matchMedia("(prefers-color-scheme: dark)");
-    const followSystem = (event) => {
-      let saved = null;
-      try {
-        saved = window.localStorage.getItem(THEME_KEY);
-      } catch (error) {
-        /* ignore */
-      }
-      if (saved === "light" || saved === "dark") return;
-
-      document.documentElement.setAttribute("data-theme", event.matches ? "dark" : "light");
-      syncThemeToggle();
-    };
-
-    if (typeof query.addEventListener === "function") {
-      query.addEventListener("change", followSystem);
-    } else if (typeof query.addListener === "function") {
-      query.addListener(followSystem);
-    }
-  }
 
   syncThemeToggle();
 }
