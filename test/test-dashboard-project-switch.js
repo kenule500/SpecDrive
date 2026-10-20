@@ -14,7 +14,7 @@ const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
 const { once } = require("events");
-const { createProject, runCli, seedTeam, cleanup, TEST_ENV } = require("./helpers/sandbox");
+const { createProject, runCli, seedTeam, writeJson, cleanup, TEST_ENV } = require("./helpers/sandbox");
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -126,6 +126,31 @@ test("dashboard switches between projects without a restart", async () => {
     seedTeam(beta, "beta-admin");
     seedTeam(gamma, "gamma-admin");
 
+    // A live feature with one rejected gate, so the portfolio has to report a
+    // real problem rather than counting a pending gate as one.
+    writeJson(path.join(beta, ".sdrive", "workflow-state.json"), {
+      features: [
+        {
+          name: "upload",
+          currentVersion: "v1",
+          versions: [
+            {
+              id: "v1",
+              phase: "ongoing",
+              currentStep: "implementation",
+              gates: {
+                specification: "approved",
+                planning: "rejected",
+                implementation: "pending",
+                review: "pending"
+              },
+              history: [{ event: "review requested", timestamp: "2026-10-19T10:00:00Z" }]
+            }
+          ]
+        }
+      ]
+    });
+
     // A project outside this tree is known only because a previous dashboard
     // recorded it. The registry is an array here, to prove the shape survives
     // an auto-registration write.
@@ -176,6 +201,44 @@ test("dashboard switches between projects without a restart", async () => {
       assert.strictEqual(initialAlpha.name, "alpha");
       assert.strictEqual(initialAlpha.label, "alpha");
 
+      // ---- portfolio -------------------------------------------------
+      const portfolio = await request(port, "/api/portfolio");
+      assert.strictEqual(portfolio.status, 200);
+      assert.strictEqual(path.resolve(portfolio.json.active), path.resolve(alpha));
+
+      const byName = new Map(portfolio.json.projects.map((project) => [project.name, project]));
+      assert.deepStrictEqual(
+        [...byName.keys()].sort(),
+        ["alpha", "beta", "gamma"],
+        "the portfolio covers every offered project"
+      );
+
+      const alphaCard = byName.get("alpha");
+      assert.strictEqual(alphaCard.status, "idle");
+      assert.strictEqual(alphaCard.features, 0);
+      assert.strictEqual(alphaCard.live, 0);
+      assert.strictEqual(alphaCard.focus, null);
+
+      const betaCard = byName.get("beta");
+      assert.strictEqual(betaCard.features, 1);
+      assert.strictEqual(betaCard.live, 1);
+      assert.strictEqual(betaCard.status, "blocked", "a rejected gate is a blocker");
+      assert.strictEqual(betaCard.focus.feature, "upload");
+      assert.strictEqual(betaCard.focus.step, "implementation");
+      assert.strictEqual(betaCard.focus.approvedGates, 1);
+      assert.strictEqual(betaCard.focus.totalGates, 4);
+      assert.deepStrictEqual(betaCard.rejectedGates, ["planning"]);
+      assert.deepStrictEqual(
+        betaCard.outstandingGates,
+        ["planning", "implementation", "review"],
+        "pending gates are the next step, listed separately"
+      );
+      assert.strictEqual(betaCard.lastActivity, "2026-10-19T10:00:00.000Z");
+
+      const projectsPage = await request(port, "/projects");
+      assert.strictEqual(projectsPage.status, 200);
+      assert.match(projectsPage.body, /id="projects-grid"/);
+
       // ---- every API reads the active project ------------------------
       assert.strictEqual((await request(port, "/api/project-info")).json.name, "alpha");
       assert.deepStrictEqual(
@@ -196,6 +259,19 @@ test("dashboard switches between projects without a restart", async () => {
       assert.strictEqual(
         path.resolve((await request(port, "/api/project-info")).json.root),
         path.resolve(beta)
+      );
+
+      // The portfolio answers from the previous project unless the switch
+      // clears it; the active flag is the cheap proof that it did.
+      const switchedPortfolio = await request(port, "/api/portfolio");
+      assert.strictEqual(path.resolve(switchedPortfolio.json.active), path.resolve(beta));
+      assert.strictEqual(
+        switchedPortfolio.json.projects.find((project) => project.name === "beta").active,
+        true
+      );
+      assert.strictEqual(
+        switchedPortfolio.json.projects.find((project) => project.name === "alpha").active,
+        false
       );
       assert.deepStrictEqual(
         (await request(port, "/api/team")).json.members.map((member) => member.username),
@@ -281,6 +357,58 @@ test("dashboard switches between projects without a restart", async () => {
   } finally {
     cleanup(parent);
     cleanup(otherParent);
+  }
+});
+
+test("sdrive dashboard reuses a running dashboard instead of adding a port", async () => {
+  const parent = createProject("sdrive-reuse-");
+  const one = path.join(parent, "one");
+  const two = path.join(parent, "two");
+
+  for (const dir of [one, two]) {
+    fs.mkdirSync(dir, { recursive: true });
+    initAt(dir);
+  }
+
+  const port = await freePort();
+  const env = { ...TEST_ENV };
+  delete env.SDRIVE_NO_REUSE;
+  delete env.SDRIVE_PROJECTS;
+
+  const server = spawn(
+    process.execPath,
+    [path.join(one, ".sdrive", "dashboard", "server.js")],
+    { cwd: one, env: { ...env, SDRIVE_PORT: String(port) }, stdio: "ignore" }
+  );
+
+  try {
+    await waitForServer(port);
+    assert.strictEqual((await request(port, "/api/project-info")).json.name, "one");
+
+    // `sdrive dashboard` from the second project must hand that project to the
+    // server that is already running, not start another one.
+    const cli = runCli(["dashboard"], {
+      cwd: two,
+      env: { ...env, SDRIVE_PORT: String(port) },
+      timeout: 30000
+    });
+
+    assert.strictEqual(cli.status, 0, cli.stderr || cli.stdout);
+    assert.match(cli.stdout, /already running/i);
+    assert.doesNotMatch(cli.stdout, /Starting the SpecDrive dashboard/);
+
+    assert.strictEqual((await request(port, "/api/project-info")).json.name, "two");
+
+    // It is the same server: still one listener, one port.
+    const projects = await request(port, "/api/projects");
+    assert.strictEqual(path.resolve(projects.json.active), path.resolve(two));
+  } finally {
+    server.kill("SIGTERM");
+    await Promise.race([
+      once(server, "exit"),
+      new Promise((resolve) => setTimeout(resolve, 3000))
+    ]);
+    cleanup(parent);
   }
 });
 

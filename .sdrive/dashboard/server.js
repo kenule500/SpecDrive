@@ -395,7 +395,7 @@ function loadJson(filePath, fallback = null) {
 // obvious which project a dashboard belongs to when several are running.
 function apiProjectInfo() {
   const name = path.basename(projectRoot) || "project";
-  return { name, root: projectRoot };
+  return { service: "specdrive-dashboard", name, root: projectRoot };
 }
 
 // Classify the project so the dashboard can tell the user which workflow they
@@ -1306,6 +1306,107 @@ function apiProjects() {
   };
 }
 
+// The portfolio is what makes the switcher optional: one page showing every
+// project's state, so you look instead of switching. It reads only JSON files
+// (workflow state and audit log) - no git spawns - because a landing page that
+// takes two seconds per project would be worse than the tabs it replaces.
+const PORTFOLIO_CACHE_MS = 3000;
+let portfolioMemo = { at: 0, value: null };
+
+function timestampOf(value) {
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function summarizeProject(root) {
+  const projectSdrive = path.join(root, ".sdrive");
+  const state = loadJson(path.join(projectSdrive, "workflow-state.json"), { features: [] });
+  const features = Array.isArray(state.features) ? state.features : [];
+  const gates = gateAccessors();
+  const live = liveVersions(state);
+
+  let lastActivity = 0;
+
+  for (const feature of features) {
+    for (const version of feature.versions || []) {
+      for (const entry of version.history || []) {
+        lastActivity = Math.max(lastActivity, timestampOf(entry.timestamp));
+      }
+    }
+  }
+
+  const audit = loadJson(path.join(projectSdrive, "audit-log.json"), { events: [] });
+  for (const event of audit.events || []) {
+    lastActivity = Math.max(lastActivity, timestampOf(event.timestamp));
+  }
+
+  // A live version is what the project is working on. When nothing is live,
+  // show the version touched most recently so the card still says something.
+  const all = features.flatMap((feature) =>
+    (feature.versions || []).map((version) => ({ feature, version }))
+  );
+  const newest = (entries) =>
+    entries
+      .slice()
+      .sort(
+        (a, b) =>
+          Math.max(...(b.version.history || []).map((h) => timestampOf(h.timestamp)), 0) -
+          Math.max(...(a.version.history || []).map((h) => timestampOf(h.timestamp)), 0)
+      )[0] || null;
+
+  const focus = newest(live) || newest(all);
+  const outstandingGates =
+    focus && gates && focus.version.phase !== "completed"
+      ? gates.GATE_ORDER.filter((gate) => !gates.isGateApprovedFor(focus.version, gate))
+      : [];
+  // A pending gate is the next step, not a problem. Only a rejected gate means
+  // someone has to act before the feature can move.
+  const rejectedGates =
+    focus && gates
+      ? gates.GATE_ORDER.filter(
+          (gate) => gates.gateStatusFor(focus.version, gate) === "rejected"
+        )
+      : [];
+
+  return {
+    name: path.basename(root) || "project",
+    path: root,
+    active: path.resolve(root) === path.resolve(projectRoot),
+    features: features.length,
+    live: live.length,
+    focus: focus
+      ? {
+          feature: focus.feature.name,
+          version: focus.version.id,
+          phase: focus.version.phase || "unknown",
+          step: focus.version.currentStep || null,
+          approvedGates: gates
+            ? gates.GATE_ORDER.filter((gate) => gates.isGateApprovedFor(focus.version, gate)).length
+            : 0,
+          totalGates: gates ? gates.GATE_ORDER.length : 0
+        }
+      : null,
+    outstandingGates,
+    rejectedGates,
+    lastActivity: lastActivity ? new Date(lastActivity).toISOString() : null,
+    status: rejectedGates.length ? "blocked" : live.length ? "active" : "idle"
+  };
+}
+
+function apiPortfolio() {
+  if (portfolioMemo.value && Date.now() - portfolioMemo.at < PORTFOLIO_CACHE_MS) {
+    return portfolioMemo.value;
+  }
+
+  const projects = discoverProjectRoots()
+    .map(summarizeProject)
+    .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name));
+
+  const value = { active: path.resolve(projectRoot), projects };
+  portfolioMemo = { at: Date.now(), value };
+  return value;
+}
+
 function switchProject(target) {
   const resolved = path.resolve(String(target || ""));
 
@@ -1328,6 +1429,7 @@ function switchProject(target) {
   gitCache.clear();
   healthMemo = { at: 0, value: null };
   stampMemo = { at: 0, value: null };
+  portfolioMemo = { at: 0, value: null };
 
   return { ok: true, project: path.basename(projectRoot) };
 }
@@ -2632,6 +2734,10 @@ async function routeRequest(req, res) {
       return res.end(JSON.stringify(apiProjects()));
     }
 
+    if (url === "/api/portfolio") {
+      return res.end(JSON.stringify(apiPortfolio()));
+    }
+
     if (url === "/api/switch-project") {
       if (req.method !== "POST") {
         res.writeHead(405);
@@ -2694,7 +2800,7 @@ async function routeRequest(req, res) {
   // Path-based page routes. Each dashboard view is its own URL (e.g.
   // /product-plan, /features, /team). They all serve the same single-page shell;
   // the client router in app.js decides which section to display.
-  const PAGE_ROUTES = ["/overview", "/product-plan", "/features", "/quality", "/team", "/activity", "/commands", "/skills"];
+  const PAGE_ROUTES = ["/projects", "/overview", "/product-plan", "/features", "/quality", "/team", "/activity", "/commands", "/skills"];
   if (PAGE_ROUTES.includes(url)) {
     return serveStatic(res, path.join(__dirname, "index.html"), "text/html");
   }

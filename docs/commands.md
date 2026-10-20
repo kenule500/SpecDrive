@@ -466,9 +466,12 @@ Starts a local web dashboard, beginning on port `4747`.
 sdrive dashboard
 ```
 
-If `4747` is already in use, it automatically falls back to the next free port
-(`4748`, `4749`, …) and prints the URL it chose. Override the starting port with
-the `SDRIVE_PORT` environment variable.
+If a dashboard is already running on this machine, the command **reuses it**:
+it switches that server to the current project and exits, printing the URL. Only
+when no dashboard answers does it start one, beginning on port `4747` and falling
+back to the next free port (`4748`, `4749`, …). Override the starting port with
+the `SDRIVE_PORT` environment variable, or force a separate server with
+`SDRIVE_NO_REUSE=1`.
 
 `sdrive init` and `sdrive onboard` **start the dashboard for you** when they finish, so a new project has something to look at immediately. Press `Ctrl+C` to stop it and get your prompt back — that is the normal way to stop a server, and it is reported as "Dashboard stopped", never as a failure.
 
@@ -479,11 +482,19 @@ the `SDRIVE_PORT` environment variable.
 | `SDRIVE_HOST` | Bind a different interface; default `127.0.0.1`, with a warning because there is no authentication |
 | `SDRIVE_PROJECTS` | Path-delimited list of additional projects for the topbar project switcher |
 | `SDRIVE_NO_REGISTRY` | Do not record this project in `~/.sdrive/projects.json` on start |
+| `SDRIVE_NO_REUSE` | Always start a new dashboard instead of switching a running one |
+
+The dashboard opens on **Projects**, one card per project it can see: status,
+feature and live counts, the feature being worked on, gate progress, rejected or
+next gates, and the last recorded activity. Opening a card switches to that
+project. The page reads only each project's `workflow-state.json` and
+`audit-log.json` — never git — so it stays fast with several projects.
 
 The topbar project name is a switcher. It discovers the current project,
 `SDRIVE_PROJECTS`, `~/.sdrive/projects.json`, and sibling projects with a
 `.sdrive/config.json`. Switching reuses the same URL and port, clears the
-git/health caches, and reloads; one server has one active project at a time.
+git/health/portfolio caches, and reloads; one server has one active project at a
+time.
 
 A dashboard records the project it serves in `~/.sdrive/projects.json` when it
 starts (unless `SDRIVE_NO_REGISTRY=1`). Projects living in different source

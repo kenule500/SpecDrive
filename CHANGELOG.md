@@ -11,6 +11,15 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
 
 ### Added
 
+- Dashboard **Projects page**: the dashboard now opens on a portfolio of every
+  project it can see (status, features, live count, current feature, gate
+  progress, last activity). Cards open a project; the page reads only
+  `workflow-state.json` and `audit-log.json`, never git. A rejected gate is
+  "Needs attention"; pending gates are shown as the next step, not a blocker.
+- `sdrive dashboard` (and the `init`/`onboard` auto-start) now **reuses a
+  running dashboard**: it probes ports from `SDRIVE_PORT` upward, switches the
+  first SpecDrive dashboard it finds to the current project, and exits instead
+  of opening another port and tab. `SDRIVE_NO_REUSE=1` forces a new server.
 - Dashboard project switcher: the topbar project name switches between the
   current project, `SDRIVE_PROJECTS`, `~/.sdrive/projects.json`, and sibling
   projects with a `.sdrive/config.json`. Switching reuses the same URL and port

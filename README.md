@@ -420,6 +420,10 @@ http://localhost:4747
 
 `sdrive init` and `sdrive onboard` **start it for you** when they finish, so a new project has something to look at immediately. Press `Ctrl+C` to stop it and get your prompt back — that is the normal way to stop a server, and it is reported as "Dashboard stopped", never as an error.
 
+If a dashboard is already running, `sdrive dashboard` (and the auto-start) hands
+the current project to it instead of opening another port. One dashboard can show
+every project you have opened, so the second project does not need a second tab.
+
 | Flag / variable | Effect |
 |-----------------|--------|
 | `--no-dashboard` | Skip the auto-start on `sdrive init` and `sdrive onboard` |
@@ -428,10 +432,22 @@ http://localhost:4747
 | `SDRIVE_HOST` | Bind a different interface. Default is `127.0.0.1`; the server has no authentication, so a non-loopback value prints a warning |
 | `SDRIVE_PROJECTS` | Path-delimited list of additional projects shown in the project switcher |
 | `SDRIVE_NO_REGISTRY` | Keep this dashboard from recording its project in `~/.sdrive/projects.json` |
+| `SDRIVE_NO_REUSE` | Always start a new dashboard instead of switching a running one |
 
 The dashboard binds to loopback by default. It is a read-only view: it cannot
 approve gates or change state. Its API is `no-store`, and responses carry a
 Content-Security-Policy that forbids inline script and framing.
+
+### Projects page
+
+The dashboard opens on **Projects**: one card per project it can see, with its
+status, feature and live counts, the feature currently being worked on, gate
+progress, rejected or next gates, and the last recorded activity. Open a card to
+work in that project. The topbar switcher remains for jumping directly.
+
+The page reads each project's `workflow-state.json` and `audit-log.json` only —
+it never runs git per project — so a portfolio of several projects loads like a
+single page.
 
 ### Switching projects
 
@@ -450,9 +466,10 @@ tab per project. Delete an entry to drop a project, or set
 `SDRIVE_NO_REGISTRY=1` to keep a dashboard out of the file.
 
 Selecting a project reuses the same dashboard URL and port, clears the cached
-git/health/stamp data, and reloads the page. The server has one active project at
-a time, so every open tab follows the switch; close the per-project tabs you no
-longer need.
+git/health/stamp data, and reloads the page. Switching lands on the project's
+Overview (a feature detail page from the previous project does not exist in the
+new one). The server has one active project at a time, so every open tab follows
+the switch; close the per-project tabs you no longer need.
 
 To start one dashboard for several projects:
 

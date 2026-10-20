@@ -3,6 +3,7 @@
 const { Command } = require("commander");
 const { execSync } = require("child_process");
 const fs = require("fs");
+const http = require("http");
 const path = require("path");
 const os = require("os");
 const readline = require("readline");
@@ -2213,11 +2214,138 @@ function ensureCommonJsScope(sdriveRoot) {
   return true;
 }
 
+// ---------- DASHBOARD REUSE ----------
+// `sdrive dashboard` used to start its own server on the next free port, so
+// opening a second project produced a second port and a second tab. One server
+// can already serve every registered project, so look for a running dashboard
+// first and hand it the current project instead.
+const DASHBOARD_PORT_ATTEMPTS = 20;
+const DASHBOARD_PROBE_TIMEOUT_MS = 600;
+
+function dashboardHost() {
+  return process.env.SDRIVE_HOST || "127.0.0.1";
+}
+
+function probeDashboard(port, host) {
+  return new Promise((resolve) => {
+    const request = http.get(
+      { hostname: host, port, path: "/api/project-info", timeout: DASHBOARD_PROBE_TIMEOUT_MS },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          try {
+            const info = JSON.parse(body);
+            // A port can be held by anything. Demand a dashboard shape, and for
+            // older servers (no `service` field) demand the root really is a
+            // SpecDrive project.
+            const identified =
+              info &&
+              typeof info.name === "string" &&
+              typeof info.root === "string" &&
+              path.isAbsolute(info.root) &&
+              (info.service === "specdrive-dashboard" ||
+                fs.existsSync(path.join(info.root, ".sdrive", "config.json")));
+
+            resolve(identified ? { port, info } : null);
+          } catch (error) {
+            resolve(null);
+          }
+        });
+      }
+    );
+
+    request.on("timeout", () => {
+      request.destroy();
+      resolve(null);
+    });
+    request.on("error", () => resolve(null));
+  });
+}
+
+async function findRunningDashboard() {
+  const host = dashboardHost();
+  const start = Number(process.env.SDRIVE_PORT) || 4747;
+
+  for (let offset = 0; offset < DASHBOARD_PORT_ATTEMPTS; offset += 1) {
+    const found = await probeDashboard(start + offset, host);
+    if (found) return { ...found, host };
+  }
+
+  return null;
+}
+
+function postJson(host, port, route, payload) {
+  return new Promise((resolve) => {
+    const body = JSON.stringify(payload);
+    const request = http.request(
+      {
+        hostname: host,
+        port,
+        path: route,
+        method: "POST",
+        timeout: 5000,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body)
+        }
+      },
+      (response) => {
+        let responseBody = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          responseBody += chunk;
+        });
+        response.on("end", () => {
+          try {
+            resolve(JSON.parse(responseBody));
+          } catch (error) {
+            resolve(null);
+          }
+        });
+      }
+    );
+
+    request.on("timeout", () => request.destroy(new Error("request timed out")));
+    request.on("error", () => resolve(null));
+    request.end(body);
+  });
+}
+
+// Returns true when an existing dashboard now shows this project. Returns false
+// when there is nothing to reuse, so the caller starts one as before.
+async function reuseRunningDashboard() {
+  if (process.env.SDRIVE_NO_REUSE === "1") return false;
+
+  const running = await findRunningDashboard();
+  if (!running) return false;
+
+  const projectRoot = process.cwd();
+  const result = await postJson(running.host, running.port, "/api/switch-project", {
+    path: projectRoot
+  });
+  const url = `http://${running.host === "127.0.0.1" ? "localhost" : running.host}:${running.port}/`;
+
+  if (result && result.ok) {
+    console.log(`\n♻️  SpecDrive Dashboard is already running at ${url}`);
+    console.log(`   Switched it to ${path.basename(projectRoot)} instead of starting a second server.`);
+    console.log("   Stop it from the terminal that started it.\n");
+    return true;
+  }
+
+  console.log(`\n⚠️  A dashboard is running at ${url} but does not list this project yet.`);
+  console.log("   Starting a separate dashboard so this project is still visible.\n");
+  return false;
+}
+
 // Auto-launch after `init` / `onboard` so a new project has something to look at
 // immediately. A server that never exits is the wrong default in the wrong
 // context, so this refuses to start without an interactive terminal (a script or
 // CI run would hang forever) and honours SDRIVE_NO_DASHBOARD.
-function launchDashboard() {
+async function launchDashboard() {
   const disabled =
     process.env.SDRIVE_NO_DASHBOARD === "1" || process.env.SDRIVE_NO_DASHBOARD === "true";
 
@@ -2240,6 +2368,8 @@ function launchDashboard() {
     return;
   }
 
+  if (await reuseRunningDashboard()) return;
+
   console.log("\n📊 Starting the SpecDrive dashboard in this terminal.");
   DASHBOARD_PITCH.forEach((line) => console.log(line));
   console.log("   Press Ctrl+C when you are done to get your prompt back.\n");
@@ -2257,13 +2387,15 @@ function launchDashboard() {
 program
   .command("dashboard")
   .description("Start SpecDrive web dashboard")
-  .action(() => {
+  .action(async () => {
     const scriptPath = dashboardScriptPath();
 
     if (!scriptPath) {
       console.error("❌ Dashboard not found. Run `sdrive init` first.");
       process.exit(1);
     }
+
+    if (await reuseRunningDashboard()) return;
 
     const result = runDashboardForeground(scriptPath);
 
