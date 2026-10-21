@@ -189,7 +189,8 @@ For feature `<feature-name>` and version `<version>`, create these files:
 
      `feature.branch` is the single source of truth for `/sdrive:apply`,
      `/sdrive:review`, `/sdrive:secure`, `/sdrive:archive` and `sdrive amend`.
-     `feature.base` is the merge target `/sdrive/archive` recommends.
+     `feature.base` is the merge target `/sdrive/archive` uses. `/sdrive:apply`
+     and `/sdrive:review` only read it; they never ask for it again.
 
    - **Existing feature, new version:** if `feature.branch` is recorded and that
      branch still exists, ask whether to reuse it (switch to it) or create a new

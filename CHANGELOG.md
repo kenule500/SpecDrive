@@ -39,6 +39,14 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
 - Dashboard defaults to **dark mode**; an explicit Light choice is remembered,
   and the OS preference no longer overrides the default.
 
+### Fixed
+
+- `/sdrive:apply` no longer asks which branch a feature should eventually merge
+  into. That target is `feature.base`, chosen by `/sdrive:propose` before the
+  spec is written. Apply and review now read it, and `/sdrive:archive` merges
+  into it; the stale apply-time prompt contradicted CON-612 and duplicated the
+  propose decision.
+
 ---
 
 ## 0.1.43 — 2026-10-19

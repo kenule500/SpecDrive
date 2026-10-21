@@ -142,8 +142,8 @@ Each entry in `features[]`:
 | Field | Description |
 |-------|-------------|
 | `name` | Feature name (kebab-case) |
-| `branch` | **The branch this feature is tied to.** Written by `/sdrive:apply` when the branch is created or resumed, and by `sdrive amend` when a branch is chosen. This is the single source of truth — `/sdrive:review`, `/sdrive:secure` and `/sdrive:archive` read it rather than guessing the name or hardcoding `main`. Optional: absent for features that have not been branched yet. |
-| `base` | **The branch this feature's branch was cut from.** Written by `/sdrive:apply` and by `sdrive amend` alongside `branch`. Because CON-612 requires a feature branch to be based on the branch it will merge into, `/sdrive:archive` recommends `base` as the target branch instead of guessing the repository default — so it is the exact answer, not a proxy for it. Optional: absent for features that have not been branched yet. |
+| `branch` | **The branch this feature is tied to.** Written by `/sdrive:propose` when it creates the branch, and by `sdrive amend` when a branch is chosen. This is the single source of truth — `/sdrive:apply`, `/sdrive:review`, `/sdrive:secure` and `/sdrive:archive` read it rather than guessing the name or hardcoding `main`. Optional: absent for features that have not been branched yet. |
+| `base` | **The branch this feature's branch was cut from.** Written by `/sdrive:propose` and by `sdrive amend` alongside `branch`. Because CON-612 requires a feature branch to be based on the branch it will merge into, `/sdrive:archive` merges into `base` instead of guessing the repository default — so it is the exact answer, not a proxy for it. `/sdrive:apply` and `/sdrive:review` only read it; neither asks for it again. Optional: absent for features that have not been branched yet. |
 | `currentVersion` | The active version (`v1`, `v2`, ...) |
 | `versions[]` | Per-version `id`, `phase`, `currentStep`, `gates`, and `history` |
 

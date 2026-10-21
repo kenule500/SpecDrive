@@ -202,31 +202,26 @@ You operate within the current version folder only.
 
    - Run `sdrive verify <feature>`. This is a static plan-vs-code diff — it does NOT run tests.
    - If the report status is `fail`, STOP and report missing/renamed/extra items.
-   - Do not ask the user to merge until verification passes.
+   - Do not offer to merge. Verification only clears the feature for `/sdrive:test`,
+     `/sdrive:review`, and `/sdrive:archive`.
    - Do NOT run the test suite to "confirm" verification. If tests are needed, hand off to `/sdrive:test`.
 
-6. **FINALIZE & BRANCH MERGE DECISION**
+6. **FINALIZE**
 
    - Push final state.
-   - Inform the user: "Implementation complete. Next: run `/sdrive:test <feature>` to generate tests."
-   - Ask the user:
-
-     "Implementation complete. Which branch should this eventually merge into?"
-
-     Resolve the repository's default branch the same way `/sdrive:archive` does — never assume `main` — then offer:
-
-     1. `<default-branch>` (recommended) — the detected default branch.
-     2. Another existing branch — list the local branches (`git branch --format='%(refname:short)'`) and ask the user to pick one.
-     3. Do not merge yet — leave branch as is
-
-     Record the answer. It is the target branch `/sdrive:archive` will later confirm and use.
-
-   - Only proceed after explicit user selection.
-   - If the user chooses to merge:
-     - Do **not** merge directly.
-     - Hand off to `/sdrive:review` for the final audit, then `/sdrive:archive` to merge and archive.
-   - If the user chooses not to merge yet:
-     - Stop here and inform the user the branch is ready.
+   - Read `feature.branch` and `feature.base` from `.sdrive/workflow-state.json`.
+     Both were chosen by `/sdrive:propose` and are authoritative (CON-612).
+   - **If `feature.base` is missing:** STOP and tell the user to run
+     `/sdrive:propose <feature>` (or `sdrive amend` when re-branching). Never ask
+     the user to pick or confirm a merge target here.
+   - Report: "Implementation complete on `<feature.branch>`, based on
+     `<feature.base>`. Next: run `/sdrive:test <feature>`."
+   - **Do not ask which branch to merge into and do not offer a branch menu.**
+     That decision was made by `/sdrive:propose`; `/sdrive:archive` merges into
+     `<feature.base>` after review and asks only whether to merge now and whether
+     to delete the feature branch.
+   - If the user asks to merge, do not merge here. Point them to
+     `/sdrive:review <feature>` and then `/sdrive:archive <feature>`.
 
 </workflow>
 
@@ -245,9 +240,10 @@ When invoked as `/sdrive:apply --all`, implement every ongoing feature sequentia
      by `/sdrive:propose`. Switch to `feature.branch` for each, one at a time.
      Never create a branch here, and never implement two features on the same
      branch. Finish (commit + push) one feature's branch before starting the next.
-   - **Approval gates still apply per feature:** dependency approvals and the final
-     merge decision are asked for EACH feature. You may batch prompts where it is
-     safe, but you MUST NOT skip an approval.
+   - **Approval gates still apply per feature:** dependency approvals are asked
+     for EACH feature. You may batch prompts where it is safe, but you MUST NOT
+     skip an approval. The merge decision belongs to `/sdrive:archive`, not this
+     command.
    - **Continue on failure:** if one feature fails (e.g. verification `fail`, blocked task, user declines a dependency), record it and MOVE ON to the next feature. Do NOT abort the whole run. Leave the failed feature's branch as-is.
    - **Do NOT merge in `--all` mode:** at the end of each feature, hand off to `/sdrive:review` (audit) and then `/sdrive:archive` (merge) as usual. Never merge directly to the target branch.
 

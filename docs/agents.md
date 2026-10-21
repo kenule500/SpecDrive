@@ -253,7 +253,7 @@ pushes that branch.
 - Implements production code only (no tests)
 - Runs `sdrive verify <feature>` before declaring completion
 - Commits and pushes
-- Records branch name in workflow state
+- Reports the recorded `feature.branch` and `feature.base`; it never asks for a merge target, because `/sdrive:propose` already chose it
 - Recommends `/sdrive:test` as the next step
 
 **Batch mode:** `/sdrive:apply --all` implements every ongoing feature, one branch each. It never merges in batch mode, and each feature still requires its own approval gate.
