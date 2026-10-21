@@ -1237,9 +1237,41 @@ body {
   min-width: 560px;
 }
 
+.table-scroll > .backlog-table {
+  min-width: 1240px;
+  table-layout: fixed;
+}
+
+.backlog-table th:nth-child(1) {
+  width: 74px;
+}
+
+.backlog-table th:nth-child(3) {
+  width: 190px;
+}
+
+.backlog-table th:nth-child(4) {
+  width: 78px;
+}
+
+.backlog-table th:nth-child(5) {
+  width: 205px;
+}
+
+.backlog-table th:nth-child(6) {
+  width: 240px;
+}
+
+.backlog-table th:nth-child(7) {
+  width: 74px;
+}
+
+.backlog-table th:nth-child(8) {
+  width: 90px;
+}
+
 .backlog-table {
   width: 100%;
-  min-width: 1080px;
   border-collapse: collapse;
   font-size: 13px;
 }
