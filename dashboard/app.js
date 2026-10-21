@@ -1124,15 +1124,69 @@ function renderProduct(product, productType) {
 
       <div id="backlog-pager"></div>
 
-      <div class="product-note backlog-legend">
-        <strong>Depends on</strong> lists prerequisites; <strong>Base for</strong> lists the items that
-        build on this one. Items in the same <strong>wave</strong> have no dependency between them
-        and can be developed in parallel; <code>start</code> means no feature dependency.
-      </div>
+      <section class="backlog-guide" aria-label="How to read the backlog table">
+        <div class="backlog-guide-head">
+          <h3>How to read this table</h3>
+          <span>Dependencies are direct; waves tell you what can run in parallel.</span>
+        </div>
 
-      <div class="product-note">
-        Backlog items are product-level candidates. Promote one with <code>/sdrive:propose</code> to start detailed planning.
-      </div>
+        <div class="backlog-guide-grid">
+          <div class="backlog-guide-card">
+            <div class="backlog-guide-term">Depends on</div>
+            <p>
+              What must be finished first. <strong>—</strong> means no feature is blocking it.
+              Italic text is an external prerequisite such as <code>app review</code>; it still
+              blocks work and does not change the wave.
+            </p>
+          </div>
+          <div class="backlog-guide-card">
+            <div class="backlog-guide-term">Base for</div>
+            <p>
+              The reverse relationship: items that build on this one. A long list means this
+              feature unblocks a lot of work, so it is a foundation worth doing early.
+            </p>
+          </div>
+          <div class="backlog-guide-card">
+            <div class="backlog-guide-term">Wave</div>
+            <p>
+              How deep the item sits in the dependency chain:
+              <code>start</code> → <code>W1</code> → <code>W2</code>. Items in the same wave
+              have no dependency between them, so they can be built in parallel.
+            </p>
+          </div>
+        </div>
+
+        <div class="backlog-guide-example">
+          <span class="backlog-guide-example-label">Example: base for →</span>
+          <span class="dep-chip">BP-001</span>
+          <span class="wave-chip now">start</span>
+          <span class="backlog-guide-arrow">→</span>
+          <span class="dep-chip">BP-005</span>
+          <span class="wave-chip">W1</span>
+          <span class="backlog-guide-arrow">→</span>
+          <span class="dep-chip">BP-006–009</span>
+          <span class="wave-chip">W2</span>
+          <span class="backlog-guide-example-note">
+            The W2 items can run together once BP-005 is done.
+          </span>
+        </div>
+
+        <div class="backlog-guide-notes">
+          <p>
+            <strong>Before starting:</strong> finish everything in <strong>Depends on</strong>
+            and clear any external blocker.
+          </p>
+          <p>
+            <strong>Waves are ordering, not dates.</strong> A later milestone can still say
+            <code>start</code> if nothing blocks it.
+          </p>
+        </div>
+
+        <p class="backlog-guide-footer">
+          Backlog items are product-level candidates. Promote one with
+          <code>/sdrive:propose</code> to start detailed planning.
+        </p>
+      </section>
     </div>
   `;
 
