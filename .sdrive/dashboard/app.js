@@ -1127,37 +1127,40 @@ function renderProduct(product, productType) {
       <section class="backlog-guide" aria-label="How to read the backlog table">
         <div class="backlog-guide-head">
           <h3>How to read this table</h3>
-          <span>Dependencies are direct; waves tell you what can run in parallel.</span>
+          <span>
+            <strong>Depends on</strong> = what's first. <strong>Base for</strong> = what's next.
+            <strong>Wave</strong> = what can run together.
+          </span>
         </div>
 
         <div class="backlog-guide-grid">
           <div class="backlog-guide-card">
             <div class="backlog-guide-term">Depends on</div>
             <p>
-              What must be finished first. <strong>—</strong> means no feature is blocking it.
-              Italic text is an external prerequisite such as <code>app review</code>; it still
-              blocks work and does not change the wave.
+              Finish these first. A dash (<strong>—</strong>) means nothing feature-related is
+              blocking this item. Italic text is an outside blocker, such as
+              <code>app review</code>, and still has to be cleared.
             </p>
           </div>
           <div class="backlog-guide-card">
             <div class="backlog-guide-term">Base for</div>
             <p>
-              The reverse relationship: items that build on this one. A long list means this
-              feature unblocks a lot of work, so it is a foundation worth doing early.
+              These items need this feature first. If the list is long, build this feature early —
+              it unlocks a lot of other work.
             </p>
           </div>
           <div class="backlog-guide-card">
             <div class="backlog-guide-term">Wave</div>
             <p>
-              How deep the item sits in the dependency chain:
-              <code>start</code> → <code>W1</code> → <code>W2</code>. Items in the same wave
-              have no dependency between them, so they can be built in parallel.
+              A simple build order: <code>start</code> = begin now, <code>W1</code> = wait for
+              start, <code>W2</code> = wait for W1. <strong>Same wave = work on them at the same
+              time.</strong>
             </p>
           </div>
         </div>
 
         <div class="backlog-guide-example">
-          <span class="backlog-guide-example-label">Example: base for →</span>
+          <span class="backlog-guide-example-label">Example</span>
           <span class="dep-chip">BP-001</span>
           <span class="wave-chip now">start</span>
           <span class="backlog-guide-arrow">→</span>
@@ -1167,24 +1170,29 @@ function renderProduct(product, productType) {
           <span class="dep-chip">BP-006–009</span>
           <span class="wave-chip">W2</span>
           <span class="backlog-guide-example-note">
-            The W2 items can run together once BP-005 is done.
+            BP-001 comes first, then BP-005. Once BP-005 is done, BP-006–009 can all be worked on
+            together.
           </span>
         </div>
 
         <div class="backlog-guide-notes">
           <p>
-            <strong>Before starting:</strong> finish everything in <strong>Depends on</strong>
-            and clear any external blocker.
+            <strong>Before you start a row:</strong> finish everything in
+            <strong>Depends on</strong> and clear any italic outside blocker.
           </p>
           <p>
-            <strong>Waves are ordering, not dates.</strong> A later milestone can still say
-            <code>start</code> if nothing blocks it.
+            <strong>Milestone and wave are different.</strong> Milestone is the product phase; wave
+            is the build order.
+          </p>
+          <p>
+            <strong>Wave is not a deadline.</strong> A later milestone item can still say
+            <code>start</code> if nothing is blocking it.
           </p>
         </div>
 
         <p class="backlog-guide-footer">
-          Backlog items are product-level candidates. Promote one with
-          <code>/sdrive:propose</code> to start detailed planning.
+          Backlog items are ideas, not started work. Promote one with
+          <code>/sdrive:propose</code> when you are ready to plan it.
         </p>
       </section>
     </div>

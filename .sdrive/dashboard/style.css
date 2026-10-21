@@ -1399,8 +1399,10 @@ body {
 }
 
 .backlog-guide-head span {
+  max-width: 72ch;
   color: var(--text-3);
   font-size: 12px;
+  text-align: right;
 }
 
 .backlog-guide-grid {
@@ -1495,6 +1497,10 @@ body {
 }
 
 @media (max-width: 900px) {
+  .backlog-guide-head span {
+    text-align: left;
+  }
+
   .backlog-guide-grid {
     grid-template-columns: 1fr;
     gap: 12px;
