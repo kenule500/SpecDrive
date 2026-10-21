@@ -1159,36 +1159,174 @@ function renderProduct(product, productType) {
           </div>
         </div>
 
-        <div class="backlog-guide-example">
-          <span class="backlog-guide-example-label">Example</span>
-          <span class="dep-chip">BP-001</span>
-          <span class="wave-chip now">start</span>
-          <span class="backlog-guide-arrow">→</span>
-          <span class="dep-chip">BP-005</span>
-          <span class="wave-chip">W1</span>
-          <span class="backlog-guide-arrow">→</span>
-          <span class="dep-chip">BP-006–009</span>
-          <span class="wave-chip">W2</span>
-          <span class="backlog-guide-example-note">
-            BP-001 comes first, then BP-005. Once BP-005 is done, BP-006–009 can all be worked on
-            together.
-          </span>
-        </div>
+        <details class="backlog-guide-more" open>
+          <summary>Go deeper: worked example, how to choose, common mistakes, and glossary</summary>
 
-        <div class="backlog-guide-notes">
-          <p>
-            <strong>Before you start a row:</strong> finish everything in
-            <strong>Depends on</strong> and clear any italic outside blocker.
-          </p>
-          <p>
-            <strong>Milestone and wave are different.</strong> Milestone is the product phase; wave
-            is the build order.
-          </p>
-          <p>
-            <strong>Wave is not a deadline.</strong> A later milestone item can still say
-            <code>start</code> if nothing is blocking it.
-          </p>
-        </div>
+          <div class="backlog-guide-deep">
+            <p class="backlog-guide-analogy">
+              <strong>Think of it like a recipe:</strong> you cannot ice a cake before baking it.
+              <strong>Depends on</strong> is what must be cooked first, <strong>Base for</strong> is
+              what this step unlocks, and <strong>Wave</strong> is the order of steps. Dishes in the
+              same wave can be cooked at the same time.
+            </p>
+
+            <div class="backlog-guide-deep-grid">
+              <section class="backlog-guide-section">
+                <h4>Worked example: one real chain</h4>
+                <ol class="backlog-guide-timeline">
+                  <li>
+                    <div class="backlog-guide-step-head">
+                      <span class="dep-chip">BP-001</span>
+                      <span class="wave-chip now">start</span>
+                      <strong>YAML parser</strong>
+                    </div>
+                    <p>No feature dependencies. This is safe to start now.</p>
+                  </li>
+                  <li>
+                    <div class="backlog-guide-step-head">
+                      <span class="dep-chip">BP-005</span>
+                      <span class="wave-chip">W1</span>
+                      <strong>wirekit core</strong>
+                    </div>
+                    <p>Waits for BP-001. Do not start it until BP-001 is done.</p>
+                  </li>
+                  <li>
+                    <div class="backlog-guide-step-head">
+                      <span class="dep-chip">BP-006–009</span>
+                      <span class="wave-chip">W2</span>
+                      <strong>provider modules</strong>
+                    </div>
+                    <p>
+                      All four wait for BP-005, but not for each other. That is why they share a
+                      wave and can be built at the same time.
+                    </p>
+                  </li>
+                  <li>
+                    <div class="backlog-guide-step-head">
+                      <span class="dep-chip">BP-010</span>
+                      <span class="wave-chip">W3</span>
+                      <strong>first publish</strong>
+                    </div>
+                    <p>Waits for all four provider modules. It is the last step in this chain.</p>
+                  </li>
+                </ol>
+                <p class="backlog-guide-takeaway">
+                  <strong>Why the wave goes up:</strong> each step waits for something in the wave
+                  before it. A wave is a layer, not a date or a priority.
+                </p>
+              </section>
+
+              <div class="backlog-guide-side">
+                <section class="backlog-guide-section">
+                  <h4>How to choose what to work on next</h4>
+                  <ol class="backlog-guide-steps">
+                    <li>
+                      Start with a <code>start</code> row. Its <strong>Depends on</strong> is
+                      <strong>—</strong>, so no feature is blocking it.
+                    </li>
+                    <li>
+                      When no <code>start</code> row is left, pick the lowest wave whose
+                      <strong>Depends on</strong> items are all done.
+                    </li>
+                    <li>
+                      Finish every item in <strong>Depends on</strong> and clear any italic outside
+                      blocker.
+                    </li>
+                    <li>
+                      If several rows in that wave are ready, work on them in parallel.
+                    </li>
+                    <li>
+                      After finishing, check <strong>Base for</strong> to see what you just
+                      unlocked, then repeat.
+                    </li>
+                  </ol>
+                </section>
+
+                <section class="backlog-guide-section">
+                  <h4>Common mistakes</h4>
+                  <ul class="backlog-guide-mistakes">
+                    <li>
+                      <strong>P0 does not mean start now.</strong> Priority says how important it
+                      is; wave says when it is safe.
+                    </li>
+                    <li>
+                      <strong>A long Base for list is not a blocker.</strong> It means this item
+                      unlocks a lot of work, so do it early when its own dependencies are clear.
+                    </li>
+                    <li>
+                      <strong>A later milestone is not a later wave.</strong> Check
+                      <strong>Depends on</strong>, not the milestone.
+                    </li>
+                    <li>
+                      <strong>Italic blockers still block.</strong> They do not change the wave, but
+                      you cannot finish without them.
+                    </li>
+                    <li>
+                      <strong>Same wave does not mean same work.</strong> It means the items do not
+                      depend on each other, so they can run at the same time.
+                    </li>
+                  </ul>
+                </section>
+              </div>
+            </div>
+
+            <section class="backlog-guide-section backlog-guide-glossary-wrap">
+              <h4>Words used in this table</h4>
+              <dl class="backlog-guide-glossary">
+                <div>
+                  <dt>Backlog item</dt>
+                  <dd>A feature idea, not started work. <code>BP-###</code> is its ID.</dd>
+                </div>
+                <div>
+                  <dt>Depends on</dt>
+                  <dd>
+                    Work that must be finished first. <code>—</code> means no feature blocker.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Base for</dt>
+                  <dd>
+                    The opposite view: items that need this one first. It is what this item
+                    unlocks.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Wave</dt>
+                  <dd>
+                    A layer in the build order. <code>start</code> has no feature dependencies;
+                    <code>W1</code> waits on <code>start</code>; <code>W2</code> waits on earlier
+                    waves. Same wave = can run at the same time.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Milestone</dt>
+                  <dd>
+                    A product phase (M0, M1, ...), not a build order. A later milestone item can
+                    still be <code>start</code>.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Outside blocker</dt>
+                  <dd>
+                    A non-feature dependency in italics, such as <code>app review</code>, a
+                    contract, or an approval. It still blocks, but it does not change the wave.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Priority</dt>
+                  <dd>How important the item is (P0-P3). It is not the same as the wave.</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>
+                    Whether the item is <code>backlog</code>, <code>deferred</code>, or
+                    <code>needs discovery</code>.
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          </div>
+        </details>
 
         <p class="backlog-guide-footer">
           Backlog items are ideas, not started work. Promote one with

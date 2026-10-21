@@ -34,8 +34,8 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
   section headings. New **Depends on** and **Base for** columns show the
   feature dependency graph, and a **wave** badge groups items that can be
   developed in parallel; external prerequisites (for example `app review`) are
-  listed beside feature dependencies. A short guide under the table explains
-  how to read the dependencies, waves, and parallel work.
+  listed beside feature dependencies. An expandable guide under the table adds
+  a worked example, a next-step recipe, common mistakes, and a glossary.
 - Dashboard defaults to **dark mode**; an explicit Light choice is remembered,
   and the OS preference no longer overrides the default.
 

@@ -1444,18 +1444,72 @@ body {
   font-size: 11.5px;
 }
 
-.backlog-guide-example {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+.backlog-guide-more {
   margin-top: 16px;
-  padding-top: 14px;
+  padding-top: 16px;
   border-top: 1px solid var(--border);
 }
 
-.backlog-guide-example-label {
-  margin-right: 2px;
+.backlog-guide-more > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  list-style: none;
+}
+
+.backlog-guide-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.backlog-guide-more > summary::before {
+  content: "▸";
+  color: var(--text-3);
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+
+.backlog-guide-more[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.backlog-guide-deep {
+  margin-top: 14px;
+}
+
+.backlog-guide-analogy {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.backlog-guide-deep-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.backlog-guide-side {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.backlog-guide-section {
+  margin: 0;
+}
+
+.backlog-guide-section h4 {
+  margin: 0 0 10px;
   color: var(--text-3);
   font-size: 11px;
   font-weight: 700;
@@ -1463,25 +1517,139 @@ body {
   text-transform: uppercase;
 }
 
-.backlog-guide-arrow {
-  color: var(--text-3);
-  font-family: var(--mono);
-  font-size: 11px;
+.backlog-guide-timeline {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.backlog-guide-example-note {
-  color: var(--text-3);
-  font-size: 12px;
+.backlog-guide-timeline li {
+  position: relative;
+  padding-left: 28px;
 }
 
-.backlog-guide-notes {
+.backlog-guide-timeline li::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.backlog-guide-timeline li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 21px;
+  bottom: -12px;
+  width: 2px;
+  background: var(--border);
+}
+
+.backlog-guide-step-head {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 24px;
-  margin-top: 12px;
+  align-items: center;
+  gap: 6px;
 }
 
-.backlog-guide-notes p {
+.backlog-guide-step-head strong {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.backlog-guide-timeline p {
+  margin: 4px 0 0;
+  color: var(--text-3);
+  font-size: 12.25px;
+  line-height: 1.5;
+}
+
+.backlog-guide-takeaway {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 7px;
+  background: var(--slate-soft);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.backlog-guide-steps {
+  margin: 0;
+  padding-left: 19px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.backlog-guide-steps li {
+  margin-bottom: 7px;
+  padding-left: 2px;
+}
+
+.backlog-guide-steps li:last-child {
+  margin-bottom: 0;
+}
+
+.backlog-guide-mistakes {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.backlog-guide-mistakes li {
+  position: relative;
+  padding-left: 17px;
+  color: var(--text-3);
+  font-size: 12.25px;
+  line-height: 1.5;
+}
+
+.backlog-guide-mistakes li::before {
+  content: "×";
+  position: absolute;
+  left: 0;
+  top: -1px;
+  color: var(--red);
+  font-weight: 700;
+}
+
+.backlog-guide-glossary-wrap {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.backlog-guide-glossary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+}
+
+.backlog-guide-glossary > div {
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+}
+
+.backlog-guide-glossary dt {
+  margin: 0 0 2px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.backlog-guide-glossary dd {
   margin: 0;
   color: var(--text-3);
   font-size: 12px;
@@ -1496,13 +1664,24 @@ body {
   font-size: 12px;
 }
 
+@media (max-width: 1100px) {
+  .backlog-guide-deep-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}
+
 @media (max-width: 900px) {
   .backlog-guide-head span {
     text-align: left;
   }
 
-  .backlog-guide-grid {
+  .backlog-guide-grid,
+  .backlog-guide-glossary {
     grid-template-columns: 1fr;
+  }
+
+  .backlog-guide-grid {
     gap: 12px;
   }
 }
