@@ -1019,12 +1019,51 @@ function renderProduct(product, productType) {
       : /pending|backlog/i.test(item.status)
       ? "amber"
       : "green";
+
+    const dependsOn = item.dependsOn || [];
+    const external = item.externalDependencies || [];
+    const baseFor = item.baseFor || [];
+    const parallelWith = item.parallelWith || [];
+    const wave = Number.isFinite(item.wave) ? item.wave : 0;
+    const waveLabel = wave === 0 ? "start" : `W${wave}`;
+    const waveTitle = parallelWith.length
+      ? `Can be developed in parallel with ${parallelWith.join(", ")}`
+      : "No other item is at this stage";
+
     return `
         <tr>
           <td class="backlog-id">${escapeHtml(item.id)}</td>
-          <td>${escapeHtml(item.feature)}</td>
+          <td>
+            <div class="backlog-feature">${escapeHtml(item.feature)}</div>
+            ${item.userValue ? `<div class="backlog-value">${escapeHtml(item.userValue)}</div>` : ""}
+          </td>
           <td>${item.milestone ? `<span class="chip slate">${escapeHtml(item.milestone)}</span>` : "—"}</td>
           <td>${item.priority ? escapeHtml(item.priority) : "—"}</td>
+          <td>
+            <div class="dep-list">
+              ${dependsOn
+                .map((id) => `<span class="dep-chip">${escapeHtml(id)}</span>`)
+                .join("")}
+              ${external
+                .map((text) => `<span class="dep-external">${escapeHtml(text)}</span>`)
+                .join("")}
+              ${dependsOn.length === 0 && external.length === 0 ? "—" : ""}
+            </div>
+          </td>
+          <td>
+            <div class="dep-list">
+              ${
+                baseFor.length
+                  ? baseFor
+                      .map((id) => `<span class="dep-chip base">${escapeHtml(id)}</span>`)
+                      .join("")
+                  : "—"
+              }
+            </div>
+          </td>
+          <td>
+            <span class="wave-chip${wave === 0 ? " now" : ""}" title="${escapeHtml(waveTitle)}">${waveLabel}</span>
+          </td>
           <td><span class="chip ${tone}">${escapeHtml(item.status)}</span></td>
         </tr>`;
   };
@@ -1032,7 +1071,7 @@ function renderProduct(product, productType) {
   const backlogSlice = paginate(backlog, "product-backlog", BACKLOG_PER_PAGE);
   const backlogRows = backlog.length
     ? backlogSlice.items.map(backlogRow).join("")
-    : `<tr><td colspan="5" class="product-empty">No backlog items yet.</td></tr>`;
+    : `<tr><td colspan="8" class="product-empty">No backlog items yet.</td></tr>`;
 
   div.innerHTML = `
     <div class="product-plan-wrap">
@@ -1068,13 +1107,28 @@ function renderProduct(product, productType) {
       <div class="table-scroll">
         <table class="backlog-table">
           <thead>
-            <tr><th>ID</th><th>Feature</th><th>Milestone</th><th>Priority</th><th>Status</th></tr>
+            <tr>
+              <th>ID</th>
+              <th>Feature</th>
+              <th>Milestone</th>
+              <th>Priority</th>
+              <th>Depends on</th>
+              <th>Base for</th>
+              <th>Wave</th>
+              <th>Status</th>
+            </tr>
           </thead>
           <tbody id="backlog-body">${backlogRows}</tbody>
         </table>
       </div>
 
       <div id="backlog-pager"></div>
+
+      <div class="product-note backlog-legend">
+        <strong>Depends on</strong> lists prerequisites; <strong>Base for</strong> lists the items that
+        build on this one. Items in the same <strong>wave</strong> have no dependency between them
+        and can be developed in parallel; <code>start</code> means no feature dependency.
+      </div>
 
       <div class="product-note">
         Backlog items are product-level candidates. Promote one with <code>/sdrive:propose</code> to start detailed planning.

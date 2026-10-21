@@ -2010,9 +2010,51 @@ function parseBacklog(markdown) {
   if (!markdown) return [];
 
   const rows = [];
+  let section = "";
+  let columns = null;
+
+  // Map header text to fields instead of trusting column positions. A product
+  // backlog is hand-written Markdown, and the columns have drifted (this file
+  // gained `User value` and `Confidence / source`), which used to push the user
+  // value into the Milestone column.
+  const headerKey = (value) => {
+    const key = String(value || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (key === "id") return "id";
+    if (key === "feature") return "feature";
+    if (key === "user value") return "userValue";
+    if (key === "milestone") return "milestone";
+    if (key === "priority") return "priority";
+    if (key === "depends on" || key === "dependencies" || key === "dependency") {
+      return "dependencies";
+    }
+    if (key === "status") return "status";
+    if (key === "confidence / source" || key === "confidence" || key === "source") {
+      return "confidence";
+    }
+    return null;
+  };
+
   for (const line of markdown.split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed.startsWith("|")) continue;
+
+    // The milestone lives in the section heading (`## M0 - Foundation`), not in
+    // every row. Track it so each item can say which milestone it belongs to.
+    const heading = trimmed.match(/^##\s+(.+?)\s*$/);
+    if (heading) {
+      section = heading[1];
+      columns = null;
+      continue;
+    }
+
+    if (!trimmed.startsWith("|")) {
+      columns = null;
+      continue;
+    }
+
     if (/^\|[\s:|-]+\|$/.test(trimmed)) continue;
 
     const cells = trimmed
@@ -2020,23 +2062,140 @@ function parseBacklog(markdown) {
       .slice(1, -1)
       .map((cell) => cell.trim());
 
-    if (cells.length < 3) continue;
-    if (/^id$/i.test(cells[0])) continue;
+    // A table is a backlog table only if it has both an ID and a Feature
+    // header. This keeps the summary and legend tables out of the item list.
+    if (!columns) {
+      const keys = cells.map(headerKey);
+      if (keys.includes("id") && keys.includes("feature")) columns = keys;
+      continue;
+    }
 
-    // Backlog table columns: ID | Feature | Milestone | Priority | Dependencies | Status
-    // Older/simpler tables may only have: ID | Feature | Status
-    const hasFullColumns = cells.length >= 6;
+    if (cells.length < columns.length) continue;
+
+    const item = {};
+    columns.forEach((key, index) => {
+      if (key) item[key] = cells[index];
+    });
+
+    if (!item.id || !item.feature) continue;
+
     rows.push({
-      id: cells[0],
-      feature: cells[1],
-      milestone: hasFullColumns ? cells[2] : "",
-      priority: hasFullColumns ? cells[3] : "",
-      dependencies: hasFullColumns ? cells[4] : "",
-      status: hasFullColumns ? cells[5] : cells[2]
+      id: item.id,
+      feature: item.feature,
+      userValue: item.userValue || "",
+      milestone: item.milestone || section,
+      priority: item.priority || "",
+      dependencies: item.dependencies || "",
+      status: item.status || "",
+      confidence: item.confidence || ""
     });
   }
 
   return rows;
+}
+
+// `Depends on` mixes feature IDs (`BP-005`, `BP-011 to BP-015`) with external
+// prerequisites (`app review`, `partner access`). Separate the two: only the
+// feature IDs form edges in the dependency graph.
+function parseDependencyCell(raw) {
+  const text = String(raw || "").replace(/[\u2013\u2014]/g, "-");
+  const ids = [];
+
+  const add = (id) => {
+    if (!ids.includes(id)) ids.push(id);
+  };
+
+  let remainder = text.replace(
+    /\bBP-(\d{3})\s*(?:to|through|-)\s*BP-(\d{3})\b/gi,
+    (match, from, to) => {
+      const start = Number(from);
+      const end = Number(to);
+
+      if (start <= end) {
+        for (let n = start; n <= end; n += 1) add(`BP-${String(n).padStart(3, "0")}`);
+      } else {
+        for (let n = start; n >= end; n -= 1) add(`BP-${String(n).padStart(3, "0")}`);
+      }
+
+      return " ";
+    }
+  );
+
+  remainder = remainder.replace(/\bBP-(\d{3})\b/gi, (match) => {
+    add(match.toUpperCase());
+    return " ";
+  });
+
+  const external = remainder
+    .split(/[;,]/)
+    .map((part) => part.replace(/^[-\u2013\u2014]\s*/, "").trim())
+    .filter((part) => part && part !== "-");
+
+  return { ids, external };
+}
+
+// The dashboard answers three questions the raw Markdown cannot:
+//   - What does this item depend on?           -> dependsOn
+//   - What builds on it (its base targets)?    -> baseFor
+//   - What can be worked on at the same time?  -> wave
+// Wave is the longest dependency path from an item with no prerequisites.
+// Items on the same wave cannot depend on each other, so they can be developed
+// in parallel. External prerequisites do not create a wave; they are listed
+// beside the feature dependencies instead.
+function annotateBacklog(items) {
+  const known = new Set(items.map((item) => item.id));
+  const dependsOn = new Map();
+  const external = new Map();
+
+  for (const item of items) {
+    const parsed = parseDependencyCell(item.dependencies);
+    dependsOn.set(item.id, parsed.ids);
+    external.set(item.id, parsed.external);
+  }
+
+  const featureDeps = (id) =>
+    (dependsOn.get(id) || []).filter((dep) => known.has(dep) && dep !== id);
+
+  const baseFor = new Map(items.map((item) => [item.id, []]));
+
+  for (const item of items) {
+    for (const dep of featureDeps(item.id)) {
+      baseFor.get(dep).push(item.id);
+    }
+  }
+
+  const waves = new Map();
+  const visiting = new Set();
+
+  const waveOf = (id) => {
+    if (waves.has(id)) return waves.get(id);
+    // A malformed backlog can contain a cycle. Do not recurse forever; report
+    // the item as a root and let the dependency lists show the links.
+    if (visiting.has(id)) return 0;
+
+    visiting.add(id);
+    const deps = featureDeps(id);
+    const wave = deps.length ? Math.max(...deps.map((dep) => waveOf(dep) + 1)) : 0;
+    visiting.delete(id);
+
+    waves.set(id, wave);
+    return wave;
+  };
+
+  return items.map((item) => {
+    const wave = waveOf(item.id);
+
+    return {
+      ...item,
+      dependsOn: dependsOn.get(item.id) || [],
+      externalDependencies: external.get(item.id) || [],
+      baseFor: baseFor.get(item.id) || [],
+      wave,
+      parallelWith: items
+        .filter((other) => other.id !== item.id && waveOf(other.id) === wave)
+        .map((other) => other.id)
+    };
+  });
 }
 
 function apiProduct() {
@@ -2054,7 +2213,7 @@ function apiProduct() {
     mockup,
     designSystem,
     roadmap,
-    backlog: parseBacklog(backlogMarkdown),
+    backlog: annotateBacklog(parseBacklog(backlogMarkdown)),
     summary: parseProductOverview(overview)
   };
 }

@@ -2,6 +2,7 @@
 // return JSON even when there is no feature data to show.
 const test = require("node:test");
 const assert = require("node:assert");
+const fs = require("fs");
 const http = require("http");
 const net = require("net");
 const path = require("path");
@@ -130,6 +131,108 @@ test("dashboard quality and evidence APIs return structured data", async () => {
 
     const quality = await get(port, "/quality");
     assert.strictEqual(quality.status, 200);
+  } finally {
+    server.kill("SIGTERM");
+
+    await Promise.race([
+      once(server, "exit"),
+      new Promise((resolve) => setTimeout(resolve, 3000))
+    ]);
+
+    cleanup(root);
+  }
+});
+
+test("product backlog maps columns and derives dependency waves", async () => {
+  const root = initProject({ prefix: "sdrive-dash-backlog-" });
+  const productDir = path.join(root, ".sdrive", "product");
+  fs.mkdirSync(productDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(productDir, "backlog.md"),
+    [
+      "# Product Backlog",
+      "",
+      "## Summary",
+      "",
+      "| Milestone | Items | Count |",
+      "|---|---|---|",
+      "| M0 - Foundation | BP-001 to BP-003 | 3 |",
+      "| **Total** |  | 3 |",
+      "",
+      "## Status legend",
+      "",
+      "| Status | Meaning |",
+      "|---|---|",
+      "| `backlog` | Approved candidate |",
+      "",
+      "## M0 - Foundation",
+      "",
+      "| ID | Feature | User value | Priority | Depends on | Status | Confidence / source |",
+      "|---|---|---|---|---|---|---|",
+      "| BP-001 | Parser core | Parse files | P0 | - | backlog | High |",
+      "| BP-002 | Retry layer | Retry calls | P1 | BP-001 | backlog | High |",
+      "| BP-003 | Partner adapter | Call partner | P1 | BP-001; partner access | backlog | Low |",
+      "",
+      "## M1 - Publish",
+      "",
+      "| ID | Feature | User value | Priority | Depends on | Status | Confidence / source |",
+      "|---|---|---|---|---|---|---|",
+      "| BP-004 | Release bundle | Ship both | P1 | BP-002 to BP-003 | backlog | High |",
+      "",
+      "## Legacy",
+      "",
+      "| ID | Feature | Milestone | Priority | Dependencies | Status |",
+      "|---|---|---|---|---|---|",
+      "| BP-005 | Legacy item | M2 - Legacy | P2 | BP-004 | backlog |",
+      ""
+    ].join("\n")
+  );
+
+  const port = await freePort();
+  const server = spawn(process.execPath, [path.join(root, ".sdrive", "dashboard", "server.js")], {
+    cwd: root,
+    env: { ...TEST_ENV, SDRIVE_PORT: String(port) },
+    stdio: "ignore"
+  });
+
+  try {
+    await waitForServer(port);
+
+    const product = JSON.parse((await get(port, "/api/product")).body);
+    const backlog = product.backlog;
+
+    // Summary and legend tables are documentation, not candidates. The old
+    // positional parser counted them and pushed user value into Milestone.
+    assert.strictEqual(backlog.length, 5);
+    assert.ok(backlog.every((item) => /^BP-\d{3}$/.test(item.id)));
+
+    const byId = new Map(backlog.map((item) => [item.id, item]));
+
+    assert.strictEqual(byId.get("BP-001").milestone, "M0 - Foundation");
+    assert.strictEqual(byId.get("BP-001").userValue, "Parse files");
+    assert.strictEqual(byId.get("BP-003").userValue, "Call partner");
+
+    // Feature dependencies and external prerequisites are separated.
+    assert.deepStrictEqual(byId.get("BP-003").dependsOn, ["BP-001"]);
+    assert.deepStrictEqual(byId.get("BP-003").externalDependencies, ["partner access"]);
+    assert.deepStrictEqual(byId.get("BP-004").dependsOn, ["BP-002", "BP-003"]);
+
+    // The inverse edge is what the table calls "Base for".
+    assert.deepStrictEqual(byId.get("BP-001").baseFor, ["BP-002", "BP-003"]);
+    assert.deepStrictEqual(byId.get("BP-003").baseFor, ["BP-004"]);
+
+    // Wave is dependency depth, so equal waves cannot depend on each other.
+    assert.strictEqual(byId.get("BP-001").wave, 0);
+    assert.strictEqual(byId.get("BP-002").wave, 1);
+    assert.strictEqual(byId.get("BP-003").wave, 1);
+    assert.strictEqual(byId.get("BP-004").wave, 2);
+    assert.strictEqual(byId.get("BP-005").wave, 3);
+    assert.deepStrictEqual(byId.get("BP-002").parallelWith, ["BP-003"]);
+
+    // The older six-column table still works, and its Milestone column wins
+    // over the section heading.
+    assert.strictEqual(byId.get("BP-005").milestone, "M2 - Legacy");
+    assert.deepStrictEqual(byId.get("BP-005").dependsOn, ["BP-004"]);
   } finally {
     server.kill("SIGTERM");
 
