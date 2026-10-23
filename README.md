@@ -350,6 +350,7 @@ Use this when you are starting from an empty folder, or a fresh scaffold with no
 ```text
 /sdrive:constitution
 /sdrive:product-plan
+/sdrive:worktree        # optional: prepare ready backlog items in parallel worktrees
 ```
 
 `/sdrive:product-plan` is **optional**. Run it when you have an idea but no written plan, or an empty repo. If you already know what you are building, go straight from the constitution to `/sdrive:propose`.
@@ -389,16 +390,16 @@ These are not part of the core workflow. Run them when the need arises.
 | `/sdrive:docs "<feature>"` | When you want documentation that matches the code |
 | `/sdrive:performance "<feature>"` | When performance or SEO matters — before a release or after a slowdown |
 | `/sdrive:secure "<feature>"` | Before shipping anything that touches auth, data, or payments |
+| `/sdrive:worktree` | After `/sdrive:product-plan`, when you want to start several ready backlog items in parallel |
 
 ### After a feature is archived
 
-Archiving closes the version and deletes the feature branch. To go further:
+Archiving closes the version and deletes the feature branch. Archived versions are immutable — there is no reopen or amend path. To go further:
 
 | Situation | Command |
 |-----------|---------|
-| The closure was wrong (for example it shipped before its tests were written) | `sdrive amend "<feature>" --reason "..."` |
 | The scope genuinely changed | `sdrive version:new "<feature>"` |
-| A defect in already-shipped code | A `fix/<ticket>` or `hotfix/<ticket>` branch — it is a separate work unit, not an amendment |
+| A defect in already-shipped code | A `fix/<ticket>` or `hotfix/<ticket>` branch — it is a separate work unit, not a new version |
 
 ---
 
@@ -843,7 +844,7 @@ Chooses the base branch, creates the feature branch, then writes the specificati
 
 Extends an **existing** feature specification with new requirements, user stories, and acceptance criteria.
 
-**When to use:** when a feature proposal needs changes before the feature is archived. After a feature is archived, use `sdrive amend` for a closure that was wrong, or `sdrive version:new` for a genuine change of scope.
+**When to use:** when a feature proposal needs changes before the feature is archived. After a feature is archived, use `sdrive version:new` for a genuine change of scope; the completed version stays archived and immutable.
 
 **What it does:**
 
@@ -1249,7 +1250,6 @@ Audits and manages AI skills.
 | `sdrive diff <old> <new>` | Show differences between two spec files |
 | `sdrive openapi:generate <feature>` | Generate OpenAPI spec from plan.json |
 | `sdrive dashboard` | Start local web dashboard (binds `127.0.0.1` by default) |
-| `sdrive amend <feature> --reason "..."` | Correct a wrongly-closed record — moves that version back to `ongoing/` (corrective action; new scope uses `sdrive version:new`) |
 | `sdrive verify <feature>` | Verify code matches plan.json |
 | `sdrive version:new <feature>` | Create a new version of a feature |
 | `sdrive diff:version <feature> <vA> <vB>` | Compare two versions of a feature |
@@ -1263,6 +1263,7 @@ Audits and manages AI skills.
 | Onboarding | `00-onboarding.md` | Adopt SpecDrive into an existing project, migrate OpenSpec and Spec-Kit |
 | Constitution | `01-constitution.md` | Discover project rules, merge into constitution |
 | Product Plan | `12-product-plan.md` | Optionally create a product overview, conceptual mockup, design-system plan, roadmap, and backlog |
+| Worktree | `16-worktree.md` | Prepare branches and isolated worktrees for the next ready Product Plan wave |
 | Specification | `02-specification.md` | Generate spec, plan, tasks, traceability |
 | Update Proposal | `13-update-propose.md` | Extend an existing feature spec with new requirements, stories, and acceptance criteria |
 | UI/UX | `03-uiux.md` | Build interactive prototype |
@@ -1361,23 +1362,22 @@ A feature moves through three spec folders. Each transition has exactly one owne
 | → `specs/backlog/<feature>/<version>/` | `/sdrive:propose` | New specs are created in `backlog/` with `phase: backlog` |
 | `backlog/` → `ongoing/` | `/sdrive:apply` | Happens at the start of implementation; sets `phase: ongoing` |
 | `ongoing/` → `completed/` | `/sdrive:archive` | Happens after merge and archive; sets `phase: completed` |
-| `completed/` → `ongoing/` | `sdrive amend <feature> --reason "..."` | Corrective action on a wrongly-closed record |
 
-`/sdrive:apply` MUST NOT begin implementation while the spec is still in `backlog/`. If the feature is in neither `backlog/` nor `ongoing/`, the agent stops and asks.
+`completed/` is immutable. There is no transition back to `ongoing/`; a new version is the only way to add scope after release. `/sdrive:apply` MUST NOT begin implementation while the spec is still in `backlog/`. If the feature is in neither `backlog/` nor `ongoing/`, the agent stops and asks.
 
 > **Note:** `governance/` is not lifecycle-partitioned. Governance files live at `.sdrive/governance/<feature>/<version>/` regardless of the spec's lifecycle folder.
 
-### Returning to a Completed Feature
+### Making a Change After Release
 
-`archive` deletes the feature branch, so a completed feature has no branch of its own. To make a further change:
+`archive` deletes the feature branch, so a completed feature has no branch of its own. The completed version is immutable; to make a further change:
 
-1. **`sdrive amend <feature> --reason "..."`** — for a closure that was *wrong*, for example a feature shipped before its tests were written. It moves that version back to `ongoing/` and resets the `review` gate to `pending`. It asks which branch the work should happen on, and **which branch to base it on** — the detected default branch is recommended, because that is where the merged code now lives. The reason is required and recorded, because that is what makes it a corrective action rather than an edit to history. To *change* a released feature, use `sdrive version:new <feature>` instead — that creates a new version and leaves the released one untouched.
+1. Run **`sdrive version:new <feature>`**. It creates a new version under `ongoing/` and leaves the released version and its record untouched.
 2. Make the change on the new branch.
 3. `/sdrive:test` → `/sdrive:review` → `/sdrive:archive`, as normal.
 
-**A minor change is NOT a new version** (CON-604). New versions are only for structural changes — a new workflow, a new user story, or a behaviour change. Small edits stay in the current version, and `/sdrive:update-propose` extends the existing spec in place.
+**A minor change is NOT a new version** (CON-604). New versions are only for structural changes — a new workflow, a new user story, or a behaviour change. Small edits stay in the current version while it is still open, and `/sdrive:update-propose` extends the existing spec in place.
 
-A defect in already-shipped code is a *different* work unit: use a `fix/<ticket>` or `hotfix/<ticket>` branch off the target rather than amending the feature.
+A defect in already-shipped code is a *different* work unit: use a `fix/<ticket>` or `hotfix/<ticket>` branch off the target rather than reopening the feature.
 
 ### Branching Policy (Enterprise Standard)
 
@@ -1402,7 +1402,7 @@ Doing it this way is what prevents overlap: the base is chosen while nothing dep
 SpecDrive does not require a particular branching model, and it has **no setting** for one. A model is a consequence of two facts it reads every time it needs them:
 
 1. **The integration branch** — where features land. Resolved from the repository: `refs/remotes/origin/HEAD`, then a conventional remote-tracking branch (`main`, `master`, `trunk`, `develop`), then the current branch. It is never assumed to be `main`, and the current-branch fallback is refused outright if that branch is a feature's own branch.
-2. **Each feature's `base`** — the branch that feature was based on, recorded on the feature in `.sdrive/workflow-state.json` when `/sdrive:apply` or `sdrive amend` creates its branch.
+2. **Each feature's `base`** — the branch that feature was based on, recorded on the feature in `.sdrive/workflow-state.json` when `/sdrive:propose` creates its branch.
 
 Everything else follows from those two:
 

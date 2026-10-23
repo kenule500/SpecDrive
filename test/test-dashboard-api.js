@@ -201,6 +201,18 @@ test("product backlog maps columns and derives dependency waves", async () => {
     const product = JSON.parse((await get(port, "/api/product")).body);
     const backlog = product.backlog;
 
+    // Lifecycle is dynamic and wave-ordered; the UI pages this at 20 per page.
+    assert.deepStrictEqual(product.counts, { backlog: 5, ongoing: 0, completed: 0 });
+    assert.deepStrictEqual(
+      product.waves.map((wave) => [wave.label, wave.total, wave.eligible]),
+      [
+        ["start", 1, 1],
+        ["W1", 2, 0],
+        ["W2", 1, 0],
+        ["W3", 1, 0]
+      ]
+    );
+
     // Summary and legend tables are documentation, not candidates. The old
     // positional parser counted them and pushed user value into Milestone.
     assert.strictEqual(backlog.length, 5);
@@ -233,6 +245,14 @@ test("product backlog maps columns and derives dependency waves", async () => {
     // over the section heading.
     assert.strictEqual(byId.get("BP-005").milestone, "M2 - Legacy");
     assert.deepStrictEqual(byId.get("BP-005").dependsOn, ["BP-004"]);
+
+    // Every row carries the lifecycle fields the Product Plan filters on.
+    assert.ok(backlog.every((item) => item.lifecycleStatus === "backlog"));
+    assert.strictEqual(byId.get("BP-001").eligible, true);
+    assert.strictEqual(byId.get("BP-002").eligible, false);
+    assert.deepStrictEqual(byId.get("BP-002").blockedBy, ["BP-001"]);
+    assert.strictEqual(byId.get("BP-003").eligible, false);
+    assert.deepStrictEqual(byId.get("BP-004").blockedBy, ["BP-002", "BP-003"]);
   } finally {
     server.kill("SIGTERM");
 

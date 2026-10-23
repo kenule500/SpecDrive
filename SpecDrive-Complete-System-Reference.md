@@ -270,7 +270,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | `sdrive dashboard` | Start web dashboard (also auto-started by `init` / `onboard` in a terminal; binds loopback by default) |
 | `sdrive archive:check <feature>` | Report whether a feature may be archived, and why not. Reads only |
 | `sdrive archive:finalize <feature>` | Record a completed archive. Refuses unless all four gates are already approved |
-| `sdrive amend` | Correct a wrongly-closed record (`--reason`, `--branch`, `--base`, `--stay`) |
+| `sdrive version:new <feature>` | Start a new version of a released feature; the completed version stays in `completed/` |
 | `sdrive verify` | Verify code vs plan |
 | `sdrive version:new` | Create new feature version |
 | `sdrive diff:version` | Compare versions |
@@ -554,11 +554,12 @@ A feature moves through three spec folders. Each transition has exactly one owne
 | → `specs/backlog/<feature>/<version>/` | `/sdrive:propose` | New specs are created in `backlog/` with `phase: backlog` |
 | `backlog/` → `ongoing/` | `/sdrive:apply` | Happens at the start of implementation; sets `phase: ongoing` |
 | `ongoing/` → `completed/` | `/sdrive:archive` | `sdrive archive:finalize` is the only writer; sets `phase: completed` |
-| `completed/` → `ongoing/` | `sdrive amend <feature> --reason "..."` | Corrective action on a wrongly-closed record |
+| `completed/` → `ongoing/` (new version) | `sdrive version:new <feature>` | Creates a new version under `ongoing/`; the released version stays in `completed/` |
 
 **Rules:**
 
 - `/sdrive:apply` MUST NOT begin implementation while the spec is still in `backlog/`.
+- `completed/` is immutable: no command moves a released version back to `ongoing/`. New scope is a new version created by `sdrive version:new`.
 - If the feature is in neither `backlog/` nor `ongoing/`, the agent stops and asks.
 - `/sdrive:review` signs the review gate. It does **not** move the feature or write the completion record — `/sdrive:archive` does, and it refuses unless all four gates are already approved.
 - `/sdrive:review` leaves the feature in `ongoing/` if the audit fails.

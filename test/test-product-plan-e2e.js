@@ -86,9 +86,39 @@ try {
   assert.deepStrictEqual(productPlanEntry.gates, [], "product-plan has no approval gates");
   assert.deepStrictEqual(productPlanEntry.validators, [], "product-plan has no validators");
 
+  // --- 2b. Worktree command is installed with its agent and helper ---
+  const worktreeEntry = manifest.commands.find((c) => c.command === "/sdrive:worktree");
+  assert.ok(worktreeEntry, "/sdrive:worktree should be registered");
+  assert.strictEqual(worktreeEntry.agent, "worktree");
+  assert.strictEqual(worktreeEntry.agentFile, ".sdrive/agents/16-worktree.md");
+  assert.strictEqual(worktreeEntry.acceptsFeature, false);
+  assert.ok(
+    fs.existsSync(path.join(sdriveRoot, "agents", "16-worktree.md")),
+    "16-worktree.md should be installed"
+  );
+  const worktreeMarkdown = fs.readFileSync(
+    path.join(sdriveRoot, "agents", "16-worktree.md"),
+    "utf8"
+  );
+  assert.ok(worktreeMarkdown.includes("worktree.js"), "agent should use the helper script");
+  assert.ok(worktreeMarkdown.includes("feature/BP-003"), "agent should offer ID-based branches");
+  assert.ok(worktreeMarkdown.includes("/sdrive:propose"), "agent should hand off to propose");  assert.ok(
+    /Readable name|feature\/chat/.test(worktreeMarkdown),
+    "agent should offer readable-name branches"
+  );
+  assert.ok(
+    fs.existsSync(path.join(sdriveRoot, "scripts", "worktree.js")),
+    "the worktree helper should be installed"
+  );
+
   // --- 3. Permissions ---
   const permissions = JSON.parse(fs.readFileSync(path.join(commandsDir, "permissions.json"), "utf8"));
   assert.deepStrictEqual(permissions.rules["/sdrive:product-plan"], ["admin", "reviewer"]);
+  assert.deepStrictEqual(permissions.rules["/sdrive:worktree"], [
+    "admin",
+    "reviewer",
+    "developer"
+  ]);
 
   // --- 4. Router resolves the command to the agent ---
   fs.writeFileSync(path.join(sdriveRoot, "scripts", "check-permission.js"), "process.exit(0);\n");

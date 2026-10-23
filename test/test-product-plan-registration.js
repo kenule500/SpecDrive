@@ -66,10 +66,38 @@ try {
 
   assert.ok(manifest.commands.some((command) => command.command === "/sdrive:product-plan"));
   assert.deepStrictEqual(permissions.rules["/sdrive:product-plan"], ["admin", "reviewer"]);
+
+  // /sdrive:worktree is part of the same lifecycle surface: it prepares the
+  // branch and worktree that /sdrive:propose then reuses.
+  const worktreeEntry = manifest.commands.find((command) => command.command === "/sdrive:worktree");
+  assert.ok(worktreeEntry, "/sdrive:worktree should be registered");
+  assert.strictEqual(worktreeEntry.agentFile, ".sdrive/agents/16-worktree.md");
+  assert.deepStrictEqual(permissions.rules["/sdrive:worktree"], [
+    "admin",
+    "reviewer",
+    "developer"
+  ]);
+  assert.ok(fs.existsSync(path.join(tempRoot, ".sdrive", "agents", "16-worktree.md")));
+
   assert.ok(manifest.commands.some((command) => command.command === "/sdrive:custom"));
   assert.strictEqual(manifest.customField, "preserve-me");
   assert.deepStrictEqual(permissions.rules["/sdrive:custom"], ["admin"]);
   assert.ok(fs.existsSync(path.join(tempRoot, ".sdrive", "agents", "12-product-plan.md")));
+
+  const worktree = manifest.commands.find((command) => command.command === "/sdrive:worktree");
+  assert.ok(worktree, "/sdrive:worktree should be registered");
+  assert.strictEqual(worktree.agent, "worktree");
+  assert.strictEqual(worktree.agentFile, ".sdrive/agents/16-worktree.md");
+  assert.deepStrictEqual(permissions.rules["/sdrive:worktree"], [
+    "admin",
+    "reviewer",
+    "developer"
+  ]);
+  assert.ok(fs.existsSync(path.join(tempRoot, ".sdrive", "agents", "16-worktree.md")));
+  assert.ok(
+    fs.existsSync(path.join(tempRoot, ".sdrive", "scripts", "worktree.js")),
+    "the worktree helper should be installed"
+  );
 
   fs.writeFileSync(path.join(tempRoot, ".sdrive", "scripts", "check-permission.js"), "process.exit(0);\n");
   const routerOutput = execFileSync(

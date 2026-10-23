@@ -50,7 +50,6 @@ SpecDrive has two types of commands:
 | `sdrive dashboard` | Start local web dashboard (also auto-started by `init` / `onboard` in a terminal) |
 | `sdrive archive:check <feature>` | Report whether a feature may be archived, and why not. Reads only — changes nothing |
 | `sdrive archive:finalize <feature> [--merge-commit <sha>]` | Record a completed archive. Refuses unless all four gates are already approved |
-| `sdrive amend <feature> --reason "..."` | Correct a wrongly-closed record — moves that version back to `ongoing/` (corrective action; new scope uses `sdrive version:new`) |
 | `sdrive verify <feature>` | Verify code matches plan.json |
 | `sdrive version:new <feature>` | Create a new version of a feature |
 | `sdrive diff:version <feature> <vA> <vB>` | Compare two versions of a feature |
@@ -211,7 +210,7 @@ Allowed gates, in order:
 Extra safeguards:
 
 - Every preceding gate must already be `approved`.
-- Gates cannot be approved on an archived feature (`specs/completed/`) — run `sdrive amend <feature> --reason "..."` first if the closure was wrong.
+- Gates cannot be approved on an archived feature (`specs/completed/`) — archived features are immutable. Use `sdrive version:new <feature>` only for new scope; the completed version stays archived.
 - The feature is named explicitly; the command never falls back to the first feature in the list.
 - Overwriting a `rejected` or `in_progress` value is reported, and the previous value is recorded in the version history.
 
@@ -764,21 +763,6 @@ Exit `3` when it refuses; nothing is written in that case.
 
 ---
 
-### `sdrive amend`
-
-Corrects a wrongly-closed record. This is a corrective action on the same
-version, not new scope.
-
-```bash
-sdrive amend user-login --reason "shipped without the required tests"
-sdrive amend user-login --reason "..." --branch feature/user-login --base main
-```
-
-Moves only that version from `completed/` back to `ongoing/`, resets the review
-gate to `pending`, and records the reason. Use `sdrive version:new` for new work
-on a released feature.
-
----
 
 ## Exit codes
 
@@ -880,6 +864,7 @@ report.
 | `/sdrive:onboard` | Onboarding | Adopt SpecDrive into an existing project, migrate OpenSpec/Spec Kit/Kiro/Agent OS/BMAD/generic specs, and offer a real product overview when the README is scaffold boilerplate |
 | `/sdrive:constitution` | Constitution | Create/update constitution |
 | `/sdrive:product-plan` | Product Plan | Optionally draft an app overview, conceptual mockup, roadmap, milestones, and backlog |
+| `/sdrive:worktree` | Worktree | Prepare branches and isolated worktrees for the next ready Product Plan wave |
 | `/sdrive:propose` | Specification | Create spec, plan, tasks |
 | `/sdrive:update-propose` | Update Proposal | Extend an existing feature spec with new requirements, stories, and acceptance criteria |
 | `/sdrive:design` | UI/UX | Build prototype |
@@ -915,6 +900,35 @@ After gathering user input and any inspiration references, Product Plan proposes
 Product Plan asks whether to add, change, or defer feature ideas and gets approval before writing. It does not generate interactive prototypes, detailed feature specs, implementation tasks, or workflow-state entries. Select an approved backlog item later and run `/sdrive:propose "<feature description>"` to create its detailed plan.
 
 > **Inspiration images:** If your AI session cannot view images (vision unavailable), Product Plan does not stall. It uses the text it can read — file names, folder names, link titles, and your own description — as high-level guidance, records the reference as an open question, and continues. You can always add detail later by describing the reference in your own words.
+
+---
+
+### `/sdrive:worktree` (optional)
+
+Prepares branches and isolated git worktrees for Product Plan items that are ready to start.
+
+```text
+/sdrive:worktree
+```
+
+Run it after `/sdrive:product-plan` when you want to work on several approved backlog items without switching branches in one checkout.
+
+**What it does:**
+
+- Reads `Depends on`, plan status, and the dependency-derived wave from `.sdrive/product/backlog.md`
+- Prepares only the lowest wave that still has eligible items; same-wave items are parallel-safe
+- Skips an item when a dependency is not `completed`, an outside blocker is open, its plan status is `deferred`/`needs discovery`, it already has a feature, or it already has a prepared worktree
+- Offers Product ID branches (`feature/BP-003`) or readable names (`feature/chat`) with suggestions and custom input
+- Creates the branch and worktree and records it under `worktrees` in `.sdrive/workflow-state.json`
+- Hands off to `/sdrive:propose` in the new worktree; `/sdrive:propose` reuses the prepared branch and records it as `feature.branch` and `feature.base`
+- Does not write specs, code, or tests, and does not commit or push
+
+```bash
+node .sdrive/scripts/worktree.js list --json
+node .sdrive/scripts/worktree.js create --item BP-003 --branch feature/BP-003 --base main --json
+```
+
+The helper writes the same lifecycle view the dashboard uses: `backlog`, `ongoing`, and `completed`. A completed version is never reopened; new scope starts with `sdrive version:new`.
 
 ---
 
@@ -984,7 +998,7 @@ Extends an **existing** feature specification with new requirements, user storie
 **When to use:**
 
 - When a feature proposal needs changes before the feature is archived
-- When a released feature must be changed — run `sdrive version:new <feature>`. That creates a new version under `ongoing/` and leaves the released version and its record untouched. Use `sdrive amend <feature> --reason "..."` only when the *closure itself* was wrong (for example it was archived before its tests were written), since amending updates the same version's record
+- When a released feature must be changed — run `sdrive version:new <feature>`. That creates a new version under `ongoing/` and leaves the released version and its record untouched. A completed version is immutable; there is no amend or reopen path
 
 **What it does NOT do:**
 
@@ -1273,9 +1287,7 @@ A feature moves through three spec folders. Each transition has exactly one owne
 | → `specs/backlog/<feature>/<version>/` | `/sdrive:propose` | New specs are created in `backlog/` with `phase: backlog` |
 | `backlog/` → `ongoing/` | `/sdrive:apply` | Happens at the start of implementation; sets `phase: ongoing` |
 | `ongoing/` → `completed/` | `/sdrive:archive` | Happens after merge and archive; sets `phase: completed` |
-| `completed/` → `ongoing/` | `sdrive amend <feature> --reason "..."` | Corrective action on a wrongly-closed record |
-
-`/sdrive:apply` MUST NOT begin implementation while the spec is still in `backlog/`. If the feature is in neither `backlog/` nor `ongoing/`, the agent stops and asks.
+`completed/` is immutable. There is no transition back to `ongoing/`; use `sdrive version:new` for new scope. `/sdrive:apply` MUST NOT begin implementation while the spec is still in `backlog/`. If the feature is in neither `backlog/` nor `ongoing/`, the agent stops and asks.
 
 > **Note:** `governance/` is not lifecycle-partitioned. Governance files live at `.sdrive/governance/<feature>/<version>/` regardless of the spec's lifecycle folder.
 

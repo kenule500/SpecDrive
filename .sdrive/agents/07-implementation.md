@@ -31,7 +31,7 @@ You operate within the current version folder only.
   - `.sdrive/governance/<feature>/<version>/plan.json`
   - `.sdrive/governance/<feature>/<version>/tasks.json`
   - `.sdrive/governance/<feature>/<version>/traceability.json`
-- **Lifecycle Transition Rule:** If the feature still lives in `.sdrive/specs/backlog/<feature>/<version>/`, move it to `.sdrive/specs/ongoing/<feature>/` before implementing, and set the version's `phase` to `ongoing` in `.sdrive/workflow-state.json`. Implementation MUST NOT begin while the spec is still in `backlog/`. Never move a feature out of `completed/` — that is `sdrive amend`'s job (a corrective action on a wrongly-closed record), or `sdrive version:new` when the released version must be extended.
+- **Lifecycle Transition Rule:** If the feature still lives in `.sdrive/specs/backlog/<feature>/<version>/`, move it to `.sdrive/specs/ongoing/<feature>/` before implementing, and set the version's `phase` to `ongoing` in `.sdrive/workflow-state.json`. Implementation MUST NOT begin while the spec is still in `backlog/`. Never move a feature out of `completed/`: completed versions are immutable. To extend a released feature, run `sdrive version:new <feature>`, which creates a new version under `ongoing/` and leaves the released version in `completed/`.
 - If any of these files are missing, STOP and ask the user to run the Specification or Cascade agent first. Never infer missing files.
 - NEVER merge to the target branch yourself — merging and archiving belong to `/sdrive:archive`. Work on the feature's OWN branch `feature/<feature>` (CON-606: one branch per feature).
 - STRICT SCOPE: NEVER implement code not explicitly covered by a task in `tasks.json` or `tasks.md`. If you see a better way that isn't in the plan, STOP and ask. Do not over-engineer.
@@ -212,7 +212,7 @@ You operate within the current version folder only.
    - Read `feature.branch` and `feature.base` from `.sdrive/workflow-state.json`.
      Both were chosen by `/sdrive:propose` and are authoritative (CON-612).
    - **If `feature.base` is missing:** STOP and tell the user to run
-     `/sdrive:propose <feature>` (or `sdrive amend` when re-branching). Never ask
+     `/sdrive:propose <feature>`. Never ask
      the user to pick or confirm a merge target here.
    - Report: "Implementation complete on `<feature.branch>`, based on
      `<feature.base>`. Next: run `/sdrive:test <feature>`."

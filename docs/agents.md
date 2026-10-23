@@ -1,6 +1,6 @@
 # SpecDrive Agent Reference
 
-SpecDrive uses 16 specialized agents. Each agent has one slash command.
+SpecDrive uses 17 specialized agents. Each agent has one slash command.
 
 ## Git behaviour
 
@@ -18,7 +18,9 @@ commit, never force-pushes, and reports the commit SHA and branch.
 
 `/sdrive:archive` is the exception. It does not create a separate
 commit-and-push step: it merges the feature into its confirmed target branch and
-pushes that branch.
+pushes that branch. `/sdrive:worktree` is also an exception: it prepares local
+branches and worktrees and records them in `workflow-state.json`, but it does not
+commit or push. `/sdrive:propose` commits its own artifacts inside the worktree.
 
 ---
 
@@ -42,6 +44,7 @@ pushes that branch.
 | 13 | Update Proposal | `/sdrive:update-propose` | `13-update-propose.md` |
 | 14 | Archive | `/sdrive:archive` | `14-archive.md` |
 | 15 | Debug | `/sdrive:debug` | `15-debug.md` |
+| 16 | Worktree | `/sdrive:worktree` | `16-worktree.md` |
 
 ---
 
@@ -149,6 +152,23 @@ pushes that branch.
 - Assigns the feature to `v1` automatically if new
 - Runs anti-redundancy check
 - Two approval gates
+
+---
+
+## Worktree Agent
+
+**Command:** `/sdrive:worktree` (optional)
+
+**Purpose:** Prepare branches and isolated git worktrees for Product Plan items that are ready to start.
+
+**What it does:**
+
+- Reads the backlog's `Depends on` and `Wave` columns and the live feature lifecycle
+- Prepares only the lowest ready wave; an item with an incomplete dependency, outside blocker, `deferred`/`needs discovery` status, existing feature, or existing worktree is skipped with the reason
+- Offers Product ID branches (`feature/BP-003`) or readable names (`feature/chat`) with suggestions and custom input
+- Creates one branch and worktree per selected item and records them under `worktrees` in `workflow-state.json`
+- Hands off to `/sdrive:propose`, which detects the prepared worktree and reuses its branch instead of creating another
+- Does not write specs, plans, tasks, code, or tests; does not commit or push
 
 ---
 
@@ -341,7 +361,7 @@ pushes that branch.
 - On pass: notifies the user to run `/sdrive:archive <feature>`
 - Verifies permission before and after the audit
 
-**Lifecycle ownership:** `/sdrive:apply` owns `backlog/` → `ongoing/`; `/sdrive:archive` owns `ongoing/` → `completed/`; `sdrive amend` owns `completed/` → `ongoing/` for that version only, and only as a corrective action on a wrongly-closed record; new work on a released feature is `sdrive version:new`, which creates a new version and leaves the released one in `completed/`.
+**Lifecycle ownership:** `/sdrive:apply` owns `backlog/` → `ongoing/`; `/sdrive:archive` owns `ongoing/` → `completed/`. `completed/` is immutable: there is no reopen or amend path. New work on a released feature is `sdrive version:new`, which creates a new version and leaves the released one in `completed/`.
 
 **Batch mode:** `/sdrive:review --all` reviews every ongoing feature one after the other and writes an aggregate report to `.sdrive/reports/reviews/review-report-all-<date>.md`. A feature that fails review is never cleared for archive.
 

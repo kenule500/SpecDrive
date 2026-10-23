@@ -142,8 +142,9 @@ Each entry in `features[]`:
 | Field | Description |
 |-------|-------------|
 | `name` | Feature name (kebab-case) |
-| `branch` | **The branch this feature is tied to.** Written by `/sdrive:propose` when it creates the branch, and by `sdrive amend` when a branch is chosen. This is the single source of truth — `/sdrive:apply`, `/sdrive:review`, `/sdrive:secure` and `/sdrive:archive` read it rather than guessing the name or hardcoding `main`. Optional: absent for features that have not been branched yet. |
-| `base` | **The branch this feature's branch was cut from.** Written by `/sdrive:propose` and by `sdrive amend` alongside `branch`. Because CON-612 requires a feature branch to be based on the branch it will merge into, `/sdrive:archive` merges into `base` instead of guessing the repository default — so it is the exact answer, not a proxy for it. `/sdrive:apply` and `/sdrive:review` only read it; neither asks for it again. Optional: absent for features that have not been branched yet. |
+| `branch` | **The branch this feature is tied to.** Written by `/sdrive:propose` when it creates or reuses the branch (including a worktree prepared by `/sdrive:worktree`). This is the single source of truth - `/sdrive:apply`, `/sdrive:review`, `/sdrive:secure` and `/sdrive:archive` read it rather than guessing the name or hardcoding `main`. Optional: absent for features that have not been branched yet. |
+| `base` | **The branch this feature's branch was cut from.** Written by `/sdrive:propose` alongside `branch` (or inherited from the worktree record created by `/sdrive:worktree`). Because CON-612 requires a feature branch to be based on the branch it will merge into, `/sdrive:archive` merges into `base` instead of guessing the repository default - so it is the exact answer, not a proxy for it. `/sdrive:apply` and `/sdrive:review` only read it; neither asks for it again. Optional: absent for features that have not been branched yet. |
+| `productItems` | The Product Plan items (`BP-###`) this feature implements, for example `["BP-003"]`. Written by `/sdrive:propose` when the feature comes from `.sdrive/product/backlog.md`. The dashboard and `/sdrive:worktree` use it to map work back to the plan. Optional for features created without a Product Plan. |
 | `currentVersion` | The active version (`v1`, `v2`, ...) |
 | `versions[]` | Per-version `id`, `phase`, `currentStep`, `gates`, and `history` |
 
@@ -174,9 +175,27 @@ Each version records a `history` array. Every entry has:
 
 | Field | Description |
 |-------|-------------|
-| `event` | What happened (e.g. `specification_approved`, `feature_amended`) |
+| `event` | What happened (e.g. `specification_approved`, `feature_archived`) |
 | `timestamp` | ISO-8601 timestamp |
 | `actor` | The Git user (`git config user.name`) who performed the action. Older entries written before actor capture may omit this field. |
+
+### Worktree Records
+
+`worktrees[]` is written by `/sdrive:worktree` and consumed by `/sdrive:propose`:
+
+| Field | Description |
+|-------|-------------|
+| `item` | The Product Plan item (`BP-###`) prepared in this worktree |
+| `branch` | The branch created in the worktree (`feature/BP-003` or `feature/chat`) |
+| `base` | The integration branch the worktree was cut from |
+| `path` | Absolute path of the worktree |
+| `title` | The backlog feature title at preparation time |
+| `createdAt` | ISO-8601 timestamp |
+| `status` | `prepared`; `active` and `released` are reserved for later lifecycle updates |
+
+A worktree record makes the item `ongoing` in the Product Plan, but it is not a
+feature. `/sdrive:propose` still creates the feature and records `branch` and
+`base` on it.
 
 ### Onboarding Fields
 
