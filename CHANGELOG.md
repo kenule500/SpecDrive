@@ -7,7 +7,14 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
 
 ---
 
-## Unreleased
+## 0.1.45 — 2026-10-23
+
+**Product Plan detail drawers, prototype references, and a darker dashboard.**
+
+Product Plan rows now open a right-side feature drawer with the description,
+dependencies, lifecycle, and next step. `/sdrive:product-plan` asks about
+Figma-style prototypes and visual references, and the dashboard dark theme
+moves to a near-black base.
 
 ### Added
 
