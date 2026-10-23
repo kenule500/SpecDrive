@@ -38,6 +38,16 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
   a worked example, a next-step recipe, common mistakes, and a glossary.
 - Dashboard defaults to **dark mode**; an explicit Light choice is remembered,
   and the OS preference no longer overrides the default.
+- Every Product Plan row now has a **View more** button that opens an animated
+  right-side drawer with the feature description, dependencies, lifecycle,
+  branch/worktree, and next step. New backlogs can add a `Details` column;
+  older backlogs fall back to `User value`.
+
+### Changed
+
+- The dashboard dark theme now uses a **near-black** base and darker surfaces,
+  borders, sidebar, skeletons, and scrims, while keeping the same text and
+  status-chip contrast.
 
 ### Fixed
 
