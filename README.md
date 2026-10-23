@@ -10,7 +10,7 @@ SpecDrive gives AI coding tools like GitHub Copilot, Cline, Claude Code, and Cur
 
 It adds:
 
-- 16 specialized governance agents
+- 17 specialized governance agents
 - **30 AI tool adapters** — Claude Code, Cursor, Copilot, Gemini CLI, Roo Code, Qwen Code, Warp, Zed, Aider, Kiro, Junie and more, each written in the format that tool actually reads
 - **Native slash commands** — 16 real `/sdrive:*` commands in Claude Code, Gemini CLI, Roo Code and OpenCode, instead of one prompt that has to route itself
 - **Any tool, without a release** — `sdrive adapters:add` registers a tool SpecDrive does not ship; `AGENTS.md` covers the tools that follow the cross-tool standard

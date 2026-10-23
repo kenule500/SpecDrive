@@ -185,10 +185,14 @@ try {
   const serverSource = fs.readFileSync(dashboardServer, "utf8");
   assert.ok(serverSource.includes("/api/product"), "dashboard server should expose /api/product");
   assert.ok(serverSource.includes("apiProduct"), "dashboard server should define apiProduct()");
+  assert.ok(serverSource.includes("/sdrive:worktree"), "dashboard workflows should include /sdrive:worktree");
 
   const appSource = fs.readFileSync(path.join(sdriveRoot, "dashboard", "app.js"), "utf8");
   assert.ok(appSource.includes("renderProduct"), "dashboard app should render the product panel");
   assert.ok(appSource.includes("/api/product"), "dashboard app should fetch /api/product");
+  assert.match(appSource, /BACKLOG_PER_PAGE\s*=\s*20/, "Product Plan should show 20 rows per page");
+  assert.ok(appSource.includes("backlog-filters"), "Product Plan should render search/filter controls");
+  assert.ok(appSource.includes("lifecycleStatus"), "Product Plan should use the dynamic lifecycle status");
 
   const htmlSource = fs.readFileSync(path.join(sdriveRoot, "dashboard", "index.html"), "utf8");
   assert.ok(htmlSource.includes('id="product-panel"'), "dashboard html should include the product panel");
