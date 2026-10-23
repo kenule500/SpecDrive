@@ -193,9 +193,13 @@ try {
   assert.match(appSource, /BACKLOG_PER_PAGE\s*=\s*20/, "Product Plan should show 20 rows per page");
   assert.ok(appSource.includes("backlog-filters"), "Product Plan should render search/filter controls");
   assert.ok(appSource.includes("lifecycleStatus"), "Product Plan should use the dynamic lifecycle status");
+  assert.ok(appSource.includes("data-backlog-detail"), "every backlog row should expose a detail trigger");
+  assert.ok(appSource.includes("View more"), "the row action should be labelled View more");
+  assert.ok(appSource.includes("backlogDrawerBody"), "the drawer should render feature details");
 
   const htmlSource = fs.readFileSync(path.join(sdriveRoot, "dashboard", "index.html"), "utf8");
   assert.ok(htmlSource.includes('id="product-panel"'), "dashboard html should include the product panel");
+  assert.ok(htmlSource.includes('id="backlog-drawer"'), "dashboard html should include the backlog drawer shell");
 
   // --- 10. Backlog table parses into the shape /api/product returns ---
   const backlogRows = backlog

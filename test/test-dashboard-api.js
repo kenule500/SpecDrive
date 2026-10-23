@@ -167,11 +167,11 @@ test("product backlog maps columns and derives dependency waves", async () => {
       "",
       "## M0 - Foundation",
       "",
-      "| ID | Feature | User value | Priority | Depends on | Status | Confidence / source |",
-      "|---|---|---|---|---|---|---|",
-      "| BP-001 | Parser core | Parse files | P0 | - | backlog | High |",
-      "| BP-002 | Retry layer | Retry calls | P1 | BP-001 | backlog | High |",
-      "| BP-003 | Partner adapter | Call partner | P1 | BP-001; partner access | backlog | Low |",
+      "| ID | Feature | Details | User value | Priority | Depends on | Status | Confidence / source |",
+      "|---|---|---|---|---|---|---|---|",
+      "| BP-001 | Parser core | Parse YAML and JSON files. | Parse files | P0 | - | backlog | High |",
+      "| BP-002 | Retry layer | Retry failed calls with backoff. | Retry calls | P1 | BP-001 | backlog | High |",
+      "| BP-003 | Partner adapter | Call the partner API. | Call partner | P1 | BP-001; partner access | backlog | Low |",
       "",
       "## M1 - Publish",
       "",
@@ -222,6 +222,7 @@ test("product backlog maps columns and derives dependency waves", async () => {
 
     assert.strictEqual(byId.get("BP-001").milestone, "M0 - Foundation");
     assert.strictEqual(byId.get("BP-001").userValue, "Parse files");
+    assert.strictEqual(byId.get("BP-001").details, "Parse YAML and JSON files.");
     assert.strictEqual(byId.get("BP-003").userValue, "Call partner");
 
     // Feature dependencies and external prerequisites are separated.

@@ -895,7 +895,9 @@ After gathering user input and any inspiration references, Product Plan proposes
 - `.sdrive/product/mockup.md` — a conceptual app map, key areas/screens, navigation, and user journeys (not a working prototype)
 - `.sdrive/product/design-system.md` — sourced design principles and proposed visual/component guidance (no implementation tokens or UI code)
 - `.sdrive/product/roadmap.md` — suggested milestones, sequencing, and dependencies
-- `.sdrive/product/backlog.md` — user-approved product-level feature candidates, initially pending
+- `.sdrive/product/backlog.md` — user-approved product-level feature candidates, initially pending, with a `Details` description for each item
+
+Product Plan explicitly asks whether you already have a prototype (Figma, Framer, Penpot, Sketch, Adobe XD), visual references (Dribbble, Behance, Mobbin, screenshots), or a similar product. It records the source, access status, what you like, and the high-level patterns to adapt. It does not copy protected layouts, text, assets, or branded designs, and it does not create a working prototype from a reference.
 
 Product Plan asks whether to add, change, or defer feature ideas and gets approval before writing. It does not generate interactive prototypes, detailed feature specs, implementation tasks, or workflow-state entries. Select an approved backlog item later and run `/sdrive:propose "<feature description>"` to create its detailed plan.
 

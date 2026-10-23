@@ -355,6 +355,8 @@ Use this when you are starting from an empty folder, or a fresh scaffold with no
 
 `/sdrive:product-plan` is **optional**. Run it when you have an idea but no written plan, or an empty repo. If you already know what you are building, go straight from the constitution to `/sdrive:propose`.
 
+Product Plan asks whether you already have a prototype or visual references — Figma, Framer, Penpot, Sketch, Adobe XD, Dribbble, Behance, Mobbin, screenshots, or a similar product — and records them as high-level guidance. It does not copy protected layouts or turn a reference into a working prototype.
+
 ### Brownfield — an existing codebase
 
 Use this when the code already exists and development is well past the early stages.

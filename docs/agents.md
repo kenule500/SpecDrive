@@ -121,6 +121,8 @@ commit or push. `/sdrive:propose` commits its own artifacts inside the worktree.
 
 - Interviews the user and records confirmed information separately from assumptions and recommendations
 - Captures inspiration references and high-level design guidance without copying protected work
+- Asks specifically about an existing prototype (Figma, Framer, Penpot, Sketch, Adobe XD), visual references (Dribbble, Behance, Mobbin, screenshots), and similar products, then records source, access status, what the user likes, and patterns to adapt
+- Writes a `Details` description for each backlog item so the dashboard's **View more** drawer can explain what the feature does
 - Creates a non-interactive, conceptual app map/mockup; it does not build a working prototype
 - Proposes milestones, roadmap order, dependencies, and candidate features
 - Asks the user whether to add, change, or defer feature candidates before saving

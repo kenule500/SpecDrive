@@ -80,6 +80,24 @@ test("parses only real backlog tables and normalizes identifiers", () => {
   ]);
 });
 
+test("parses a details column for the feature drawer", () => {
+  const markdown = [
+    "# Product Backlog",
+    "",
+    "## Start",
+    "",
+    "| ID | Feature | Details | User value | Priority | Depends on | Status |",
+    "|---|---|---|---|---|---|---|",
+    "| BP-001 | Chat | Direct messages with mentions and read receipts. | Talk without leaving the app. | P0 | - | backlog |",
+    ""
+  ].join("\n");
+
+  const [item] = productPlan.parseBacklog(markdown);
+  assert.strictEqual(item.id, "BP-001");
+  assert.strictEqual(item.details, "Direct messages with mentions and read receipts.");
+  assert.strictEqual(item.userValue, "Talk without leaving the app.");
+});
+
 test("separates feature dependencies from external blockers", () => {
   assert.deepStrictEqual(productPlan.parseDependencyCell("BP-001; partner access"), {
     ids: ["BP-001"],
