@@ -899,6 +899,8 @@ After gathering user input and any inspiration references, Product Plan proposes
 
 Product Plan explicitly asks whether you already have a prototype (Figma, Framer, Penpot, Sketch, Adobe XD), visual references (Dribbble, Behance, Mobbin, screenshots), or a similar product. It records the source, access status, what you like, and the high-level patterns to adapt. It does not copy protected layouts, text, assets, or branded designs, and it does not create a working prototype from a reference.
 
+The dashboard renders the approved backlog as a paginated table sorted by dependency wave, with status, wave, milestone, and priority filters. Each row has a **View more** drawer showing its `Details` description, user value, confidence/source, dependencies, lifecycle, branch or worktree, and next step. Older backlogs without a `Details` column fall back to `User value`.
+
 Product Plan asks whether to add, change, or defer feature ideas and gets approval before writing. It does not generate interactive prototypes, detailed feature specs, implementation tasks, or workflow-state entries. Select an approved backlog item later and run `/sdrive:propose "<feature description>"` to create its detailed plan.
 
 > **Inspiration images:** If your AI session cannot view images (vision unavailable), Product Plan does not stall. It uses the text it can read — file names, folder names, link titles, and your own description — as high-level guidance, records the reference as an open question, and continues. You can always add detail later by describing the reference in your own words.

@@ -443,6 +443,10 @@ The dashboard binds to loopback by default. It is a read-only view: it cannot
 approve gates or change state. Its API is `no-store`, and responses carry a
 Content-Security-Policy that forbids inline script and framing.
 
+The dashboard defaults to **dark** and remembers an explicit Light choice. The
+dark theme uses a near-black base with stepped surfaces, so cards, tables, and
+drawers stay distinguishable without flattening every panel into the same black.
+
 ### Projects page
 
 The dashboard opens on **Projects**: one card per project it can see, with its
@@ -512,6 +516,17 @@ The auto-start is deliberately **skipped when there is no interactive terminal**
 - **Project health** — a scored, auditable read-out of where the project actually stands (see [Project Health](#project-health))
 
 The sidebar footer also shows the current branch, its latest commit, and the branch it was most recently merged from, and clicking the topbar chip shows the full commit subject.
+
+### Product Plan Page
+
+The **Product Plan** page shows backlog, ongoing, and completed counts, sorts
+items by dependency wave, and searches by ID or feature name. Status, wave,
+milestone, and priority filters narrow the table, which shows 20 items per page.
+
+Each row has a **View more** button that opens an animated right-side drawer with
+the feature description, user value, confidence/source, dependencies, lifecycle,
+branch or prepared worktree, and the recommended next step. New backlogs can add
+a `Details` column for the description; older backlogs fall back to `User value`.
 
 ### Feature Detail Page
 

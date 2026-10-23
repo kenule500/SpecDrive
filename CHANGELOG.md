@@ -45,13 +45,23 @@ moves to a near-black base.
   a worked example, a next-step recipe, common mistakes, and a glossary.
 - Dashboard defaults to **dark mode**; an explicit Light choice is remembered,
   and the OS preference no longer overrides the default.
+- Dashboard **Product Plan page**: backlog, ongoing, and completed counts, a
+  wave-first sort, search by ID or feature name, status/wave/milestone/priority
+  filters, and 20 items per page.
 - Every Product Plan row now has a **View more** button that opens an animated
   right-side drawer with the feature description, dependencies, lifecycle,
   branch/worktree, and next step. New backlogs can add a `Details` column;
   older backlogs fall back to `User value`.
+- `/sdrive:worktree` prepares a branch and isolated worktree for each selected
+  backlog item whose dependencies are completed and whose wave is ready. It
+  records the prepared branch/worktree in `workflow-state.json` and hands off to
+  `/sdrive:propose`, which reuses them.
 
 ### Changed
 
+- Archived features are now immutable. `sdrive amend` is removed, `reopen` is
+  hidden, and new work on a released feature starts with `sdrive version:new`.
+  There is no path that edits a completed version in place.
 - The dashboard dark theme now uses a **near-black** base and darker surfaces,
   borders, sidebar, skeletons, and scrims, while keeping the same text and
   status-chip contrast.
