@@ -7,7 +7,7 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
 
 ---
 
-## Unreleased
+## 0.1.46 — 2026-10-24
 
 **Built-in knowledge MCP servers, MCP sync commands, and a Context7 fallback.**
 
