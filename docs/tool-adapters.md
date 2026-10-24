@@ -240,18 +240,59 @@ SpecDrive knows how to write are wired - a tool with no `mcpClient` gets a file
 adapter and nothing else, because writing a config a tool never reads is worse
 than writing none.
 
-| Client | Config Path | Config Key |
-|--------|-------------|------------|
-| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` | `mcpServers` |
-| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` | `mcpServers` |
-| Cursor | `.cursor/mcp.json` | `mcpServers` |
-| Cline | `.cline/mcp.json` | `mcpServers` |
-| Roo Code | `.roo/mcp.json` | `mcpServers` |
-| Gemini CLI | `.gemini/settings.json` | `mcpServers` |
-| GitHub Copilot (VS Code) | `.vscode/mcp.json` | `servers` (with `type: "stdio"`) |
+| Client | Config Path | Config Key | Remote shape |
+|--------|-------------|------------|--------------|
+| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` | `mcpServers` | stdio bridge via `mcp-remote` |
+| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` | `mcpServers` | stdio bridge via `mcp-remote` |
+| Cursor | `.cursor/mcp.json` | `mcpServers` | `{ "url": "..." }` |
+| Cline | `.cline/mcp.json` | `mcpServers` | `{ "type": "streamableHttp", "url": "..." }` |
+| Roo Code | `.roo/mcp.json` | `mcpServers` | `{ "type": "streamable-http", "url": "..." }` |
+| Gemini CLI | `.gemini/settings.json` | `mcpServers` | `{ "httpUrl": "..." }` |
+| GitHub Copilot (VS Code) | `.vscode/mcp.json` | `servers` | `{ "type": "http", "url": "..." }` |
 
 > **Note:** VS Code uses `servers` with an explicit `type`, while the others use
-> `mcpServers`. SpecDrive writes the correct shape per client.
+> `mcpServers`. SpecDrive writes the correct shape per client. Claude Desktop's
+> config file only accepts stdio entries, so SpecDrive bridges remote servers
+> with `npx -y mcp-remote <url> --transport http-only`.
+
+### Built-in knowledge servers
+
+Every `init` / `mcp:sync` adds these entries unless they already exist:
+
+| Server | Endpoint | Purpose |
+|--------|----------|---------|
+| `specdrive` | `.sdrive/mcp/server.js` | Feature lifecycle, gates, traceability, validation |
+| `ux-ui-library` | `https://ux-ui-library.vercel.app/api/mcp` | UX/UI patterns, accessibility, design systems |
+| `stackwise` | `https://stackwisehq.vercel.app/api/mcp` | Backend, data, security, distributed systems, AI |
+| `context7` | `https://mcp.context7.com/mcp` | Current library and framework documentation |
+
+```bash
+sdrive mcp:list                 # show defaults and client status
+sdrive mcp:sync                 # update configs that already exist
+sdrive mcp:sync --client cursor # create/update one client
+sdrive mcp:sync --all           # create/update every supported client
+sdrive mcp:sync --no-knowledge  # wire only the SpecDrive server
+sdrive mcp:sync --dry-run       # show changes without writing
+```
+
+To keep only the SpecDrive server permanently:
+
+```bash
+sdrive config:set mcp.defaultServers false
+```
+
+Context7 works anonymously. For higher limits, add an `Authorization: Bearer
+<key>` header in the client config. If a client cannot use the Context7 MCP
+server, download docs instead:
+
+```bash
+sdrive knowledge:fetch next.js --query "routing"
+sdrive knowledge:fetch /vercel/next.js --query "middleware" --tokens 6000
+sdrive knowledge:fetch --library-id /vercel/next.js --query "middleware"
+```
+
+Saved files live under `.sdrive/context/external/`. Generated files can be
+refreshed; a hand-written file is only replaced with `--force`.
 
 ---
 
@@ -273,7 +314,9 @@ than writing none.
 SpecDrive never overwrites an existing adapter file. If the file is already
 there, it is skipped and reported — edit it if you want it to differ.
 
-The same applies to MCP configs: an existing `specdrive` entry is left alone.
+The same applies to MCP configs: an existing `specdrive`, `ux-ui-library`,
+`stackwise`, or `context7` entry is left alone, and servers you added yourself
+are preserved.
 
 ---
 

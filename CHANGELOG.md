@@ -7,6 +7,61 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
 
 ---
 
+## Unreleased
+
+**Built-in knowledge MCP servers, MCP sync commands, and a Context7 fallback.**
+
+`sdrive init` now wires three hosted knowledge servers alongside the SpecDrive
+governance server: `ux-ui-library`, `stackwise`, and `context7`. Existing MCP
+entries are preserved, so projects can add their own servers without losing
+them. The agents also know when to use each server.
+
+### Added
+
+- Default MCP entries for `ux-ui-library`
+  (`https://ux-ui-library.vercel.app/api/mcp`), `stackwise`
+  (`https://stackwisehq.vercel.app/api/mcp`), and Context7
+  (`https://mcp.context7.com/mcp`).
+- `sdrive mcp:list` and `sdrive mcp:sync` for auditing and refreshing client
+  configs. `--client`, `--all`, `--no-knowledge`, and `--dry-run` are supported.
+- `sdrive knowledge:fetch <library>`: downloads a focused Context7 docs slice
+  into `.sdrive/context/external/` when the MCP server is unavailable or a
+  durable copy is needed.
+- `mcp.defaultServers` in `.sdrive/config.json` (default: `true`) to opt out of
+  the hosted knowledge servers while keeping the governance server.
+- Agent guidance for `ux-ui-library` (UI/UX), `stackwise` (backend, data, AI),
+  and Context7 (library APIs) in the constitution, specification, design,
+  implementation, performance, review, security, product-plan, update-propose,
+  cascade, and debug agents.
+
+### Changed
+
+- Claude Desktop remote entries use the `mcp-remote` stdio bridge because
+  `claude_desktop_config.json` only accepts stdio entries. Cursor, Cline, Roo
+  Code, Gemini CLI, and VS Code use their native remote HTTP shapes.
+- The SpecDrive MCP server's `initialize` instructions now point agents at the
+  knowledge servers and the `knowledge:fetch` fallback.
+
+### Fixed
+
+- `sdrive dashboard` now passes the CLI's dependency path to the server it
+  starts, so the copied governance validator can load `ajv` in a project that
+  has no `node_modules` of its own. The dashboard's validation panel no longer
+  reports a false failure on a freshly initialized project.
+
+### Upgrade
+
+```bash
+npm install -g specdrive-cli@latest
+sdrive update
+sdrive mcp:sync
+```
+
+`mcp:sync` only updates config files that already exist unless you pass
+`--client <id>` or `--all`.
+
+---
+
 ## 0.1.45 — 2026-10-23
 
 **Product Plan detail drawers, prototype references, and a darker dashboard.**

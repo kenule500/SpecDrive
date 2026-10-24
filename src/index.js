@@ -17,6 +17,8 @@ const evidence = require("./lib/evidence");
 const doctor = require("./lib/doctor");
 const auditLog = require("./lib/audit");
 const execute = require("./lib/execute");
+const mcp = require("./lib/mcp");
+const knowledge = require("./lib/knowledge");
 const migrations = require("../migrations");
 const migrationApply = require("../migrations/lib/apply");
 const migrationLifecycle = require("../migrations/lib/lifecycle");
@@ -387,151 +389,65 @@ function mcpServerPath() {
   return path.join(process.cwd(), ".sdrive", "mcp", "server.js");
 }
 
-// Each MCP client uses a different config schema. VS Code (GitHub Copilot) uses
-// `servers` + an explicit `type`, while Claude Desktop / Cursor / Cline use
-// `mcpServers`. Writing the wrong shape fails silently, so the shape is per-client.
-const MCP_CLIENTS = {
-  "Claude Desktop": {
-    id: "claude-desktop",
-    key: "mcpServers",
-    entry: () => ({ command: "node", args: [mcpServerPath()] })
-  },
-  Cursor: {
-    id: "cursor",
-    key: "mcpServers",
-    entry: () => ({ command: "node", args: [mcpServerPath()] })
-  },
-  Cline: {
-    id: "cline",
-    key: "mcpServers",
-    entry: () => ({ command: "node", args: [mcpServerPath()] })
-  },
-  "Roo Code": {
-    id: "roo",
-    key: "mcpServers",
-    entry: () => ({ command: "node", args: [mcpServerPath()] })
-  },
-  "Gemini CLI": {
-    id: "gemini-cli",
-    key: "mcpServers",
-    entry: () => ({ command: "node", args: [mcpServerPath()] })
-  },
-  "GitHub Copilot (VS Code)": {
-    id: "vscode",
-    key: "servers",
-    entry: () => ({ type: "stdio", command: "node", args: [mcpServerPath()] })
+// The hosted knowledge servers are on by default. Projects can opt out without
+// losing the SpecDrive governance server by setting mcp.defaultServers to false
+// in .sdrive/config.json, or by running `sdrive mcp:sync --no-knowledge`.
+function defaultMcpServersEnabled(projectRoot = process.cwd()) {
+  if (process.env.SDRIVE_NO_DEFAULT_MCP === "1" || process.env.SDRIVE_NO_DEFAULT_MCP === "true") {
+    return false;
   }
-};
 
-// Which client to wire is a property of the tool, so it lives in
-// commands/tools.json as `mcpClient` rather than in a second hand-kept map. A
-// tool with no `mcpClient` is file-adapter only, which is the honest default:
-// wiring a config file a tool never reads is worse than wiring nothing.
-function mcpClientNameFor(id) {
-  if (!id) return null;
-  return Object.keys(MCP_CLIENTS).find((name) => MCP_CLIENTS[name].id === id) || null;
+  const config = stateStore.readJson(path.join(projectRoot, ".sdrive", "config.json"), null);
+  return !(config && config.mcp && config.mcp.defaultServers === false);
 }
 
-function mcpConfigContent(clientName) {
-  const client = MCP_CLIENTS[clientName] || MCP_CLIENTS["Claude Desktop"];
-  return JSON.stringify({ [client.key]: { specdrive: client.entry() } }, null, 2);
-}
+function printMcpResult(result) {
+  const relative = path.relative(process.cwd(), result.path) || result.path;
+  const added = result.added.length > 0 ? ` (${result.added.join(", ")})` : "";
 
-function safeMergeMcpConfig(configPath, clientName) {
-  const client = MCP_CLIENTS[clientName] || MCP_CLIENTS["Claude Desktop"];
-
-  if (!fs.existsSync(configPath)) {
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(configPath, mcpConfigContent(clientName));
-    console.log(`✅ Created: ${configPath}`);
-    return;
+  if (result.status === "created") {
+    console.log(`  + Created: ${relative}${added}`);
+  } else if (result.status === "merged") {
+    console.log(`  + Updated: ${relative}${added}`);
+  } else if (result.status === "would-create") {
+    console.log(`  + Would create: ${relative}${added}`);
+  } else if (result.status === "would-merge") {
+    console.log(`  + Would update: ${relative}${added}`);
+  } else if (result.status === "unchanged") {
+    console.log(`  = Already configured: ${relative}`);
+  } else {
+    console.error(`  x ${relative}: ${result.error}`);
   }
-
-  try {
-    const existing = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    existing[client.key] = existing[client.key] || {};
-
-    if (existing[client.key].specdrive) {
-      console.log(`⚠️  SpecDrive already configured in ${configPath}`);
-      return;
-    }
-
-    existing[client.key].specdrive = client.entry();
-
-    fs.writeFileSync(configPath, JSON.stringify(existing, null, 2));
-    console.log(`✅ Merged SpecDrive into: ${configPath}`);
-  } catch (error) {
-    console.error(`⚠️  Could not merge into ${configPath}`);
-  }
-}
-
-function getMcpConfigPaths() {
-  const paths = [];
-
-  const platform = os.platform();
-  const home = os.homedir();
-  if (platform === "darwin") {
-    paths.push({
-      name: "Claude Desktop",
-      path: path.join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json")
-    });
-  }
-
-  if (platform === "win32") {
-    paths.push({
-      name: "Claude Desktop",
-      path: path.join(process.env.APPDATA || "", "Claude", "claude_desktop_config.json")
-    });
-  }
-
-  paths.push({
-    name: "Cursor",
-    path: path.join(process.cwd(), ".cursor", "mcp.json")
-  });
-
-  paths.push({
-    name: "Cline",
-    path: path.join(process.cwd(), ".cline", "mcp.json")
-  });
-
-  paths.push({
-    name: "GitHub Copilot (VS Code)",
-    path: path.join(process.cwd(), ".vscode", "mcp.json")
-  });
-
-  paths.push({
-    name: "Roo Code",
-    path: path.join(process.cwd(), ".roo", "mcp.json")
-  });
-
-  paths.push({
-    name: "Gemini CLI",
-    path: path.join(process.cwd(), ".gemini", "settings.json")
-  });
-
-  return paths;
 }
 
 // Wires every MCP client implied by the selected tools, without prompting.
-function autoWireMcp(selectedTools) {
+function autoWireMcp(selectedTools, options = {}) {
   const clientNames = new Set();
 
   selectedTools.forEach((tool) => {
-    const clientName = mcpClientNameFor(tool.mcpClient);
+    const clientName = mcp.clientNameForId(tool.mcpClient);
     if (clientName) clientNames.add(clientName);
   });
 
   if (clientNames.size === 0) return;
 
-  const available = getMcpConfigPaths();
+  const available = mcp.getMcpConfigPaths({ projectRoot: process.cwd() });
   const targets = available.filter((p) => clientNames.has(p.name));
 
   if (targets.length === 0) return;
 
+  const includeKnowledge =
+    options.includeKnowledge === undefined
+      ? defaultMcpServersEnabled()
+      : options.includeKnowledge;
+
   console.log("\n🔌 MCP Wiring\n");
 
-  targets.forEach((p) => {
-    safeMergeMcpConfig(p.path, p.name);
+  targets.forEach((target) => {
+    const result = mcp.safeMergeMcpConfig(target.path, target.name, mcpServerPath(), {
+      includeKnowledge
+    });
+    printMcpResult(result);
   });
 }
 
@@ -735,6 +651,11 @@ program
               allowStaleEvidence: false,
               requireStructuredReview: true
             },
+            mcp: {
+              // Hosted knowledge servers are wired by default. Set this to
+              // false to keep only the SpecDrive governance server.
+              defaultServers: true
+            },
             test: {}
           },
           null,
@@ -775,7 +696,18 @@ program
 
     const mcpConfigPath = path.join(sdriveRoot, "mcp", "mcp.json");
     if (!fs.existsSync(mcpConfigPath)) {
-      fs.writeFileSync(mcpConfigPath, mcpConfigContent("Claude Desktop"));
+      fs.writeFileSync(
+        mcpConfigPath,
+        `${JSON.stringify(
+          {
+            name: "specdrive",
+            version: getCliVersion(),
+            description: "SpecDrive MCP server"
+          },
+          null,
+          2
+        )}\n`
+      );
       console.log("  Created: .sdrive/mcp/mcp.json");
     }
 
@@ -1053,8 +985,178 @@ program
       }
       summary += ").";
       console.log(summary);
-      console.log("   Your specs, governance, and constitution were left untouched.\n");
+      console.log("   Your specs, governance, and constitution were left untouched.");
+      if (defaultMcpServersEnabled(projectRoot)) {
+        console.log("   Run `sdrive mcp:sync` to add the built-in knowledge servers to existing MCP configs.\n");
+      } else {
+        console.log("");
+      }
     }
+  });
+
+// ---------- MCP COMMANDS ----------
+program
+  .command("mcp:list")
+  .description("List the built-in MCP servers and the client configs SpecDrive can wire")
+  .option("--json", "Print the result as JSON")
+  .action((options) => {
+    output.setJson(options.json);
+
+    const projectRoot = process.cwd();
+    const serverPath = mcpServerPath();
+    const defaults = mcp.DEFAULT_KNOWLEDGE_SERVERS.map((server) => ({
+      name: server.name,
+      label: server.label,
+      url: server.url,
+      purpose: server.purpose
+    }));
+
+    const clients = mcp.getMcpConfigPaths({ projectRoot }).map((target) => {
+      const client = mcp.clientConfig(target.name);
+      const expected = Object.keys(mcp.defaultEntries(target.name, serverPath));
+      const read = mcp.readMcpConfig(target.path);
+      const configuredEntries =
+        read.exists && read.config && read.config[client.key] && typeof read.config[client.key] === "object"
+          ? Object.keys(read.config[client.key])
+          : [];
+
+      return {
+        id: target.id,
+        name: target.name,
+        path: target.path,
+        exists: read.exists,
+        error: read.error,
+        servers: configuredEntries,
+        missing: read.exists && !read.error
+          ? expected.filter((name) => !configuredEntries.includes(name))
+          : expected
+      };
+    });
+
+    output.finish({
+      command: "mcp:list",
+      ok: true,
+      data: { defaults, clients },
+      human: () => {
+        console.log("\nBuilt-in MCP servers\n");
+        printTable(
+          ["SERVER", "TYPE", "ENDPOINT"],
+          [
+            ["specdrive", "stdio", ".sdrive/mcp/server.js"],
+            ...defaults.map((server) => [server.name, "http", server.url])
+          ]
+        );
+        console.log("\nClient configs\n");
+        printTable(
+          ["CLIENT", "FILE", "STATUS"],
+          clients.map((client) => [
+            client.name,
+            path.relative(projectRoot, client.path) || client.path,
+            client.error
+              ? "invalid JSON"
+              : !client.exists
+                ? "not configured"
+                : client.missing.length === 0
+                  ? "wired"
+                  : `missing: ${client.missing.join(", ")}`
+          ])
+        );
+        console.log("\nRun `sdrive mcp:sync` to add defaults to existing configs.");
+        console.log("Run `sdrive mcp:sync --all` to create configs for every supported client.\n");
+      }
+    });
+
+    process.exit(EXIT.OK);
+  });
+
+program
+  .command("mcp:sync")
+  .description("Add SpecDrive and the default knowledge MCP servers to AI client configs")
+  .option("--client <id>", "One client: claude-desktop, cursor, cline, roo, gemini-cli, vscode")
+  .option("--all", "Create or update every supported client config")
+  .option("--no-knowledge", "Only wire the SpecDrive governance server")
+  .option("--dry-run", "Show what would change without writing files")
+  .option("--json", "Print the result as JSON")
+  .action((options) => {
+    output.setJson(options.json);
+
+    if (!options.dryRun) {
+      requirePermission("mcp:sync");
+    }
+
+    const projectRoot = process.cwd();
+    const clientName = options.client ? mcp.resolveClientName(options.client) : null;
+
+    if (options.client && !clientName) {
+      process.exit(
+        output.fail(
+          "mcp:sync",
+          EXIT.USAGE,
+          `Unknown MCP client "${options.client}". Use one of: claude-desktop, cursor, cline, roo, gemini-cli, vscode.`
+        )
+      );
+    }
+
+    const available = mcp.getMcpConfigPaths({ projectRoot });
+    let targets;
+
+    if (clientName) {
+      targets = available.filter((target) => target.name === clientName);
+    } else if (options.all) {
+      targets = available;
+    } else {
+      targets = available.filter((target) => fs.existsSync(target.path));
+    }
+
+    if (targets.length === 0) {
+      if (clientName) {
+        process.exit(
+          output.fail(
+            "mcp:sync",
+            EXIT.USAGE,
+            `MCP client "${clientName}" is not available on this platform. On Windows, Claude Desktop needs APPDATA to be set.`
+          )
+        );
+      }
+
+      output.finish({
+        command: "mcp:sync",
+        ok: true,
+        data: { results: [] },
+        human: () => {
+          console.log("\nNo MCP config files found.");
+          console.log("Use --client <id> to create one, or --all for every supported client.\n");
+        }
+      });
+      process.exit(EXIT.OK);
+    }
+
+    const includeKnowledge =
+      options.knowledge !== false && defaultMcpServersEnabled(projectRoot);
+    const serverPath = mcpServerPath();
+    const results = targets.map((target) =>
+      mcp.safeMergeMcpConfig(target.path, target.name, serverPath, {
+        includeKnowledge,
+        dryRun: options.dryRun === true
+      })
+    );
+    const errors = results.filter((result) => result.status === "error");
+
+    output.finish({
+      command: "mcp:sync",
+      ok: errors.length === 0,
+      code: errors.length === 0 ? EXIT.OK : EXIT.ERROR,
+      data: { results, includeKnowledge },
+      blockers: errors.map((result) => result.error),
+      suppressAuto: true,
+      human: () => {
+        console.log(`\nMCP sync${options.dryRun ? " (dry run)" : ""}\n`);
+        results.forEach(printMcpResult);
+        console.log("");
+      }
+    });
+
+    process.exit(errors.length === 0 ? EXIT.OK : EXIT.ERROR);
   });
 
 // ---------- TEMPLATE COMMANDS ----------
@@ -2145,8 +2247,20 @@ program
 // normal way to stop it, not a failure: execSync reports it as a throw carrying
 // signal SIGINT, and printing "failed to start" there would simply be untrue.
 function runDashboardForeground(scriptPath) {
+  // The dashboard is copied into the project, but its validator requires ajv.
+  // A freshly initialized project has no node_modules, so point the child at the
+  // dependencies that shipped with this CLI. Without this the dashboard starts
+  // but /api/validate reports that it cannot find ajv.
+  const packageNodeModules = path.join(__dirname, "..", "node_modules");
+  const nodePath = [packageNodeModules, process.env.NODE_PATH]
+    .filter(Boolean)
+    .join(path.delimiter);
+
   try {
-    execSync(`node "${scriptPath}"`, { stdio: "inherit" });
+    execSync(`node "${scriptPath}"`, {
+      stdio: "inherit",
+      env: { ...process.env, NODE_PATH: nodePath }
+    });
     return { ok: true, stoppedByUser: false };
   } catch (error) {
     // Ctrl+C is a normal way to stop a server, not a crash, and each platform
@@ -2624,7 +2738,7 @@ program
   .option("--no-generate", "Only update the registry; do not write the adapter file")
   .action((name, options) => {
     const { projectRoot, sdriveRoot } = loadProjectRegistry();
-    if (options.mcpClient && !mcpClientNameFor(options.mcpClient)) {
+    if (options.mcpClient && !mcp.clientNameForId(options.mcpClient)) {
       console.error(`❌ Unknown MCP client "${options.mcpClient}".`);
       console.error("   Use one of: claude-desktop, cursor, cline, roo, gemini-cli, vscode");
       process.exit(1);
@@ -3131,6 +3245,84 @@ program
     });
 
     process.exit(EXIT.OK);
+  });
+
+// ---------- CONTEXT7 KNOWLEDGE FALLBACK ----------
+program
+  .command("knowledge:fetch [library]")
+  .description("Download current library docs from Context7 into .sdrive/context/external/")
+  .option("--query <query>", "Topic to focus the download on", knowledge.DEFAULT_QUERY)
+  .option("--library-id <id>", "Use a Context7 library id directly, e.g. /vercel/next.js")
+  .option("--tokens <n>", "Approximate token budget", String(knowledge.DEFAULT_TOKENS))
+  .option("--out <path>", "Write to a custom file (relative to the project root)")
+  .option("--force", "Replace a file SpecDrive did not generate")
+  .option("--json", "Print the result as JSON")
+  .action((library, options) => {
+    output.setJson(options.json);
+    requirePermission("knowledge:fetch");
+
+    const projectRoot = process.cwd();
+
+    if (!fs.existsSync(path.join(projectRoot, ".sdrive"))) {
+      process.exit(
+        output.fail(
+          "knowledge:fetch",
+          EXIT.NOT_INITIALIZED,
+          "❌ No .sdrive folder found. Run `sdrive init` first."
+        )
+      );
+    }
+
+    const tokens = Number(options.tokens);
+
+    if (!Number.isInteger(tokens) || tokens <= 0) {
+      process.exit(
+        output.fail("knowledge:fetch", EXIT.USAGE, "❌ --tokens must be a positive integer.")
+      );
+    }
+
+    knowledge
+      .fetchAndWriteContext({
+        projectRoot,
+        library,
+        libraryId: options.libraryId,
+        query: options.query,
+        tokens,
+        out: options.out,
+        force: options.force
+      })
+      .then((result) => {
+        output.finish({
+          command: "knowledge:fetch",
+          ok: true,
+          code: EXIT.OK,
+          data: {
+            library: result.library.id,
+            title: result.library.title,
+            query: result.query,
+            tokens: result.tokens,
+            path: result.path,
+            bytes: result.bytes,
+            overwritten: result.overwritten,
+            fetchedAt: result.fetchedAt
+          },
+          human: () => {
+            console.log(`\n${result.overwritten ? "Updated" : "Downloaded"} Context7 knowledge\n`);
+            console.log(`  Library: ${result.library.title || result.library.id}`);
+            console.log(`  ID:      ${result.library.id}`);
+            console.log(`  Query:   ${result.query}`);
+            console.log(`  Tokens:  ${result.tokens}`);
+            console.log(`  File:    ${path.relative(projectRoot, result.path) || result.path}\n`);
+          }
+        });
+
+        process.exit(EXIT.OK);
+      })
+      .catch((error) => {
+        process.exit(
+          output.fail("knowledge:fetch", EXIT.ERROR, `❌ Context7 fetch failed: ${error.message}`)
+        );
+      });
   });
 
 // ---------- MIGRATION ADAPTERS ----------

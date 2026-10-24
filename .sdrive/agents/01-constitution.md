@@ -5,7 +5,7 @@ argument-hint: Run to initialize or update the project constitution. You may opt
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'vscode/askQuestions', 'todo', 'exa:search', 'exa:fetch', 'context7']
+tools: ['read', 'search', 'create', 'edit', 'execute', 'web', 'vscode/askQuestions', 'todo', 'exa:search', 'exa:fetch', 'ux-ui-library', 'stackwise', 'context7']
 agents: []
 ---
 
@@ -26,6 +26,7 @@ You extract prescriptive rules, standards, and constraints from the discovered c
   - `src/` or `app/` structure (architecture patterns)
   - Any existing context files under `.sdrive/context/`
 - If the **Context7 MCP** or web search tools are available, use them to fetch official best practices, security standards, and architectural patterns for the detected technologies. Always cite the source.
+- **Knowledge MCP Rule:** Use **ux-ui-library** for UI/UX standards (`library_guide`, then `route_task`), **Stackwise** for backend/data/AI architecture (`library_guide`, then `route_task`), and **Context7** for version-specific library docs (`resolve-library-id`, then `query-docs`). If a server is unavailable, continue with the repository's actual conventions and say which source was missing. Never invent standards or citations.
 - NEVER invent project facts. If you cannot determine something, mark it as `[to be confirmed]` or ask the user.
 - Create context files only if they do not exist. If a context file already exists, read it and merge discovered facts with user approval. Never overwrite silently.
 - Extract ONLY explicit prescriptive rules (MUST, SHALL, MUST NOT).

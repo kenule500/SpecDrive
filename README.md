@@ -1261,6 +1261,9 @@ Audits and manages AI skills.
 | `sdrive adapters:list` | List every AI tool and the exact files each one reads |
 | `sdrive adapters:verify` | Check the tool registry for paths a tool would never read |
 | `sdrive adapters:add <name> --path <file>` | Support a tool SpecDrive does not ship (any tool, no release needed) |
+| `sdrive mcp:list` | List built-in MCP servers and client config status |
+| `sdrive mcp:sync` | Add SpecDrive and knowledge servers to existing MCP configs |
+| `sdrive knowledge:fetch [library]` | Download focused Context7 docs into `.sdrive/context/external/` |
 | `sdrive permissions:check` | Verify every CLI and slash command has a permission rule |
 | `sdrive audit:verify` | Verify the hash chain of the audit log |
 | `sdrive hooks:install` | Install pre-commit validation hook (preserves an existing hook) |
@@ -1723,9 +1726,69 @@ no separate prompt. Each client uses its own config schema:
 | Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` | `mcpServers` |
 | Cursor | `.cursor/mcp.json` | `mcpServers` |
 | Cline | `.cline/mcp.json` | `mcpServers` |
-| GitHub Copilot (VS Code) | `.vscode/mcp.json` | `servers` (with `type: "stdio"`) |
+| Roo Code | `.roo/mcp.json` | `mcpServers` |
+| Gemini CLI | `.gemini/settings.json` | `mcpServers` |
+| GitHub Copilot (VS Code) | `.vscode/mcp.json` | `servers` (with `type: "stdio"` or `type: "http"`) |
 
-SpecDrive never overwrites existing MCP entries. It merges safely.
+### Built-in knowledge servers
+
+SpecDrive wires three hosted knowledge servers by default, alongside its own
+governance server:
+
+| Server | Endpoint | Use it for |
+|--------|----------|------------|
+| `specdrive` | local `.sdrive/mcp/server.js` | Features, gates, traceability, validation |
+| `ux-ui-library` | `https://ux-ui-library.vercel.app/api/mcp` | UI/UX patterns, accessibility, design systems, review checklists |
+| `stackwise` | `https://stackwisehq.vercel.app/api/mcp` | Backend, data, security, distributed systems, and AI architecture |
+| `context7` | `https://mcp.context7.com/mcp` | Current library and framework documentation |
+
+The agents are told when to use each server: `ux-ui-library` for `/sdrive:design`
+and UI work, `stackwise` for architecture and backend work, and `context7` before
+writing library-specific code. Knowledge is guidance, not evidence — the agents
+still have to implement and verify the result.
+
+SpecDrive **never overwrites an existing MCP entry**. If you already defined
+`context7`, `stackwise`, `ux-ui-library`, or `specdrive`, your entry wins and is
+kept as-is. Other servers you added are preserved too. To refuse the hosted
+defaults entirely, set:
+
+```bash
+sdrive config:set mcp.defaultServers false
+```
+
+Then run `sdrive mcp:sync` to update existing configs. You can also opt out for a
+single run with `sdrive mcp:sync --no-knowledge`.
+
+Claude Desktop only accepts stdio entries in its config file, so SpecDrive wraps
+each remote server with `npx -y mcp-remote <url> --transport http-only`. The other
+clients use their native remote shape. Context7 works anonymously; if you have a
+key, add an `Authorization: Bearer <key>` header in that client's config.
+
+### MCP commands
+
+```bash
+sdrive mcp:list                 # show defaults and which clients are wired
+sdrive mcp:sync                 # update config files that already exist
+sdrive mcp:sync --client cursor # create/update one client
+sdrive mcp:sync --all           # create/update every supported client
+sdrive mcp:sync --dry-run       # show changes without writing
+```
+
+### Context7 download fallback
+
+If a client cannot use the Context7 MCP server, download a focused slice of the
+docs instead:
+
+```bash
+sdrive knowledge:fetch next.js --query "routing"
+sdrive knowledge:fetch /vercel/next.js --query "middleware" --tokens 6000
+sdrive knowledge:fetch --library-id /vercel/next.js --query "middleware"
+```
+
+The result is saved under `.sdrive/context/external/` and can be read like any
+other context file. Set `CONTEXT7_API_KEY` to use an authenticated key. Generated
+files can be refreshed; hand-written files are not overwritten unless you pass
+`--force`.
 
 ### Available MCP Methods
 

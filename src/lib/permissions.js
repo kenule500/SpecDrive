@@ -27,6 +27,8 @@ const MUTATING = new Set([
   "hooks:install",
   "version:new",
   "adapters:add",
+  "mcp:sync",
+  "knowledge:fetch",
   "test",
   "check",
   "config:set",

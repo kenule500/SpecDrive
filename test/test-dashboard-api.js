@@ -8,7 +8,7 @@ const net = require("net");
 const path = require("path");
 const { spawn } = require("child_process");
 const { once } = require("events");
-const { initProject, cleanup, TEST_ENV } = require("./helpers/sandbox");
+const { initProject, cleanup, TEST_ENV, PACKAGE_ROOT } = require("./helpers/sandbox");
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -95,7 +95,14 @@ test("dashboard quality and evidence APIs return structured data", async () => {
   const port = await freePort();
   const server = spawn(process.execPath, [path.join(root, ".sdrive", "dashboard", "server.js")], {
     cwd: root,
-    env: { ...TEST_ENV, SDRIVE_PORT: String(port) },
+    env: {
+      ...TEST_ENV,
+      SDRIVE_PORT: String(port),
+      // The generated validator under .sdrive/scripts requires ajv. The CLI
+      // supplies its own dependencies through NODE_PATH when it starts the
+      // dashboard; this test starts the server directly, so it does the same.
+      NODE_PATH: path.join(PACKAGE_ROOT, "node_modules")
+    },
     stdio: "ignore"
   });
 
@@ -191,7 +198,14 @@ test("product backlog maps columns and derives dependency waves", async () => {
   const port = await freePort();
   const server = spawn(process.execPath, [path.join(root, ".sdrive", "dashboard", "server.js")], {
     cwd: root,
-    env: { ...TEST_ENV, SDRIVE_PORT: String(port) },
+    env: {
+      ...TEST_ENV,
+      SDRIVE_PORT: String(port),
+      // The generated validator under .sdrive/scripts requires ajv. The CLI
+      // supplies its own dependencies through NODE_PATH when it starts the
+      // dashboard; this test starts the server directly, so it does the same.
+      NODE_PATH: path.join(PACKAGE_ROOT, "node_modules")
+    },
     stdio: "ignore"
   });
 

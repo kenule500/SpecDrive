@@ -42,6 +42,9 @@ SpecDrive has two types of commands:
 | `sdrive adapters:list` | List every AI tool and the exact files each one reads |
 | `sdrive adapters:verify` | Check the tool registry for paths a tool would never read |
 | `sdrive adapters:add <name> --path <file>` | Support a tool SpecDrive does not ship |
+| `sdrive mcp:list` | List built-in MCP servers and client config status |
+| `sdrive mcp:sync` | Add SpecDrive and knowledge servers to existing MCP configs |
+| `sdrive knowledge:fetch [library]` | Download focused Context7 docs into `.sdrive/context/external/` |
 | `sdrive permissions:check` | Verify every command has a permission rule |
 | `sdrive audit:verify` | Verify the audit-log hash chain |
 | `sdrive hooks:install` | Install pre-commit validation hook (preserves an existing hook) |
@@ -350,6 +353,73 @@ sdrive adapters:add my-tool \
 
 The entry is validated before it is saved, so a path your tool ignores is
 rejected rather than silently doing nothing.
+
+---
+
+### `sdrive mcp:list`
+
+Shows the built-in MCP servers and whether each supported client config exists,
+which entries it has, and which defaults are still missing.
+
+```bash
+sdrive mcp:list
+sdrive mcp:list --json
+```
+
+---
+
+### `sdrive mcp:sync`
+
+Adds the SpecDrive governance server and the built-in knowledge servers
+(`ux-ui-library`, `stackwise`, `context7`) to MCP client configs. Existing
+entries, including servers you added yourself, are never overwritten.
+
+```bash
+sdrive mcp:sync                  # update configs that already exist
+sdrive mcp:sync --client cursor  # create/update one client
+sdrive mcp:sync --all            # create/update every supported client
+sdrive mcp:sync --no-knowledge   # wire only the SpecDrive server
+sdrive mcp:sync --dry-run        # show changes without writing
+```
+
+Client ids: `claude-desktop`, `cursor`, `cline`, `roo`, `gemini-cli`, `vscode`.
+
+To keep only the SpecDrive server permanently:
+
+```bash
+sdrive config:set mcp.defaultServers false
+```
+
+Claude Desktop only accepts stdio entries, so remote defaults are bridged with
+`npx -y mcp-remote <url> --transport http-only`.
+
+---
+
+### `sdrive knowledge:fetch [library]`
+
+Downloads a focused slice of a library's current documentation from Context7.
+This is the fallback for clients that cannot use the Context7 MCP server, and a
+way to keep a durable copy of the docs an agent used.
+
+```bash
+sdrive knowledge:fetch next.js --query "routing"
+sdrive knowledge:fetch /vercel/next.js --query "middleware" --tokens 6000
+sdrive knowledge:fetch --library-id /vercel/next.js --query "middleware"
+sdrive knowledge:fetch react --query "hooks" --out .sdrive/context/external/react-hooks.md
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--query <query>` | Topic to focus on (default: `overview`) |
+| `--library-id <id>` | Skip the search and use a Context7 id such as `/vercel/next.js` |
+| `--tokens <n>` | Approximate token budget (default: `8000`) |
+| `--out <path>` | Custom output path, relative to the project root |
+| `--force` | Replace a file SpecDrive did not generate |
+| `--json` | Print the result as JSON |
+
+Files are saved under `.sdrive/context/external/`. Set `CONTEXT7_API_KEY` to use an
+authenticated key. A generated cache file is refreshed on the next fetch; a
+hand-written file is only replaced with `--force`.
 
 ---
 

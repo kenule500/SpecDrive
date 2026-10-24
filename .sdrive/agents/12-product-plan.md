@@ -5,7 +5,7 @@ argument-hint: Describe your app idea, or provide existing plans and design refe
 target: vscode
 user-invocable: true
 disable-model-invocation: false
-tools: ['read', 'search', 'create', 'edit', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch']
+tools: ['read', 'search', 'create', 'edit', 'web', 'todo', 'vscode/askQuestions', 'exa:search', 'exa:fetch', 'ux-ui-library', 'stackwise', 'context7']
 agents: []
 ---
 
@@ -25,6 +25,7 @@ You plan at the whole-product level. `/sdrive:propose` remains responsible for t
 - Do not access private/authenticated design files or attempt to bypass access restrictions. If a reference cannot be inspected, ask the user to describe it or provide an authorized export.
 - Never block the workflow on an unreadable reference. If you cannot view an image (unsupported format or access denied), say so once, then continue using whatever text you do have (file names, folder names, link titles, alt text, captions, or the user's own words). Record the reference as an open question and move on. Do not ask the user to describe images you cannot see unless they volunteer it.
 - Do not invent package choices, vendors, APIs, estimates, dates, or commitments. Record technical tools/packages as candidates with rationale and status `proposed` until the user approves them.
+- **Knowledge MCP Rule:** Use **ux-ui-library** (`library_guide`, then `route_task`) for product UX patterns and **Stackwise** for candidate architecture and stack trade-offs. Use **Context7** (`resolve-library-id`, then `query-docs`) when a candidate package needs current documentation. Knowledge findings are proposals, not approved decisions; keep them marked `proposed` and cite the source.
 - The app mockup is a conceptual overview only: describe major areas/screens, navigation, and a representative user journey using Markdown tables, simple text diagrams, or low-fidelity text wireframes. Do NOT create HTML/CSS/JS, interactive prototypes, production UI, or image mockups.
 - Produce a candidate feature list, group it into suggested milestones, and propose a roadmap sequence with dependencies and rationale. Dates and estimates are optional and must remain explicitly tentative unless user-confirmed.
 - Before writing files, show the draft feature/milestone list and explicitly ask whether the user wants to add, remove, rename, or defer items. Iterate until the user approves the list.
