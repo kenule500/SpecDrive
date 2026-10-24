@@ -96,10 +96,27 @@ function initAt(dir) {
   }
 }
 
+function canonicalPath(value) {
+  const resolved = path.resolve(value);
+
+  try {
+    return fs.realpathSync.native(resolved);
+  } catch (error) {
+    return resolved;
+  }
+}
+
 function samePath(a, b) {
+  const left = canonicalPath(a);
+  const right = canonicalPath(b);
+
   return process.platform === "win32"
-    ? a.toLowerCase() === b.toLowerCase()
-    : a === b;
+    ? left.toLowerCase() === right.toLowerCase()
+    : left === right;
+}
+
+function assertSamePath(actual, expected, message) {
+  assert.ok(samePath(actual, expected), message || `${actual} !== ${expected}`);
 }
 
 test("dashboard switches between projects without a restart", async () => {
@@ -182,7 +199,7 @@ test("dashboard switches between projects without a restart", async () => {
       // ---- discovery -------------------------------------------------
       const initial = await request(port, "/api/projects");
       assert.strictEqual(initial.status, 200);
-      assert.strictEqual(path.resolve(initial.json.active), path.resolve(alpha));
+      assertSamePath(initial.json.active, alpha);
 
       const names = initial.json.projects.map((project) => project.name).sort();
       assert.deepStrictEqual(names, ["alpha", "beta", "gamma"], "siblings and registry entries are offered");
@@ -192,8 +209,8 @@ test("dashboard switches between projects without a restart", async () => {
       const registry = JSON.parse(fs.readFileSync(registryFile, "utf8"));
       assert.ok(Array.isArray(registry), "an array registry stays an array");
       assert.deepStrictEqual(
-        registry.map((entry) => path.resolve(entry)).sort(),
-        [gamma, alpha].map((entry) => path.resolve(entry)).sort(),
+        registry.map(canonicalPath).sort(),
+        [gamma, alpha].map(canonicalPath).sort(),
         "the served project is recorded next to the entries already there"
       );
 
@@ -204,7 +221,7 @@ test("dashboard switches between projects without a restart", async () => {
       // ---- portfolio -------------------------------------------------
       const portfolio = await request(port, "/api/portfolio");
       assert.strictEqual(portfolio.status, 200);
-      assert.strictEqual(path.resolve(portfolio.json.active), path.resolve(alpha));
+      assertSamePath(portfolio.json.active, alpha);
 
       const byName = new Map(portfolio.json.projects.map((project) => [project.name, project]));
       assert.deepStrictEqual(
@@ -256,15 +273,12 @@ test("dashboard switches between projects without a restart", async () => {
       assert.strictEqual(switched.json.project, "beta");
 
       assert.strictEqual((await request(port, "/api/project-info")).json.name, "beta");
-      assert.strictEqual(
-        path.resolve((await request(port, "/api/project-info")).json.root),
-        path.resolve(beta)
-      );
+      assertSamePath((await request(port, "/api/project-info")).json.root, beta);
 
       // The portfolio answers from the previous project unless the switch
       // clears it; the active flag is the cheap proof that it did.
       const switchedPortfolio = await request(port, "/api/portfolio");
-      assert.strictEqual(path.resolve(switchedPortfolio.json.active), path.resolve(beta));
+      assertSamePath(switchedPortfolio.json.active, beta);
       assert.strictEqual(
         switchedPortfolio.json.projects.find((project) => project.name === "beta").active,
         true
@@ -280,7 +294,7 @@ test("dashboard switches between projects without a restart", async () => {
       );
 
       const afterSwitch = await request(port, "/api/projects");
-      assert.strictEqual(path.resolve(afterSwitch.json.active), path.resolve(beta));
+      assertSamePath(afterSwitch.json.active, beta);
       assert.strictEqual(afterSwitch.json.projects[0].name, "beta", "active project sorts first");
       assert.strictEqual(afterSwitch.json.projects[0].active, true);
       assert.strictEqual(
@@ -316,8 +330,8 @@ test("dashboard switches between projects without a restart", async () => {
       const settled = JSON.parse(fs.readFileSync(registryFile, "utf8"));
       assert.ok(Array.isArray(settled));
       assert.deepStrictEqual(
-        settled.map((entry) => path.resolve(entry)).sort(),
-        [alpha, beta, gamma].map((entry) => path.resolve(entry)).sort()
+        settled.map(canonicalPath).sort(),
+        [alpha, beta, gamma].map(canonicalPath).sort()
       );
 
       // ---- refusals --------------------------------------------------
@@ -401,7 +415,7 @@ test("sdrive dashboard reuses a running dashboard instead of adding a port", asy
 
     // It is the same server: still one listener, one port.
     const projects = await request(port, "/api/projects");
-    assert.strictEqual(path.resolve(projects.json.active), path.resolve(two));
+    assertSamePath(projects.json.active, two);
   } finally {
     server.kill("SIGTERM");
     await Promise.race([
@@ -451,13 +465,13 @@ test("dashboards started together share one project list", async () => {
       const registry = JSON.parse(
         fs.readFileSync(path.join(home, ".sdrive", "projects.json"), "utf8")
       );
-      const recorded = (Array.isArray(registry) ? registry : registry.projects).map((entry) =>
-        path.resolve(entry)
+      const recorded = (Array.isArray(registry) ? registry : registry.projects).map(
+        canonicalPath
       );
 
       for (const dir of projects) {
         assert.ok(
-          recorded.some((entry) => samePath(entry, path.resolve(dir))),
+          recorded.some((entry) => samePath(entry, dir)),
           `${path.basename(dir)} survived the concurrent writes`
         );
       }
