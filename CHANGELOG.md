@@ -7,6 +7,16 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
 
 ---
 
+## Unreleased
+
+### Fixed
+
+- macOS dashboards compare canonical project paths, so switching between a
+  project spelled `/var/...` and one spelled `/private/var/...` works and the
+  same project is not listed twice.
+
+---
+
 ## 0.1.46 — 2026-10-24
 
 **Built-in knowledge MCP servers, MCP sync commands, and a Context7 fallback.**
