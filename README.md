@@ -12,7 +12,7 @@ It adds:
 
 - 17 specialized governance agents
 - **30 AI tool adapters** — Claude Code, Cursor, Copilot, Gemini CLI, Roo Code, Qwen Code, Warp, Zed, Aider, Kiro, Junie and more, each written in the format that tool actually reads
-- **Native slash commands** — 16 real `/sdrive:*` commands in Claude Code, Gemini CLI, Roo Code and OpenCode, instead of one prompt that has to route itself
+- **Native slash commands** — 17 real `/sdrive:*` commands in Claude Code, Gemini CLI, Roo Code and OpenCode, instead of one prompt that has to route itself
 - **Any tool, without a release** — `sdrive adapters:add` registers a tool SpecDrive does not ship; `AGENTS.md` covers the tools that follow the cross-tool standard
 - Machine-readable JSON schemas
 - Requirement → AC → task → test traceability
@@ -50,6 +50,7 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed in the current release.
 - [Templates](#templates)
 - [Versions](#versions)
 - [Feature Lifecycle](#feature-lifecycle)
+- [Descoped work](#descoped-work)
 - [Directory Structure](#directory-structure)
 - [Validation](#validation)
   - [Doctor](#doctor)
@@ -953,7 +954,7 @@ Final audit and pass/fail verdict. Does **not** merge or archive.
 
 **What it does:**
 
-- Verifies coverage: every AC in `spec.json` has a linked test in `traceability.json` with `status: complete`
+- Verifies coverage: every AC in `spec.json` has a linked test in `traceability.json` with `status: complete` — except criteria the spec marks `withdrawn: true` with a reason and a citation, which are reported instead of counted
 - **The same check is enforced in code.** `sdrive approve <feature> review` reads `traceability.json` and exits non-zero if any AC has no passing test. A rule written in an agent prompt cannot refuse anything; only the CLI can, which is why this one lives in the CLI
 - **Requires passing test evidence** when `governance.requireTestEvidence` is enabled: `test-evidence.json` must show a zero-exit run with no failures at `HEAD`. A hand-written `Status: PASS` is not verification by itself
 - **Binds the verdict to a commit.** It records `HEAD`, the feature branch/base, and refuses a dirty tree, a branch mismatch, or a review that moved past its commit
@@ -1482,6 +1483,69 @@ Everything else follows from those two:
 
 ---
 
+## Descoped work
+
+Scope is usually additive: a spec lists what it will do. Real features also lose legs — a
+partner that never grants access, a provider that publishes no API, a report nobody can
+query. Without a way to record that, a bundled feature that loses one item can never
+archive: `approve implementation` wants every task completed, and `verify` wants every
+planned entity to exist.
+
+The governance model therefore has a third state beside done and not-done: **descoped**,
+recorded on the item itself.
+
+| Where | Field |
+|-------|-------|
+| `tasks.json` → `phases[].tasks[]` | `resolution` |
+| `plan.json` → `architecture.components[]` | `resolution` |
+| `plan.json` → `dataModel.entities[]` | `resolution` |
+| `plan.json` → `apiContracts[]` | `resolution` |
+| `spec.json` → acceptance criteria | `withdrawn` + `withdrawnReason` + `withdrawnEvidence` |
+
+```json
+"resolution": {
+  "kind": "deferred",
+  "reason": "ADP partner access was never granted, so the integration cannot be built.",
+  "at": "2026-10-29"
+}
+```
+
+What it changes:
+
+- `sdrive approve <feature> implementation` counts a resolved task as neither complete nor
+  outstanding, and names it in the warning list.
+- `sdrive verify` reports a resolved plan item as **Withdrawn** instead of **Missing**, and
+  a resolved entity carries that to its fields.
+- Review coverage counts only the acceptance criteria still in scope.
+- A descope is never silent: every gate that sees one reports it.
+
+What it cannot do, by design:
+
+- **No reason, no descope.** A `resolution` without a `reason` is not honoured — the task
+  still counts as incomplete — and `sdrive validate` rejects the file.
+- **You cannot descope everything.** Withdrawing every acceptance criterion, or resolving
+  every plan item, does not produce a verified feature; it produces an empty one, and the
+  gate refuses.
+- **Nothing is deleted.** IDs stay and `traceability.json` stays, so the record still shows
+  what was promised and what was not delivered. Merging the missing work later is a
+  `sdrive version:new`, not a silent edit.
+
+### Group by access certainty, not by theme
+
+Bundling several backlog items into one feature is supported and works. The failure mode is
+bundling items whose *access* differs: one item that needs partner credentials or
+unverified documentation can block the whole branch at archive time, long after the
+decision was made.
+
+> Many branches per wave is fine. Many **risk envelopes** per branch is not. An item gated
+> on partner access, or on documentation nobody has confirmed exists, belongs in the
+> backlog until that access is confirmed.
+
+`/sdrive:propose` can only warn about this, not enforce it: read the backlog rows the
+feature is drawing from, and treat `needs discovery` as a risk boundary rather than a note.
+
+---
+
 ## Validation
 
 Run the governance validator:
@@ -1607,6 +1671,10 @@ It detects:
 - Renamed components, functions, endpoints, fields
 - Extra code not in the plan
 - Dependencies not installed
+
+It reports one thing separately:
+
+- **Withdrawn** — plan components, entities, and endpoints marked with a `resolution` block (see [Descoped work](#descoped-work)). Descoped work is not missing work: it is listed with the reason it was recorded and does not affect the status. A resolved entity carries its resolution to its fields, so a table that will never exist is not reported as forty missing columns.
 
 ### Run Verification
 

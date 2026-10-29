@@ -47,6 +47,33 @@ Validates the feature specification.
 - Functional requirements: `FR-001`
 - Non-functional requirements: `NFR-001`
 
+### Out-of-scope acceptance criteria
+
+An acceptance criterion can describe behaviour that cannot be implemented — a provider
+endpoint that was never published, a report nobody can query. Do not delete it and do not
+reword it: mark it withdrawn and say why.
+
+| Field | Type | Required |
+|-------|------|----------|
+| `withdrawn` | boolean | No |
+| `withdrawnReason` | string, 20+ characters | Yes when `withdrawn` is `true` |
+| `withdrawnEvidence` | string, 10+ characters | Yes when `withdrawn` is `true` |
+
+```json
+{
+  "id": "AC-004",
+  "text": "Updating a lead status writes back to Google Local Services Ads.",
+  "withdrawn": true,
+  "withdrawnReason": "The localservices:v1 discovery document publishes no lead-status update method.",
+  "withdrawnEvidence": "https://localservices.googleapis.com/$discovery/rest?version=v1"
+}
+```
+
+A withdrawn criterion stays in `spec.json` and in the traceability record, is reported by
+the planning and review gates, and is excluded from coverage. `sdrive approve <feature>
+review` refuses a withdrawal with no reason and evidence, and refuses a feature whose
+criteria are all withdrawn: withdrawing is a recorded decision, not a way to skip a test.
+
 ---
 
 ## 2. plan.schema.json
@@ -80,6 +107,30 @@ Fields:
 - `remove`
 - `no_change`
 
+### Descoped plan items
+
+`architecture.components[]`, `dataModel.entities[]`, and `apiContracts[]` accept the same
+optional `resolution` block as a task:
+
+```json
+{
+  "method": "POST",
+  "path": "/api/leads/{id}/status",
+  "action": "create",
+  "linkedRequirements": ["FR-014"],
+  "resolution": {
+    "kind": "deferred",
+    "reason": "localservices:v1 publishes no lead-status update method.",
+    "at": "2026-10-29"
+  }
+}
+```
+
+`sdrive verify` reports a resolved item under **Withdrawn** instead of **Missing**, and
+inherits it to the fields of a resolved entity — so a table that will never exist does
+not report forty missing columns. `verification.json` gains `summary.withdrawn` and
+`items.withdrawn`, and its `status` is unaffected by withdrawn items.
+
 ---
 
 ## 3. tasks.schema.json
@@ -103,6 +154,47 @@ T1.1, T1.2, T2.1
 ```
 
 Where `T` = task, first number = phase, second number = task number.
+
+### Task fields
+
+| Field | Type | Required |
+|-------|------|----------|
+| `id` | string (`T1.1`) | Yes |
+| `title` | string | Yes |
+| `linkedRequirements` | array of `FR-###` / `NFR-###` | Yes |
+| `completed` | boolean | Yes |
+| `resolution` | object | No |
+
+### Descoped tasks
+
+A task that will not be done — a partner that never granted access, a provider route
+that does not exist — is **not** `completed` and must not be left as an outstanding
+failure. It is descoped:
+
+```json
+{
+  "id": "T5.2",
+  "title": "Push lead status back to Google Local Services Ads",
+  "linkedRequirements": ["FR-014"],
+  "completed": false,
+  "resolution": {
+    "kind": "deferred",
+    "reason": "localservices:v1 publishes no lead-status update method and ADP access was never granted.",
+    "at": "2026-10-29"
+  }
+}
+```
+
+| `resolution` field | Type | Required |
+|--------------------|------|----------|
+| `kind` | `deferred` \| `superseded` | Yes |
+| `reason` | string, 20+ characters | Yes |
+| `at` | string (ISO date) | No |
+
+The implementation gate counts a resolved task as neither done nor outstanding, and
+names it in its output, so the reduction is visible rather than silent. A `resolution`
+with no reason is not a resolution: the task still counts as incomplete and
+`sdrive validate` rejects the file.
 
 ---
 

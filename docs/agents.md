@@ -349,7 +349,7 @@ commit or push. `/sdrive:propose` commits its own artifacts inside the worktree.
 
 - Requires `sdrive verify <feature>` to return `pass` or `warn`
 - Runs `sdrive check`, `sdrive validate`, `sdrive verify`, and `sdrive audit:verify` as structured CLI checks
-- Verifies coverage: every AC has a linked, existing, passing test
+- Verifies coverage: every AC has a linked, existing, passing test — criteria marked `withdrawn: true` with a reason and citation are reported instead of counted
 - Requires the test report for the current version
 - **Requires `sdrive test` evidence** — `test-evidence.json` must record a zero-exit run with no failures, at least one result, and a commit matching `HEAD`
 - Binds the verdict to a commit: records `HEAD`, the feature branch/base, and requires a clean working tree

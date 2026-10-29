@@ -6,6 +6,7 @@ const os = require("os");
 const path = require("path");
 const { execFile } = require("child_process");
 const productPlan = require("../scripts/lib/product-plan");
+const { isResolved } = require("../scripts/lib/resolution");
 
 let projectRoot = process.cwd();
 let sdriveRoot = path.join(projectRoot, ".sdrive");
@@ -709,28 +710,40 @@ function apiTasks(feature, version) {
   const phases = Array.isArray(data.phases) ? data.phases : [];
   let total = 0;
   let completed = 0;
+  let descoped = 0;
 
   const shaped = phases.map((phase) => {
     const tasks = Array.isArray(phase.tasks) ? phase.tasks : [];
     const done = tasks.filter((t) => t.completed === true).length;
+    // A descoped task is not pending: it will not be done in this version. Counting it
+    // as pending makes a deliberately reduced feature look permanently unfinished.
+    const resolved = tasks.filter((t) => t.completed !== true && isResolved(t)).length;
     total += tasks.length;
     completed += done;
+    descoped += resolved;
     return {
       phaseId: phase.phaseId || "",
       name: phase.name || "",
       dependencies: phase.dependencies || [],
       total: tasks.length,
       completed: done,
+      descoped: resolved,
       tasks: tasks.map((t) => ({
         id: t.id || "",
         title: t.title || "",
         description: t.description || "",
         linkedRequirements: t.linkedRequirements || [],
         linkedAcceptanceCriteria: t.linkedAcceptanceCriteria || [],
-        completed: t.completed === true
+        completed: t.completed === true,
+        descoped: t.completed !== true && isResolved(t),
+        resolution: t.completed !== true && isResolved(t) ? t.resolution : null
       }))
     };
   });
+
+  // Progress is measured against the work that is still supposed to happen, so the
+  // percentage can actually reach 100 on a feature whose scope was reduced.
+  const actionable = total - descoped;
 
   return {
     feature: data.feature || feature,
@@ -738,8 +751,9 @@ function apiTasks(feature, version) {
     summary: {
       total,
       completed,
-      pending: total - completed,
-      percent: total === 0 ? 0 : Math.round((completed / total) * 100)
+      descoped,
+      pending: actionable - completed,
+      percent: actionable === 0 ? 0 : Math.round((completed / actionable) * 100)
     },
     phases: shaped
   };

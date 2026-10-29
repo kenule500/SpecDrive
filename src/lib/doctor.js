@@ -13,7 +13,16 @@ const { actor, roleOf } = require("./permissions");
 const { resolveTestCommand } = require("./evidence");
 
 const REQUIRED_FILES = ["config.json", "team.json", "workflow-state.json"];
-const REQUIRED_DIRS = ["commands", "schemas", "scripts", "agents", "templates", "dashboard", "mcp"];
+const REQUIRED_DIRS = [
+  "commands",
+  "schemas",
+  "scripts",
+  "agents",
+  "templates",
+  "dashboard",
+  "mcp",
+  "migrations"
+];
 
 function result(id, status, message, fix) {
   return { id, status, message, ...(fix ? { fix } : {}) };

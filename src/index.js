@@ -334,6 +334,28 @@ function audit(event, details = {}) {
   }
 }
 
+// Which CLI wrote `.sdrive/` is not the same question as which CLI is running now.
+//
+// A refusal that reads as impossible - "approve implementation, but implementation must
+// be approved first" - is almost always version skew: the rule being enforced belongs to
+// the installed copy, not to the binary in front of the user. `sdrive doctor` already
+// reports this as manifest drift, but nobody runs doctor while staring at a refusal, so
+// the gate commands say it at the point where it costs something.
+function frameworkVersionNotice(projectRoot) {
+  try {
+    const installed = manifest.readManifest(projectRoot);
+    const running = manifest.packageVersion();
+
+    if (!installed || !installed.cliVersion || installed.cliVersion === running) {
+      return null;
+    }
+
+    return `.sdrive/ was installed by specdrive-cli ${installed.cliVersion}, but this CLI is ${running}. Run \`sdrive update\` so the project and the CLI enforce the same rules.`;
+  } catch (error) {
+    return null;
+  }
+}
+
 // Resolves the acting user for workflow-state history entries so the dashboard
 // can attribute each action. Mirrors the Git-identity lookup used by
 // check-permission.js, with an OS-username fallback.
@@ -1711,12 +1733,19 @@ program
         // it certifies actually exists.
         const verdict = checkGateRequirements(projectRoot, feature, version, gate);
 
+        // Reported whether the verdict passes or not: a refusal produced by a different
+        // CLI version than the one installed is unreproducible from the user's side.
+        const versionNotice = frameworkVersionNotice(projectRoot);
+        const warnings = [...(verdict.warnings || [])];
+
+        if (versionNotice) warnings.push(versionNotice);
+
         if (!verdict.ok) {
           return {
             ok: false,
             code: EXIT.GATE_BLOCKED,
             blockers: verdict.blockers,
-            warnings: verdict.warnings,
+            warnings,
             data: { feature: featureName, version: version.id, gate }
           };
         }
@@ -1725,7 +1754,7 @@ program
           return {
             ok: true,
             already: true,
-            warnings: verdict.warnings,
+            warnings,
             data: { feature: featureName, version: version.id, gate }
           };
         }
@@ -1751,7 +1780,7 @@ program
         return {
           ok: true,
           already: false,
-          warnings: verdict.warnings,
+          warnings,
           previous: verdict.current || "pending",
           data: { feature: featureName, version: version.id, gate, actor }
         };
@@ -1772,6 +1801,7 @@ program
         suppressAuto: true,
         human: () => {
           console.error(`\n❌ Refusing to approve "${gate}" for "${featureName}".`);
+          (outcome.warnings || []).forEach((warning) => console.error(`⚠️  ${warning}`));
           outcome.blockers.forEach((blocker) => console.error(`   • ${blocker}`));
           console.error("\nNothing was written. Approving an unmet gate would falsify the governance record.\n");
         }

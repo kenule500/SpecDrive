@@ -9,11 +9,66 @@ SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
 
 ## Unreleased
 
+Nothing yet.
+
+---
+
+## 0.1.47 — 2026-10-29
+
+### Added
+
+- **Withdrawn acceptance criteria.** A criterion that describes behaviour nobody can
+  implement — a provider endpoint that was never published, a report nobody can query —
+  can now be marked `withdrawn: true` in `spec.json` with a `withdrawnReason` and a
+  `withdrawnEvidence` citation. The criterion stays in the specification and in the
+  traceability record, is excluded from review coverage, and is reported by the planning
+  gate, the review gate, and archive. Projects no longer need to fork
+  `.sdrive/schemas/spec.schema.json` to describe an out-of-scope criterion — and no
+  longer drift from `framework-manifest.json` if they did.
+- **Descoped tasks and plan items.** `tasks.json` tasks and `plan.json` components,
+  entities, and API contracts accept an optional `resolution`
+  (`kind` + mandatory `reason`, optional `at`). A resolved task is neither complete nor
+  outstanding: `sdrive approve <feature> implementation` stops counting it and names it,
+  which is what lets a bundled feature that lost one leg archive without implementing the
+  impossible or deleting the record. `sdrive verify` reports resolved plan items as
+  `Withdrawn` instead of `Missing`, inherits an entity's resolution to its fields, and
+  records both in `verification.json`. The dashboard counts a descoped task as neither
+  pending nor complete, so progress can still reach 100%.
+
+### Changed
+
+- Withdrawal is refused rather than trusted: `sdrive approve <feature> review` fails when
+  a flagged criterion has no reason and evidence, and fails when every criterion is
+  withdrawn, so the coverage gate cannot be cleared by withdrawing scope.
+
 ### Fixed
 
+- `sdrive verify` scanned no files in a Cargo workspace. `crates` was missing from the
+  root list, and the constitution reader required a trailing slash so the `crates/*` form
+  a Rust constitution uses never matched. A Rust project therefore reported its whole plan
+  as missing (`Matched: 0, Missing: 83` on a feature whose code was present). `crates` is
+  now a root, and a declared root is read from `` `crates/*` ``, `` `crates/` ``, and
+  `` `src/components/` `` alike.
+- `sdrive verify` took dependencies from `package.json` only, and returned early when a
+  project had none — so every declared library dependency in a Rust, Python, or Go project
+  was reported missing. It now reads `Cargo.toml` (workspace and member manifests) and
+  `requirements.txt` as well, and no longer treats `internal`, `service`, or `external`
+  plan dependencies as manifest-verifiable: a reused crate or a partner agreement can
+  never appear in a lockfile, and reporting it as missing pinned `verification.json` to
+  `fail` permanently.
+  unmet prerequisite. The prerequisite list is derived by slicing `GATE_ORDER` before the
+  gate and filtering the gate itself out, so an off-by-one or a duplicate entry cannot
+  produce a refusal the user has no way to satisfy.
+- Prerequisite refusals now state which gate is being approved and the full gate order,
+  instead of naming a gate with no context.
+- `sdrive approve` warns when `.sdrive/` was installed by a different CLI version than the
+  one running. Version skew is the usual reason a refusal cannot be reproduced from the
+  user's side, and `sdrive doctor` was the only place that reported it.
 - macOS dashboards compare canonical project paths, so switching between a
   project spelled `/var/...` and one spelled `/private/var/...` works and the
   same project is not listed twice.
+- `sdrive doctor` treats a missing `.sdrive/migrations/` as a layout problem, like the
+  other framework directories it already checks.
 
 ---
 

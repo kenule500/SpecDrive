@@ -207,7 +207,7 @@ Allowed gates, in order:
 
 - `specification` — requires `spec.md` and `spec.json`
 - `planning` — requires `specification` approved, plus `plan.md`, `tasks.md`, `plan.json`, `tasks.json`, and `traceability.json`
-- `implementation` — requires `specification` and `planning` approved, every task in `tasks.json` marked `completed`, and no failing `verification.json`
+- `implementation` — requires `specification` and `planning` approved, every task in `tasks.json` either `completed` or descoped with a `resolution`, and no failing `verification.json`
 - `review` — requires `implementation` approved, a `review.md` recording `Status: PASS`, and (when `governance.requireStructuredReview` is enabled) a matching `review.json` with the same verdict and `HEAD` commit
 
 Extra safeguards:

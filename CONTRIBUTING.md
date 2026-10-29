@@ -29,7 +29,7 @@ is the executable, and the package ships source directly.
 | `scripts/` | Installed project scripts (validation, verification, onboarding, hooks) |
 | `migrations/` | Migration adapter registry and per-framework detect/plan/apply support |
 | `schemas/` | JSON Schemas for config, specs, plans, tasks, traceability, workflow state, test evidence, review records |
-| `agents/` | The 16 agent instruction files used by AI tools |
+| `agents/` | The 17 agent instruction files used by AI tools |
 | `dashboard/` | Local read-only web dashboard |
 | `mcp/` | MCP server |
 | `templates/` | Starter templates |
