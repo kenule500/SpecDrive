@@ -13,6 +13,25 @@ Nothing yet.
 
 ---
 
+## 0.1.48 — 2026-10-29
+
+### Fixed
+
+- `sdrive verify` reported every Rust entity and every one of its fields as `Missing`.
+  Entities were read from SQL, Prisma, TypeORM, and TypeScript only; fields from SQL,
+  Prisma, and TypeScript only. A `pub struct` — with or without `pub`, and with generics
+  such as `Option<T>` — was invisible to both, so an entity declared in a file the
+  scanner had already matched still came back as missing.
+- A rename could claim a file that already satisfied a different component. The test
+  compared the first five characters of the whole path, so `crates/wirekit/Cargo.toml`
+  "matched" `crates/dado/src/diag.rs` — both begin "crate". A rename now needs a similar
+  basename and a file no other item has claimed; an unmatched item is reported as
+  missing rather than renamed onto an unrelated file.
+- A plan that declares `Cargo.toml`, `README.md`, or a YAML file as a `modify` component
+  was told they were missing, because those extensions were never scanned. They are now.
+
+---
+
 ## 0.1.47 — 2026-10-29
 
 ### Added

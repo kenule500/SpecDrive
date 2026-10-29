@@ -1,62 +1,223 @@
 <p align="center">
-  <img src="logo.png" alt="SpecDrive" width="120" />
+  <img src="logo.png" alt="SpecDrive" width="140" />
 </p>
 
-# SpecDrive
+<h1 align="center">SpecDrive</h1>
 
-**Enterprise Spec-Driven Development for AI Coding Tools**
+<p align="center">
+  <strong>Enterprise spec-driven development for AI coding tools.</strong><br>
+  Turn a one-line idea into a governed, traceable, evidence-backed feature —<br>
+  without trusting the model to police itself.
+</p>
 
-SpecDrive gives AI coding tools like GitHub Copilot, Cline, Claude Code, and Cursor a deterministic governance layer for spec-driven development.
+<p align="center">
+  <a href="https://www.npmjs.com/package/specdrive-cli"><img alt="npm version" src="https://img.shields.io/npm/v/specdrive-cli?logo=npm&label=npm&color=cb3837"></a>
+  <a href="#prerequisites"><img alt="node" src="https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white"></a>
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-blue"></a>
+  <a href="#agents"><img alt="agents" src="https://img.shields.io/badge/agents-17-4f46e5"></a>
+  <a href="#tool-support"><img alt="adapters" src="https://img.shields.io/badge/tool%20adapters-30-0ea5e9"></a>
+</p>
 
-It adds:
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#the-pipeline">How it works</a> ·
+  <a href="#contents">Contents</a> ·
+  <a href="docs/commands.md">Command reference</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
 
-- 17 specialized governance agents
-- **30 AI tool adapters** — Claude Code, Cursor, Copilot, Gemini CLI, Roo Code, Qwen Code, Warp, Zed, Aider, Kiro, Junie and more, each written in the format that tool actually reads
-- **Native slash commands** — 17 real `/sdrive:*` commands in Claude Code, Gemini CLI, Roo Code and OpenCode, instead of one prompt that has to route itself
-- **Any tool, without a release** — `sdrive adapters:add` registers a tool SpecDrive does not ship; `AGENTS.md` covers the tools that follow the cross-tool standard
-- Machine-readable JSON schemas
-- Requirement → AC → task → test traceability
-- Per-version lifecycle tracking
-- Human approval gates
-- **Evidence-backed review gates** — `sdrive test` records the command, exit code, counts, commit, and output hash, and review refuses without a passing run
-- Anti-redundancy checks
-- Spec-to-code verification
-- **A machine-readable CLI** — `--json`, stable exit codes `0`–`9`, and `sdrive doctor` for diagnosing a broken install
-- Atomic, locked state writes and a hash-chained audit log
-- Brownfield onboarding for existing projects, including detecting a scaffolded README that describes the framework instead of the product
-- OpenSpec, Spec Kit, Kiro, Agent OS, BMAD, and generic spec-folder migration
-- Anti-hallucination controls
-- CI/CD integration, including `sdrive check`
+---
+
+## What SpecDrive is
+
+SpecDrive is a **governance layer** that sits between you and any AI coding tool. The tool
+still writes the code; SpecDrive decides what it is allowed to claim.
+
+The distinction that matters: in most spec-driven setups the rules are *prose in a prompt*.
+A model can ignore prose. Here the rules are **code** — `commands/gates.js` reads your
+repository and refuses to record an approval whose evidence is missing. A hand-written
+`Status: PASS` cannot clear a gate; a `test-evidence.json` bound to the current commit can.
+
+| Without a governance layer | With SpecDrive |
+|---|---|
+| "It's done" is a sentence the model writes about itself | Done means tasks closed, tests recorded against `HEAD`, review verdict bound to a commit |
+| Requirements drift from code silently | `sdrive verify` diffs `plan.json` against the real source tree |
+| Nobody can say which test proves which requirement | Requirement → AC → task → test, in one checkable matrix |
+| Merging is an agent's judgement call | `/sdrive:archive` merges into the branch recorded at proposal time, or refuses |
+| Scope that cannot be built has no record | Descoped work is *recorded* — never deleted, never faked as complete |
+
+See [why this is different →](#why-specdrive)
+
+## The pipeline
+
+Five commands, four gates, one branch. Everything else is optional.
+
+```text
+        idea / intake
+             │
+             ▼
+   ┌───────────────────┐   /sdrive:propose
+   │  specification    │   spec.md + spec.json
+   │  plan  ·  tasks   │   plan.json + tasks.json
+   │  traceability     │   traceability.json      ◄── Gate 1  specification
+   └─────────┬─────────┘                          ◄── Gate 2  planning
+             │
+             ▼
+   ┌───────────────────┐   /sdrive:apply
+   │  implementation   │   code on feature/<name>
+   └─────────┬─────────┘   sdrive verify  plan ⇒ code   ◄── Gate 3  implementation
+             │
+             ▼
+   ┌───────────────────┐   /sdrive:test
+   │       tests       │   one test per AC, actually run
+   └─────────┬─────────┘   test-evidence.json (exit code · counts · HEAD · hash)
+             │
+             ▼
+   ┌───────────────────┐   /sdrive:review
+   │      review       │   audit + coverage, no merge   ◄── Gate 4  review
+   └─────────┬─────────┘   review.md + review.json
+             │
+             ▼
+   ┌───────────────────┐   /sdrive:archive
+   │      archive      │   merge → specs/completed/ → phase: completed
+   └───────────────────┘   archived versions are immutable
+```
+
+**A gate is a refusal, not a checkbox.** Each one is enforced in code, writes nothing when it
+fails, and says why.
+
+### The gate ladder
+
+Gates are ordered: a gate opens only when the one before it is approved **and** the evidence
+behind it still exists. Nothing here is a checklist a model can tick on its own behalf.
+
+```text
+  Gate 1  specification   ├─ spec.md + spec.json exist
+                          └─ no predecessor
+        │ approved
+        ▼
+  Gate 2  planning        ├─ plan.md, tasks.md, plan.json, tasks.json, traceability.json
+                          ├─ warns about any acceptance criterion with no task
+        │ approved        └─ refuses without Gate 1
+        ▼
+  Gate 3  implementation  ├─ every task completed … or descoped with a stated reason
+                          ├─ verification.json is not "fail"   (plan ⇒ code)
+        │ approved        └─ refuses without Gates 1–2
+        ▼
+  Gate 4  review          ├─ review.md records Status: PASS
+                          ├─ review.json agrees: same status, same HEAD, a named reviewer
+                          ├─ every in-scope AC has a passing test (withdrawn ones excluded)
+                          └─ test-evidence.json: exit 0, no failures, commit === HEAD
+                                  refuses without Gates 1–3
+```
+
+| Gate | Owns the transition | Refuses when |
+|---|---|---|
+| `specification` | — | spec artefacts are missing |
+| `planning` | — | plan/tasks/traceability missing, or a predecessor gate is unapproved |
+| `implementation` | `backlog/` → `ongoing/` | a task is neither done nor descoped, or verification failed |
+| `review` | — | no PASS verdict, verdict bound to another commit, an AC untested, evidence stale |
+
+**Every refusal writes nothing.** That is the property worth trusting: a failed gate cannot
+leave a half-written approval behind, and an approval cannot be manufactured by prose.
+
+## What a governed feature looks like on disk
+
+Two trees, deliberately different: humans read Markdown, tooling reads JSON, and neither is
+partitioned the way the other is.
+
+```text
+.sdrive/
+├── constitution.md                ← the rules every agent must obey
+├── config.json                    ← template + gate policy
+├── workflow-state.json            ← the state machine (phases, gates, history)
+│
+├── specs/                         ← HUMAN-READABLE, lifecycle-partitioned
+│   ├── backlog/<feature>/v1/      spec.md · plan.md · tasks.md · review.md
+│   ├── ongoing/<feature>/v1/
+│   └── completed/<feature>/v1/    ← immutable once archived
+│
+├── governance/<feature>/v1/       ← MACHINE-READABLE, not lifecycle-partitioned
+│   ├── spec.json                  schema-validated specification
+│   ├── plan.json  tasks.json      the plan and its execution units
+│   ├── traceability.json          requirement → AC → task → test
+│   ├── verification.json          plan ⇒ code diff (pass / warn / fail)
+│   ├── test-evidence.json         a recorded run: exit code, counts, commit, hash
+│   └── review.json                the structured verdict the review gate reads
+│
+├── reports/                       security · performance · docs · tests · debug
+├── skills/                        project conventions agents must load
+├── agents/ commands/ schemas/ scripts/ dashboard/ mcp/ migrations/
+├── audit-log.json                 hash-chained governance events
+└── team.json                      roles: admin · reviewer · developer
+```
+
+## At a glance
+
+| | |
+|---|---|
+| **Agents** | 17 specialised governance agents, one per command |
+| **Slash commands** | 17 `/sdrive:*`; native command-sets for Claude Code, Gemini CLI, Roo Code, OpenCode |
+| **Tool adapters** | 30, each in the format that tool actually reads, plus `adapters:add` for anything unshipped |
+| **CLI** | 45 commands, `--json` everywhere, stable exit codes `0`–`9` |
+| **Schemas** | 8 JSON Schemas; every governance artifact is validated before it is written |
+| **Gates** | 4, ordered, prerequisite-checked, evidence-bound |
+| **Integrations** | Local dashboard on `127.0.0.1:4747`, MCP server, CI recipe, pre-commit hook |
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed in the current release.
 
 ---
 
-## Table of Contents
+## Contents
 
-- [Why SpecDrive](#why-specdrive)
+<table>
+<tr><td valign="top" width="33%">
+
+**Getting started**
+
+- [Quick start](#quick-start)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Where to Run Commands](#where-to-run-commands)
 - [Lifecycle](#lifecycle)
+- [Why SpecDrive](#why-specdrive)
 - [Web Dashboard](#web-dashboard)
+
+**Bringing an existing project in**
+
 - [Onboarding an Existing Project](#onboarding-an-existing-project)
-- [Migrating from another spec-driven framework](#migrating-from-another-spec-driven-framework)
+- [Migrating from another framework](#migrating-from-another-spec-driven-framework)
+
+</td><td valign="top" width="33%">
+
+**Daily use**
+
 - [Core Workflow](#core-workflow)
-- [Batch Mode: the `--all` Flag](#batch-mode-the---all-flag)
 - [Optional Commands](#optional-commands)
-- [Terminal Commands](#terminal-commands)
-- [Agents](#agents)
-- [Templates](#templates)
+- [Batch Mode: the `--all` Flag](#batch-mode-the---all-flag)
 - [Versions](#versions)
 - [Feature Lifecycle](#feature-lifecycle)
 - [Descoped work](#descoped-work)
+
+**Reference**
+
+- [Terminal Commands](#terminal-commands)
+- [Agents](#agents)
+- [Templates](#templates)
 - [Directory Structure](#directory-structure)
+
+</td><td valign="top" width="33%">
+
+**Correctness**
+
 - [Validation](#validation)
   - [Doctor](#doctor)
   - [Test evidence](#test-evidence)
   - [Exit codes](#exit-codes)
 - [Spec-to-Code Verification](#spec-to-code-verification)
+
+**Operations**
+
 - [CI/CD Integration](#cicd-integration)
 - [MCP Server](#mcp-server)
 - [Tool Support](#tool-support)
@@ -64,6 +225,45 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed in the current release.
 - [Permissions](#permissions)
 - [Contributing](#contributing)
 - [License](#license)
+
+</td></tr>
+</table>
+
+---
+
+## Quick start
+
+**New project — five commands to a governed feature.**
+
+```bash
+npm install -g specdrive-cli@latest   # or pnpm add -g / yarn global add / bun add -g
+sdrive init                           # .sdrive/, adapters, MCP wiring, team.json
+sdrive doctor                         # confirm the install before writing specs
+```
+
+Then, in your AI tool:
+
+```text
+/sdrive:constitution        → the rules for this project (run once)
+/sdrive:propose "..."       → spec, plan, tasks, traceability  (Gate 1 + 2)
+/sdrive:apply "..."; /sdrive:test "..."
+/sdrive:review "..."; /sdrive:archive "..."   (Gate 3 + 4, then merge)
+```
+
+**Existing project?** Replace the last step with `/sdrive:onboard` — it inventories what is
+already there and never overwrites or deletes anything.
+
+**Want to see it working in 10 seconds?**
+
+```bash
+sdrive init --tools none --no-dashboard   # scaffold only
+sdrive dashboard                         # http://localhost:4747
+```
+
+> **Reading this for the first time?** Read [What SpecDrive is](#what-specdrive-is),
+> [The pipeline](#the-pipeline) and [the gate ladder](#the-gate-ladder) — that is the whole
+> design in three screens. Everything after [Terminal Commands](#terminal-commands) is
+> reference material you can look up when you need it.
 
 ---
 
@@ -1377,6 +1577,15 @@ All agents operate within the **current version** folder only. Older versions ar
 ## Feature Lifecycle
 
 A feature moves through three spec folders. Each transition has exactly one owner:
+
+```text
+   /sdrive:propose          /sdrive:apply             /sdrive:archive
+ ─────────────────►  backlog/  ──────────►  ongoing/  ──────────►  completed/
+                                            ▲                          │
+                                            │    sdrive version:new     │
+                                            └──────────────────────────┘
+                            a NEW vN — an archived version is never edited
+```
 
 | Transition | Owner | Notes |
 |------------|-------|-------|
