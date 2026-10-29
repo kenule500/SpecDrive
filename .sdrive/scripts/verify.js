@@ -390,20 +390,32 @@ function detectFields(files) {
 
     // Rust struct fields: `pub name: Type,` inside a `struct Name { ... }` body, which
     // is how a plan's entity fields are written in Rust. Generics such as `Option<T>`
-    // and `Vec<T>` are captured as-is; only the field name is used for matching.
+    // and `Vec<T>` are captured as-is; only the field name is used for matching, so the
+    // type spelling (`usize`, `String`, `Option<String>`) never affects the result.
+    //
+    // This is parsed line by line rather than with one regular expression because a
+    // field is not required to end in a comma - the last field in a struct often does
+    // not - and a pattern that insists on one silently drops that field while its
+    // siblings match.
     const rustStructs = content.matchAll(
       /\b(?:pub(?:\([^)]*\))?\s+)?struct\s+([A-Z]\w*)[^;{]*\{([\s\S]*?)\n\s*\}/g
     );
 
     for (const block of rustStructs) {
       const rustEntity = block[1];
-      const rustBody = block[2];
 
-      const rustFieldMatches = rustBody.matchAll(
-        /^\s*(?:pub(?:\([^)]*\))?\s+)?([a-z_]\w*)\s*:\s*([^,\n]+),/gm
-      );
+      for (const rawLine of block[2].split(/\r?\n/)) {
+        // Drop a trailing inline comment, then attributes and blank lines.
+        const line = rawLine.replace(/\/\/.*$/, "").trim();
 
-      for (const field of rustFieldMatches) {
+        if (!line || line.startsWith("#")) continue;
+
+        const field = line.match(
+          /^(?:pub(?:\([^)]*\))?\s+)?([a-z_]\w*)\s*:\s*(.+?),?\s*$/
+        );
+
+        if (!field) continue;
+
         fields.push({
           entity: rustEntity,
           name: field[1],
@@ -826,10 +838,15 @@ console.log(`➕ Extra:     ${result.extra.length}`);
 console.log(`\n🧾 Status:    ${status.toUpperCase()}`);
 console.log(`📁 Report:    ${path.relative(projectRoot, reportPath)}\n`);
 
+// A field is only meaningful with its entity: "row" says nothing on its own, while
+// "AngiImportOutcome.row" says which model is missing it - and makes a rename obvious.
+const labelItem = (item) =>
+  item.type === "field" ? `${item.entity}.${item.name}` : item.name || item.path || "";
+
 if (result.withdrawn.length > 0) {
   console.log("⏸️  Withdrawn (descoped, not missing):");
   result.withdrawn.forEach((i) => {
-    console.log(`  [${i.type}] ${i.name || i.path} - ${i.reason}`);
+    console.log(`  [${i.type}] ${labelItem(i)} - ${i.reason}`);
   });
   console.log("");
 }
@@ -837,7 +854,7 @@ if (result.withdrawn.length > 0) {
 if (result.missing.length > 0) {
   console.log("❌ Missing:");
   result.missing.forEach((i) => {
-    console.log(`  [${i.type}] ${i.name || i.path}`);
+    console.log(`  [${i.type}] ${labelItem(i)}`);
   });
 }
 

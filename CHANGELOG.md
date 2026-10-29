@@ -13,6 +13,23 @@ Nothing yet.
 
 ---
 
+## 0.1.49 — 2026-10-29
+
+### Changed
+
+- `sdrive verify` names a missing field with its entity — `AngiImportOutcome.line`, not a
+  bare `line`. A lone field name in the missing list cannot distinguish a parser gap from a
+  rename; `Entity.field` makes the difference readable at a glance.
+
+### Fixed
+
+- A Rust struct field with no trailing comma was silently dropped, so a plan field could be
+  reported as missing while every sibling on the same struct matched. Fields are now parsed
+  per line, which also tolerates a trailing inline comment and a `#[...]` attribute on the
+  field line.
+
+---
+
 ## 0.1.48 — 2026-10-29
 
 ### Fixed
