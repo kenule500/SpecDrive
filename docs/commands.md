@@ -201,15 +201,58 @@ sdrive group:resolve "[signup, multilanguage, video call]" --json
 | `[p0]` | every P0 item, in any wave |
 | `[BP-004, BP-012]` | those two items |
 | `[signup, video call]` | features by name — `video call` stays one name |
-
-A comma separates items; a space filters them. A comma-separated segment is a filter only
-when **every word** in it is a recognised selector (`waveN` / `wN` / `mN`, `pN`, `BP-###`, a
-status, `@tag`); otherwise the whole segment is a feature name.
+| `[m5 p2]` | Milestone **M5** and priority P2 |
+| `[w2 p1 build]` | wave 2, priority 1, and only rows whose `Kind` is `build` |
+| `[b1]` | the declared batch `b1` — **always one branch**, and refused if the batch is broken |
 
 `wN` / `waveN` selects the **dependency-derived wave** — the same wave `/sdrive:worktree`
 works from. `mN` / `milestoneN` selects the **Milestone** column. Those are different columns
 and they do not always agree (in a plan where `M5` holds three crates the dependency wave can
 be 1), so the two are never treated as synonyms: `[w1]` and `[m5]` can select different items.
+
+#### Sharing one branch
+
+The same command answers whether a selection *can* share one branch:
+
+| Flag | Effect |
+|------|--------|
+| *(none)* | reports the gated items and says a shared branch would wait on them |
+| `--exclude-gated` | drops them from the result (they stay in the backlog) |
+| `--allow-gated` | accepts them anyway, knowing they hold the group |
+
+**Gated** means the row is `needs discovery` or `deferred`, or its dependency cell names
+access that has to be granted ("partner access", "credentials", "onboarding"). A shared
+branch merges only when every member passes review (CON-611), so one gated member stalls the
+whole group. A selection larger than four features warns rather than blocks: that is 8+
+approval stops, and one failure freezes all of them.
+
+#### Batches — a declared branch group
+
+A backlog `Batch` column (`b1`, `b2`, …) records the items that **land together on one
+branch**. The two axes are different in kind:
+
+| | Wave (`wN`) | Batch (`bN`) |
+|---|---|---|
+| Question | what can run in parallel | what must merge at the same moment |
+| Source | **derived** from `Depends on` | **declared** by a human in the backlog |
+| `/sdrive:propose` | asks the branch question | `[b1]` alone **implies one branch** |
+
+`[b1]` is validated, and a broken batch is a **refusal** rather than a blocker — it was
+written by hand, so it should be fixed in the backlog:
+
+- every member must be `Kind: build` (a decision has no test; a release postdates the merge);
+- no member may be gated;
+- every member must be in the **same wave** (otherwise they can never all be ready at once);
+- more than four members warns.
+
+Anything else in the brackets — `[b1, signup]`, `[b1 p1]` — is a plain selection again, and
+the branch question is asked as usual: "one branch" is a property of the whole expression,
+never of a fragment.
+
+A comma separates items; a space filters them. A comma-separated segment is a filter only
+when **every word** in it is a recognised selector (`wN`/`waveN`, `mN`/`milestoneN`, `pN`,
+`BP-###`, `build`/`decision`/`release`, a status, `@tag`); otherwise the whole segment is a
+feature name — which is why `video call` stays one name while `w2 p1 build` is a filter.
 
 Exit code `0` when at least one item resolved, `4` when nothing matched — and the error lists
 the waves and priorities that are selectable.

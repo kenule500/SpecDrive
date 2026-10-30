@@ -8,6 +8,9 @@ const assert = require("node:assert");
 const {
   parseExpression,
   resolveGroup,
+  checkGroupShareable,
+  checkBatch,
+  singleBatch,
   suggestBranchName,
   selectorFor,
   waveValue
@@ -125,4 +128,122 @@ test("the suggested branch is derived from the expression", () => {
   assert.strictEqual(suggestBranchName("wave1 p2"), "wave1-p2");
   assert.strictEqual(suggestBranchName("signup, video call"), "signup-video-call");
   assert.strictEqual(suggestBranchName(""), "wave");
+});
+
+test("kind selects work a gate can actually cover", () => {
+  const backlog = [
+    { id: "BP-001", feature: "Build a module", status: "backlog", kind: "build", wave: 2, priority: "P1" },
+    { id: "BP-002", feature: "Decide build vs crate", status: "backlog", kind: "decision", wave: 2, priority: "P1" },
+    { id: "BP-003", feature: "Publish 0.2", status: "backlog", kind: "release", wave: 2, priority: "P1" }
+  ];
+
+  assert.deepStrictEqual(ids(resolveGroup({ expression: "w2 p1 build", backlog })), ["BP-001"]);
+  assert.deepStrictEqual(ids(resolveGroup({ expression: "w2 decision", backlog })), ["BP-002"]);
+  assert.deepStrictEqual(ids(resolveGroup({ expression: "w2 release", backlog })), ["BP-003"]);
+});
+
+test("gated items are reported, and block a shared branch only", () => {
+  const backlog = [
+    {
+      id: "BP-001",
+      feature: "OAuth helper",
+      status: "backlog",
+      kind: "build",
+      wave: 2,
+      priority: "P1",
+      dependsOn: [],
+      externalDependencies: []
+    },
+    { id: "BP-002", feature: "Meta leads", status: "needs discovery", kind: "build", wave: 2, priority: "P1" },
+    {
+      id: "BP-003",
+      feature: "Stripe sync",
+      status: "backlog",
+      kind: "build",
+      wave: 2,
+      priority: "P1",
+      externalDependencies: ["partner access"]
+    }
+  ];
+
+  const resolved = resolveGroup({ expression: "w2 p1 build", backlog });
+
+  assert.deepStrictEqual(
+    resolved.gated.map((item) => item.id),
+    ["BP-002", "BP-003"]
+  );
+
+  assert.strictEqual(checkGroupShareable(resolved).ok, false);
+  assert.match(checkGroupShareable(resolved).blockers[0], /BP-002, BP-003/);
+  assert.strictEqual(checkGroupShareable(resolved, { allowGated: true }).ok, true);
+
+  const clean = resolveGroup({ expression: "BP-001", backlog });
+  assert.deepStrictEqual(checkGroupShareable(clean).blockers, []);
+});
+
+test("a large group warns but is not blocked", () => {
+  const backlog = Array.from({ length: 6 }, (_unused, index) => ({
+    id: `BP-00${index + 1}`,
+    feature: `Module ${index + 1}`,
+    status: "backlog",
+    kind: "build",
+    wave: 2,
+    priority: "P1"
+  }));
+
+  const verdict = checkGroupShareable(resolveGroup({ expression: "w2 p1 build", backlog }));
+
+  assert.strictEqual(verdict.ok, true);
+  assert.strictEqual(verdict.warnings.length, 1);
+  assert.match(verdict.warnings[0], /12 approval stops/);
+});
+
+// ------------------------------------------------------------------ declared batches ---
+
+const BATCH_BACKLOG = [
+  { id: "BP-011", feature: "Meta leads", status: "backlog", kind: "build", batch: "b1", wave: 2, priority: "P1" },
+  { id: "BP-012", feature: "EagleView", status: "backlog", kind: "build", batch: "b1", wave: 2, priority: "P1" },
+  { id: "BP-013", feature: "QuickBooks", status: "backlog", kind: "build", batch: "b1", wave: 2, priority: "P1" },
+  { id: "BP-014", feature: "build vs crate", status: "backlog", kind: "decision", batch: "b2", wave: 2, priority: "P1" },
+  { id: "BP-020", feature: "Blocked one", status: "needs discovery", kind: "build", batch: "b3", wave: 2, priority: "P1" },
+  { id: "BP-030", feature: "Next wave thing", status: "backlog", kind: "build", batch: "b4", wave: 3, priority: "P1" }
+];
+
+test("[b1] selects exactly the declared batch, and implies one branch", () => {
+  const resolved = resolveGroup({ expression: "b1", backlog: BATCH_BACKLOG });
+
+  assert.deepStrictEqual(ids(resolved), ["BP-011", "BP-012", "BP-013"]);
+  assert.strictEqual(resolved.batch, "b1");
+  assert.strictEqual(singleBatch("b1"), "b1");
+
+  // Anything else in the brackets makes it a plain selection again.
+  assert.strictEqual(singleBatch("b1, signup"), null);
+  assert.strictEqual(singleBatch("w2 p1"), null);
+  assert.strictEqual(singleBatch("b1 p1"), null);
+});
+
+test("a healthy batch is shareable, and its members pass checkBatch", () => {
+  const resolved = resolveGroup({ expression: "b1", backlog: BATCH_BACKLOG });
+
+  assert.strictEqual(checkBatch(resolved).ok, true);
+  assert.strictEqual(checkGroupShareable(resolved).ok, true);
+});
+
+test("a batch containing a decision, a gated item, or two waves is refused", () => {
+  const decision = resolveGroup({ expression: "b2", backlog: BATCH_BACKLOG });
+  assert.strictEqual(checkBatch(decision).ok, false);
+  assert.match(checkBatch(decision).blockers.join(" "), /not builds/);
+
+  const gated = resolveGroup({ expression: "b3", backlog: BATCH_BACKLOG });
+  assert.strictEqual(checkBatch(gated).ok, false);
+  assert.match(checkBatch(gated).blockers.join(" "), /need access/);
+
+  const crossWave = [
+    { id: "BP-001", feature: "A", status: "backlog", kind: "build", batch: "b9", wave: 2, priority: "P1" },
+    { id: "BP-002", feature: "B", status: "backlog", kind: "build", batch: "b9", wave: 3, priority: "P1" }
+  ];
+  const verdict = checkBatch(resolveGroup({ expression: "b9", backlog: crossWave }));
+
+  assert.strictEqual(verdict.ok, false);
+  assert.match(verdict.blockers.join(" "), /span 2 waves/);
 });

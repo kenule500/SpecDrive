@@ -193,6 +193,7 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed in the current release.
 **Daily use**
 
 - [Core Workflow](#core-workflow)
+- [Grouping and batches](#grouping-and-batches)
 - [Optional Commands](#optional-commands)
 - [Batch Mode: the `--all` Flag](#batch-mode-the---all-flag)
 - [Versions](#versions)
@@ -1213,6 +1214,44 @@ Merges an approved feature back into the branch it came from, and completes its 
 **Batch mode:**
 
 - `/sdrive:archive --all` — archive every ongoing feature that has passed review, one after the other. Each feature still lands on its own recorded `base`
+
+---
+
+## Grouping and batches
+
+`/sdrive:propose` accepts a **selection** instead of a single feature name. Inside the
+brackets a comma separates items and a space filters them:
+
+| Command | Meaning |
+|---|---|
+| `/sdrive:propose [w2 p1]` | dependency wave 2, priority P1 |
+| `/sdrive:propose [m5 p1 build]` | milestone M5, P1, and only `Kind: build` rows |
+| `/sdrive:propose [b1]` | the declared batch `b1` — **one branch, no question asked** |
+| `/sdrive:propose [signup, video call]` | two features by name — `video call` stays one name |
+
+Resolve one without creating anything:
+
+```bash
+sdrive group:resolve "[w2 p1 build]" --json
+```
+
+### Wave vs batch
+
+| | Wave (`wN`) | Batch (`bN`) |
+|---|---|---|
+| Question | what can run in parallel | what merges at the same moment |
+| Source | **derived** from `Depends on` | **declared** in the backlog's `Batch` column |
+| Consequence | an ordering | an atomic merge |
+
+`[b1]` therefore implies one branch, and it is *refused* rather than warned about when a
+member is not a `build`, is gated on access from outside the repository, or sits in a
+different wave — a declared batch has no excuse for being unable to finish.
+
+**Gates stay per feature.** Three features in a group means six approval stops (Gate 1 + Gate
+2 each) and one merge. Grouping buys one branch decision and one name, not one approval.
+
+See [Descoped work](#descoped-work) when a member cannot be delivered, and
+[commands.md](docs/commands.md#sdrive-groupresolve-expression) for the full selector list.
 
 ---
 

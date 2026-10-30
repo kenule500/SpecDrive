@@ -1634,6 +1634,45 @@ program
       return;
     }
 
+    // Shared branches: features recording the same branch are ONE review unit, so the number
+    // worth knowing first is how many of them are review-ready. Derived from `branch`
+    // equality - the same rule archive:check enforces - with nothing stored.
+    const branchGroups = new Map();
+
+    features.forEach((feature) => {
+      if (!feature.branch) return;
+      if (!branchGroups.has(feature.branch)) branchGroups.set(feature.branch, []);
+      branchGroups.get(feature.branch).push(feature);
+    });
+
+    const sharedBranches = [...branchGroups.entries()].filter(([, list]) => list.length > 1);
+
+    if (sharedBranches.length > 0) {
+      console.log("\nShared branches\n");
+
+      sharedBranches.forEach(([branch, list]) => {
+        const ready = list.filter((feature) => {
+          const version =
+            feature.versions.find((entry) => entry.id === feature.currentVersion) ||
+            feature.versions[0];
+
+          if (!version) return false;
+
+          const gates = Object.values(version.gates || {});
+
+          return gates.length > 0 && gates.every((status) => status === "approved");
+        }).length;
+
+        console.log(
+          `   ${branch} — ${ready}/${list.length} review-ready (${list
+            .map((feature) => feature.name)
+            .join(", ")})`
+        );
+      });
+
+      console.log("");
+    }
+
     console.log("\nSpecDrive Feature Status\n");
 
     features.forEach((feature) => {
@@ -3603,6 +3642,8 @@ program
   .command("group:resolve <expression>")
   .description("Resolve a group expression such as [wave1 p2] against .sdrive/product/backlog.md")
   .option("--json", "Print the resolved group as JSON")
+  .option("--exclude-gated", "Drop items that need access from outside the repository")
+  .option("--allow-gated", "Treat gated items as shareable (they will hold the whole branch)")
   .action((expression, options) => {
     output.setJson(options.json);
     requirePermission("group:resolve");
@@ -3632,8 +3673,27 @@ program
       backlog: parseBacklog(markdown)
     });
 
+    // `--exclude-gated` is the mechanical form of "drop anything whose access is not
+    // confirmed": the item stays in the backlog, it just does not join this wave.
+    if (options.excludeGated) {
+      resolved.matched = resolved.matched.filter((item) => !item.gated);
+    }
+
     const branchSuggestion = `feature/${groupLib.suggestBranchName(body)}`;
+
+    // Whether these features can share ONE branch. This is not a failure - the user still
+    // decides - but they decide knowing which members would hold the whole group.
+    const sharedBranch = groupLib.checkGroupShareable(resolved, {
+      allowGated: options.allowGated === true
+    });
+
+    // `[b1]` is a declaration, not a preference: the batch was written by hand in the
+    // backlog, so a batch that cannot finish is an error to fix there.
+    const batchVerdict = resolved.batch ? groupLib.checkBatch(resolved) : null;
+    const impliesSharedBranch = Boolean(resolved.batch);
     const blockers = [];
+
+    if (batchVerdict && !batchVerdict.ok) blockers.push(...batchVerdict.blockers);
 
     if (resolved.matched.length === 0) {
       blockers.push(
@@ -3656,6 +3716,9 @@ program
       data: {
         ...resolved,
         branchSuggestion,
+        sharedBranch,
+        batchVerdict,
+        impliesSharedBranch,
         backlog: path.relative(projectRoot, backlogPath),
         available: resolved.available
       },
@@ -3665,18 +3728,35 @@ program
         console.log(`\n📦 Group: [${body}]\n`);
 
         resolved.matched.forEach((item) => {
-          // `status` is shown because a wave query also returns rows that are already
-          // `completed` or already owned by a feature - the confirm step is where they get
-          // dropped, so the list has to say which ones they are.
-          const meta = [item.milestone, item.priority, item.status].filter(Boolean).join(" ");
+          // `status` and `kind` are shown because a wave query also returns rows that are
+          // already `completed`, are decisions, or are release steps - the confirm step is
+          // where they get dropped, so the list has to say which ones they are.
+          const meta = [item.milestone, item.priority, item.kind, item.status]
+            .filter(Boolean)
+            .join(" ");
+          const gate = item.gated ? "  ⛔ needs access" : "";
+
           console.log(
-            `   ${String(item.id || "-").padEnd(7)} ${item.name}${meta ? `  (${meta})` : ""}`
+            `   ${String(item.id || "-").padEnd(7)} ${item.name}${meta ? `  (${meta})` : ""}${gate}`
           );
         });
 
         console.log(
           `\n   ${resolved.matched.length} feature(s) · suggested branch: ${branchSuggestion}`
         );
+
+        if (sharedBranch.blockers.length > 0 || sharedBranch.warnings.length > 0) {
+          console.log("\n   Shared branch:");
+
+          sharedBranch.blockers.forEach((blocker) => console.log(`   ⛔ ${blocker}`));
+          sharedBranch.warnings.forEach((warning) => console.log(`   ⚠️  ${warning}`));
+        }
+
+        if (impliesSharedBranch) {
+          console.log(
+            `\n   Batch ${resolved.batch}: ONE branch (declared in the backlog), merged once when every member passes review.`
+          );
+        }
 
         if (ok) {
           console.log("   Nothing has been created yet - /sdrive:propose creates each feature.\n");

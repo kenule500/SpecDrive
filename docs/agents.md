@@ -140,6 +140,12 @@ commit or push. `/sdrive:propose` commits its own artifacts inside the worktree.
 
 **Command:** `/sdrive:propose`
 
+**Accepts a group:** `[w1 p2]`, `[m5 p1 build]`, `[b1]` or `[signup, video call]`. A comma
+separates items and a space filters them; a segment is a filter only when every word in it is
+a selector. The agent resolves it with `sdrive group:resolve "<expression>" --json`, shows the
+list, and creates nothing until you confirm. `[b1]` alone means **one branch** — a declared
+batch must be all `build`, ungated, and inside a single wave, and it lands as one merge.
+
 **Purpose:** Create feature specification, technical plan, and tasks.
 
 **What it does:**

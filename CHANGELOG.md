@@ -35,6 +35,22 @@ features and `video call` stays one name.
 - **Shared branches are a recorded decision, not an accident.** Two features may record the
   same `branch`; the group is derived from that equality, so there is nothing to store and
   nothing to migrate.
+- **`Kind` on backlog items** (`build` | `decision` | `release`) with a matching selector, so
+  `[w2 p1 build]` excludes the work a coverage gate cannot pass — a decision has no test, and
+  a release cannot run before the build lands. The product plan only needs a `Kind` column;
+  without one every row is treated as a build, exactly as before.
+- **Declared batches: a backlog `Batch` column** (`b1`, `b2`, …) records the items that land
+  together on one branch, and `[b1]` is the one-word form of "all of these, one branch". Wave
+  is *derived* from dependencies; a batch is *declared* by a human. A broken batch is refused
+  rather than warned about — a member that is not a `build`, a gated member, or members split
+  across two waves. Anything else in the brackets (`[b1, signup]`) reverts to a plain
+  selection, so "one branch" is a property of the whole expression, never of a fragment.
+- **A shared branch that would stall is refused, not just warned about.**
+  `sdrive group:resolve` reports the *gated* items — `needs discovery`, `deferred`, or a
+  dependency cell naming access that must be granted — because a shared branch merges only
+  when every member passes review, so one gated member holds the whole group.
+  `--exclude-gated` drops them from the selection, `--allow-gated` accepts the wait, and a
+  selection larger than four features warns (8+ approval stops; one failure freezes all).
 
 ### Changed
 
