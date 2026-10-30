@@ -13,6 +13,45 @@ Nothing yet.
 
 ---
 
+## 0.1.50 — 2026-10-29
+
+**Groups: `/sdrive:propose [wave1 p2]`, and many features on one branch — when the user
+says so.**
+
+`/sdrive:propose` now accepts a bracketed *selection* instead of a single feature name. A
+comma separates items, a space filters them, and a segment is a filter only when every word
+in it is a selector — so `[wave1 p2]` is a query while `[signup, video call]` is two
+features and `video call` stays one name.
+
+### Added
+
+- `sdrive group:resolve "<expression>" [--json]` — the resolver `/sdrive:propose [ ... ]`
+  uses, exposed so an agent can show the selection, its count, and the suggested branch name
+  before anything is created. Exit `4` when nothing matches, listing the waves and
+  priorities that *are* selectable.
+- `/sdrive:propose [ ... ]`: resolve → show the list → confirm → ask the branch question
+  **once** → run the per-feature workflow for each feature, stopping at every Gate 1 and
+  Gate 2. Grouping buys one branch decision and one name, never one approval.
+- **Shared branches are a recorded decision, not an accident.** Two features may record the
+  same `branch`; the group is derived from that equality, so there is nothing to store and
+  nothing to migrate.
+
+### Changed
+
+- `sdrive archive:check` / `archive:finalize` treat a shared branch as one review unit: the
+  branch merges once, when **every** feature recording it is ready, and the refusal names
+  the sibling and quotes its own blockers (CON-611).
+- **CON-606** and **CON-611** are amended: one branch per feature remains the default, but
+  features share a branch by recorded decision, and a shared branch still lands as a single
+  review unit.
+
+### Notes
+
+- The dashboard Branching read-out does not yet count shared branches — it still reports the
+  model (GitHub Flow / trunk-based / stacked). Planned, not shipped.
+
+---
+
 ## 0.1.49 — 2026-10-29
 
 ### Changed

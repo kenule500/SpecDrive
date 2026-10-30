@@ -183,6 +183,39 @@ Checks that `defaultTemplate` is a valid template and that no unknown keys exist
 
 ---
 
+### `sdrive group:resolve <expression>`
+
+Resolves a bracketed group expression against `.sdrive/product/backlog.md`. This is the same
+resolver `/sdrive:propose [ ... ]` uses, exposed so an agent can show the selection before
+creating anything.
+
+```bash
+sdrive group:resolve "[wave1 p2]"
+sdrive group:resolve "[signup, multilanguage, video call]" --json
+```
+
+| Expression | Means |
+|------------|-------|
+| `[wave1 p2]` | backlog items in wave 1 **and** priority 2 |
+| `[wave1]` | every item in wave 1 |
+| `[p0]` | every P0 item, in any wave |
+| `[BP-004, BP-012]` | those two items |
+| `[signup, video call]` | features by name — `video call` stays one name |
+
+A comma separates items; a space filters them. A comma-separated segment is a filter only
+when **every word** in it is a recognised selector (`waveN` / `wN` / `mN`, `pN`, `BP-###`, a
+status, `@tag`); otherwise the whole segment is a feature name.
+
+`wN` / `waveN` selects the **dependency-derived wave** — the same wave `/sdrive:worktree`
+works from. `mN` / `milestoneN` selects the **Milestone** column. Those are different columns
+and they do not always agree (in a plan where `M5` holds three crates the dependency wave can
+be 1), so the two are never treated as synonyms: `[w1]` and `[m5]` can select different items.
+
+Exit code `0` when at least one item resolved, `4` when nothing matched — and the error lists
+the waves and priorities that are selectable.
+
+---
+
 ### `sdrive status`
 
 Shows all features and their lifecycle state.

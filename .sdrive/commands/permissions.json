@@ -36,6 +36,7 @@
     "update-propose": ["admin", "reviewer"],
     "assign": ["admin", "reviewer"],
     "status": ["admin", "reviewer", "developer"],
+    "group:resolve": ["admin", "reviewer", "developer"],
     "approve": ["admin", "reviewer"],
     "archive:check": ["admin", "reviewer"],
     "archive:finalize": ["admin", "reviewer"],

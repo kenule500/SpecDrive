@@ -1444,6 +1444,7 @@ Audits and manages AI skills.
 | `sdrive config:get <key>` | Read a config value by dot path |
 | `sdrive config:set <key> <value>` | Write a config value (e.g. opt into test evidence) |
 | `sdrive status` | Show feature lifecycle state, blockers, and the next action |
+| `sdrive group:resolve <expression>` | Resolve a group like `[wave1 p2]` against the product backlog — `--json` for agents |
 | `sdrive test <feature>` | Run the project's tests and record `test-evidence.json` |
 | `sdrive check` | Run doctor + validation (+ tests with `--tests`) in one pass |
 | `sdrive approve <feature> <gate>` | Approve a workflow gate (verifies the stage is genuinely complete) |

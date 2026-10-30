@@ -3593,4 +3593,111 @@ program
     process.exit(result.ok ? EXIT.OK : EXIT.ERROR);
   });
 
+// ---------- GROUP RESOLVE ----------
+// `/sdrive:propose [wave1 p2]` is a selection, not a feature name: inside the brackets a
+// comma separates items and a space filters them. The agent must not guess what that means,
+// so the resolver lives in scripts/lib/group.js and this command exposes it as JSON - one
+// implementation, one contract, and a result the agent shows the user before creating
+// anything.
+program
+  .command("group:resolve <expression>")
+  .description("Resolve a group expression such as [wave1 p2] against .sdrive/product/backlog.md")
+  .option("--json", "Print the resolved group as JSON")
+  .action((expression, options) => {
+    output.setJson(options.json);
+    requirePermission("group:resolve");
+
+    const projectRoot = process.cwd();
+    const sdriveRoot = path.join(projectRoot, ".sdrive");
+
+    if (!fs.existsSync(sdriveRoot)) {
+      process.exit(
+        output.fail(
+          "group:resolve",
+          EXIT.NOT_INITIALIZED,
+          "❌ No .sdrive/ directory. Run `sdrive init` first."
+        )
+      );
+    }
+
+    const groupLib = require("../scripts/lib/group");
+    const { parseBacklog } = require("../scripts/lib/product-plan");
+
+    const backlogPath = path.join(sdriveRoot, "product", "backlog.md");
+    const markdown = fs.existsSync(backlogPath) ? fs.readFileSync(backlogPath, "utf8") : "";
+    const parsed = groupLib.parseExpression(expression);
+    const body = parsed.isGroup ? parsed.expression : expression;
+    const resolved = groupLib.resolveGroup({
+      expression: body,
+      backlog: parseBacklog(markdown)
+    });
+
+    const branchSuggestion = `feature/${groupLib.suggestBranchName(body)}`;
+    const blockers = [];
+
+    if (resolved.matched.length === 0) {
+      blockers.push(
+        markdown
+          ? `Nothing in .sdrive/product/backlog.md matches "${body}".`
+          : "No .sdrive/product/backlog.md, so a group can only name features directly."
+      );
+    }
+
+    resolved.emptyQueries.forEach((query) => {
+      blockers.push(`"${query}" matched no backlog item.`);
+    });
+
+    const ok = blockers.length === 0;
+
+    output.finish({
+      command: "group:resolve",
+      ok,
+      code: ok ? EXIT.OK : EXIT.VALIDATION,
+      data: {
+        ...resolved,
+        branchSuggestion,
+        backlog: path.relative(projectRoot, backlogPath),
+        available: resolved.available
+      },
+      blockers,
+      suppressAuto: true,
+      human: () => {
+        console.log(`\n📦 Group: [${body}]\n`);
+
+        resolved.matched.forEach((item) => {
+          // `status` is shown because a wave query also returns rows that are already
+          // `completed` or already owned by a feature - the confirm step is where they get
+          // dropped, so the list has to say which ones they are.
+          const meta = [item.milestone, item.priority, item.status].filter(Boolean).join(" ");
+          console.log(
+            `   ${String(item.id || "-").padEnd(7)} ${item.name}${meta ? `  (${meta})` : ""}`
+          );
+        });
+
+        console.log(
+          `\n   ${resolved.matched.length} feature(s) · suggested branch: ${branchSuggestion}`
+        );
+
+        if (ok) {
+          console.log("   Nothing has been created yet - /sdrive:propose creates each feature.\n");
+          return;
+        }
+
+        blockers.forEach((blocker) => console.error(`   • ${blocker}`));
+
+        const { waves, milestones, priorities } = resolved.available;
+
+        if (waves.length || milestones.length || priorities.length) {
+          console.error(
+            `\n   Selectable: ${waves.map((wave) => `w${wave}`).join(", ") || "no waves"}` +
+              ` | ${milestones.map((m) => `m${m}`).join(", ") || "no milestones"}` +
+              ` | ${priorities.map((p) => `p${p}`).join(", ") || "no priorities"}\n`
+          );
+        }
+      }
+    });
+
+    process.exit(ok ? EXIT.OK : EXIT.VALIDATION);
+  });
+
 program.parse(process.argv);

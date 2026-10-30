@@ -26,6 +26,7 @@
       "agentFile": ".sdrive/agents/02-specification.md",
       "description": "Choose the base branch, create the feature branch, then write the specification, traceability, plan, and tasks",
       "acceptsFeature": true,
+      "acceptsGroup": true,
       "gates": [],
       "validators": ["governance"]
     },
