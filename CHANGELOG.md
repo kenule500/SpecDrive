@@ -13,6 +13,32 @@ Nothing yet.
 
 ---
 
+## 0.1.52 — 2026-10-31
+
+### Fixed
+
+- **The Product Plan table's columns collided.** Its widths are positional
+  (`th:nth-child(N)` under `table-layout: fixed`), so adding `Kind` and `Batch` shifted every
+  rule two columns right: **Depends on** inherited the 74 px meant for **Wave**, and its label
+  ran into **Base for** as `DEPENDS ONBASE FOR`. The widths are re-applied for eleven columns
+  and the table scrolls instead of squeezing.
+
+### Added
+
+- **Only branch topologies that can finish are offered.** `sdrive group:resolve` now returns
+  `topology.options` — each with `ok` — and `topology.excluded`. A shared branch is never
+  offered for a selection containing a gated member, because it could not archive until that
+  access exists; a `decision` or `release` is excluded from *every* topology, because neither
+  can pass a coverage gate. `/sdrive:propose` builds the branch question from the viable
+  options instead of inventing its own, so a deadlocked topology can no longer be chosen.
+
+### Changed
+
+- `suggestBranchName` dedupes segments: `[BP-011, BP-011, BP-017]` now suggests
+  `feature/bp-011-bp-017` rather than advertising the duplicate.
+
+---
+
 ## 0.1.51 — 2026-10-30
 
 **Groups and batches: `/sdrive:propose [w2 p1]`, `[m5 p1 build]`, `[b1]` — and many features
