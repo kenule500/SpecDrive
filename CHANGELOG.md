@@ -55,6 +55,12 @@ features and `video call` stays one name.
   when every member passes review, so one gated member holds the whole group.
   `--exclude-gated` drops them from the selection, `--allow-gated` accepts the wait, and a
   selection larger than four features warns (8+ approval stops; one failure freezes all).
+- **Only viable branch topologies are offered.** `sdrive group:resolve` now returns
+  `topology.options`, each with `ok`, plus `topology.excluded` for members no topology can
+  save — a decision cannot pass a coverage gate, and a release step postdates the merge. A
+  shared branch is never offered for a set containing a gated member, because it could not
+  archive. The agent builds the branch question from the viable options instead of inventing
+  its own, so a deadlocked topology can no longer be picked.
 
 ### Changed
 

@@ -3688,6 +3688,11 @@ program
       allowGated: options.allowGated === true
     });
 
+    // Only topologies that can reach archive. A decision cannot pass a gate in any
+    // topology, and a gated member would hold a shared branch, so neither is offered as a
+    // choice the user can pick and regret.
+    const topology = groupLib.topologies(resolved);
+
     // `[b1]` is a declaration, not a preference: the batch was written by hand in the
     // backlog, so a batch that cannot finish is an error to fix there.
     const batchVerdict = resolved.batch ? groupLib.checkBatch(resolved) : null;
@@ -3720,6 +3725,7 @@ program
         sharedBranch,
         batchVerdict,
         impliesSharedBranch,
+        topology,
         backlog: path.relative(projectRoot, backlogPath),
         available: resolved.available
       },
@@ -3752,6 +3758,30 @@ program
           sharedBranch.blockers.forEach((blocker) => console.log(`   ⛔ ${blocker}`));
           sharedBranch.warnings.forEach((warning) => console.log(`   ⚠️  ${warning}`));
         }
+
+        if (topology.options.length > 0) {
+          console.log("\n   Branch options that can finish:");
+
+          topology.options
+            .filter((option) => option.ok)
+            .forEach((option, index) => {
+              console.log(`     ${index + 1}. ${option.label}`);
+              console.log(`        ${option.note}`);
+            });
+
+          topology.options
+            .filter((option) => !option.ok)
+            .forEach((option) => {
+              console.log(`     not offered - ${option.label}`);
+              option.reasons.forEach((reason) => console.log(`        ${reason}`));
+            });
+        }
+
+        topology.excluded.forEach((entry) => {
+          console.log(
+            `\n   Not proposed as a feature: ${entry.item} (${entry.kind}) - ${entry.reason}`
+          );
+        });
 
         if (impliesSharedBranch) {
           console.log(

@@ -11,6 +11,7 @@ const {
   checkGroupShareable,
   checkBatch,
   singleBatch,
+  topologies,
   suggestBranchName,
   selectorFor,
   waveValue
@@ -227,6 +228,36 @@ test("a healthy batch is shareable, and its members pass checkBatch", () => {
 
   assert.strictEqual(checkBatch(resolved).ok, true);
   assert.strictEqual(checkGroupShareable(resolved).ok, true);
+});
+
+test("only topologies that can finish are offered", () => {
+  const backlog = [
+    { id: "BP-011", feature: "Meta", status: "backlog", kind: "build", wave: 2, priority: "P1" },
+    { id: "BP-013", feature: "QuickBooks", status: "needs discovery", kind: "build", wave: 2, priority: "P1" },
+    { id: "BP-014", feature: "decide crate", status: "backlog", kind: "decision", wave: 2, priority: "P1" },
+    { id: "BP-015", feature: "OAuth", status: "backlog", kind: "build", wave: 2, priority: "P1" }
+  ];
+
+  const resolved = resolveGroup({ expression: "w2 p1", backlog });
+  const { options, excluded } = topologies(resolved);
+  const byId = (id) => options.find((option) => option.id === id);
+
+  // The only shared branch on offer is the ungated one, with the gated item split out.
+  assert.deepStrictEqual(
+    options.filter((option) => option.ok).map((option) => option.id),
+    ["shared-clean", "per-feature"]
+  );
+
+  assert.deepStrictEqual(byId("shared-clean").shared, ["BP-011", "BP-015"]);
+  assert.deepStrictEqual(byId("shared-clean").separate, ["BP-013"]);
+
+  // "One shared branch for everything" is never offered while a member is gated.
+  assert.strictEqual(byId("shared-all-builds").ok, false);
+  assert.match(byId("shared-all-builds").reasons.join(" "), /hold the merge/);
+
+  // A decision is not a feature in any topology; it is excluded with a reason.
+  assert.deepStrictEqual(excluded.map((entry) => entry.item), ["BP-014"]);
+  assert.match(excluded[0].reason, /no test to pass/);
 });
 
 test("a batch containing a decision, a gated item, or two waves is refused", () => {
