@@ -13,10 +13,14 @@ Nothing yet.
 
 ---
 
-## 0.1.50 — 2026-10-29
+## 0.1.51 — 2026-10-30
 
-**Groups: `/sdrive:propose [wave1 p2]`, and many features on one branch — when the user
-says so.**
+**Groups and batches: `/sdrive:propose [w2 p1]`, `[m5 p1 build]`, `[b1]` — and many features
+on one branch, when the user says so.**
+
+> Supersedes `0.1.50`, which was published from an earlier commit: that tarball has the group
+> expressions and the shared-branch rules, but not the `Kind` selector, the gated refusal, the
+> declared `Batch` column, or the dashboard and documentation work below.
 
 `/sdrive:propose` now accepts a bracketed *selection* instead of a single feature name. A
 comma separates items, a space filters them, and a segment is a filter only when every word
@@ -65,6 +69,30 @@ features and `video call` stays one name.
 
 - The dashboard Branching read-out does not yet count shared branches — it still reports the
   model (GitHub Flow / trunk-based / stacked). Planned, not shipped.
+
+---
+
+## 0.1.50 — 2026-10-29
+
+**Groups: `/sdrive:propose [wave1 p2]`, and many features on one branch — when the user says
+so.** Published from the `groups` commit; superseded by `0.1.51`.
+
+### Added
+
+- `/sdrive:propose [ ... ]`: a bracketed argument is a *selection*, not a feature name. A comma
+  separates items, a space filters them, and a segment is a filter only when every word in it
+  is a selector — so `[wave1 p2]` is a query while `[signup, video call]` is two features.
+- `sdrive group:resolve "<expression>" [--json]` — the same resolver, so an agent can show the
+  selection and its count before anything is created.
+- Shared branches as a recorded decision: two features may record the same `branch`, and the
+  group is derived from that equality rather than stored.
+
+### Changed
+
+- `sdrive archive:check` / `archive:finalize` treat a shared branch as one review unit: it
+  merges once, when **every** feature recording it is ready (CON-611).
+- CON-606 and CON-611 amended: one branch per feature stays the default, but a shared branch
+  lands as a single review unit.
 
 ---
 
