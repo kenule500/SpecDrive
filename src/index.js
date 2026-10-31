@@ -1650,17 +1650,18 @@ program
     if (sharedBranches.length > 0) {
       console.log("\nShared branches\n");
 
+      // Only commands/gates.js may name a gate value. `allGatesApproved` is the accessor
+      // that knows what "every gate cleared" means, and it is deliberately false when no
+      // gates are recorded - "nothing recorded" is not "everything approved".
+      const { allGatesApproved } = require("../commands/gates");
+
       sharedBranches.forEach(([branch, list]) => {
         const ready = list.filter((feature) => {
           const version =
             feature.versions.find((entry) => entry.id === feature.currentVersion) ||
             feature.versions[0];
 
-          if (!version) return false;
-
-          const gates = Object.values(version.gates || {});
-
-          return gates.length > 0 && gates.every((status) => status === "approved");
+          return version ? allGatesApproved(version) : false;
         }).length;
 
         console.log(
