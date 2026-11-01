@@ -549,6 +549,24 @@ activity predates the stamp keeps the rules it was proposed under, so switching 
 on cannot refuse work that was already in flight. Only features proposed afterwards
 must prove their tests fail without the work.
 
+**8. Agents run the mechanics themselves.** Every handoff used to be a list of commands
+for you to type. Most were shell commands an agent already had a terminal for, so
+`sdrive next` now answers the question with the *kind* attached:
+
+```text
+📁 checkout v1
+   1. [run yourself] sdrive verify checkout
+   2. [run yourself] sdrive test checkout
+   3. [needs you] sdrive approve checkout implementation
+```
+
+`/sdrive:apply` runs `sdrive verify` and `sdrive test` before reporting. The three
+kinds state what is possible, not what is convenient: `cli` steps are scripts any agent
+can run, `slash` steps are prompts the host must load (no agent can start another — all
+of them declare `agents: []`), and `human` steps are sign-offs. CON-715 makes "run it
+yourself" a rule, and `sdrive next <feature> --write` records the handoff in
+`.sdrive/handoff.json` so a session that ends today is resumable tomorrow in any editor.
+
 Run `sdrive doctor` after upgrading. It reports anything the upgrade could not
 repair on its own.
 
@@ -1563,6 +1581,7 @@ Audits and manages AI skills.
 | `sdrive config:get <key>` | Read a config value by dot path |
 | `sdrive config:set <key> <value>` | Write a config value (e.g. opt into test evidence) |
 | `sdrive status` | Show feature lifecycle state, blockers, and the next action |
+| `sdrive next [feature]` | Print the exact next steps, marking each `cli` (an agent runs it), `slash` (only you can start it), or `human` (a sign-off) |
 | `sdrive group:resolve <expression>` | Resolve a group like `[wave1 p2]` against the product backlog — `--json` for agents |
 | `sdrive test <feature>` | Run the project's tests and record `test-evidence.json` |
 | `sdrive check` | Run doctor + validation (+ tests with `--tests`) in one pass |

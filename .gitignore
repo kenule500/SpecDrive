@@ -23,6 +23,10 @@ Thumbs.db
 .sdrive/package.json
 .sdrive/framework-manifest.json
 .sdrive/migration-runs/
+# Where THIS session left off. Written by `sdrive next <feature> --write`; it describes
+# one working copy's next move, not a governance record, so it must not be committed or
+# merged between branches.
+.sdrive/handoff.json
 
 # Local scratch output
 .tmp-*

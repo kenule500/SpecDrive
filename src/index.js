@@ -1562,7 +1562,10 @@ program
 // what to do from `sdrive status` instead of from a chat log that no longer exists.
 // Without it the answer is "run the tests", which is true and useless when the finding
 // is a leaked key.
-function remediationFor(feature, version, root) {
+// The raw handoff record. `status` collapses it to one line; `next` lists every step.
+// Reading it in one place is what stops the two commands from disagreeing about what a
+// failed review means.
+function reviewRemediation(feature, version, root) {
   if (!feature || !version || !version.id) {
     return null;
   }
@@ -1585,7 +1588,17 @@ function remediationFor(feature, version, root) {
     return null;
   }
 
-  const round = Number(remediation.round) || 1;
+  return { round: Number(remediation.round) || 1, items };
+}
+
+function remediationFor(feature, version, root) {
+  const handoff = reviewRemediation(feature, version, root);
+
+  if (!handoff) {
+    return null;
+  }
+
+  const { round, items } = handoff;
   const first = items[0];
   const others = items.length > 1 ? ` (and ${items.length - 1} more on the list)` : "";
   const tail =
@@ -1636,6 +1649,96 @@ function nextActionFor(feature, version, root) {
     command: `sdrive approve ${feature.name} ${pending}`,
     reason: `The "${pending}" gate is ${gates[pending] || "pending"}.`
   };
+}
+
+// ---------- WHO RUNS WHAT ----------
+//
+// Every handoff used to be a list of commands for the user to type. Most of them are
+// shell commands an agent already has a terminal for, so telling the user to run them
+// is work transferred for no reason. The three kinds are not a preference, they are a
+// description of what is possible:
+//
+//   cli    - a script. Any agent can run it. The user should never have to.
+//   slash  - a prompt the host loads. NO agent can start another: every agent declares
+//            `agents: []`, so a run cannot continue into a different command. The
+//            cheapest honest form is one word from the user.
+//   human  - a sign-off. `sdrive approve` is the governance act itself; an agent that
+//            approves its own work is exactly what these gates exist to prevent.
+function stepKind(command) {
+  if (/^\/sdrive:/.test(command)) return "slash";
+  if (/^sdrive approve\b/.test(command)) return "human";
+
+  return "cli";
+}
+
+function stepsFor(feature, version, root) {
+  const { GATE_ORDER, isGateApprovedFor } = require("../commands/gates");
+  const name = feature.name;
+  const steps = [];
+  const add = (command, why) => {
+    steps.push({ command, kind: stepKind(command), why });
+  };
+
+  const pending = GATE_ORDER.find((gate) => !isGateApprovedFor(version, gate));
+
+  if (!pending) {
+    add(`sdrive archive:check ${name}`, "Every gate is approved; confirm nothing else blocks the archive.");
+    add(`/sdrive:archive ${name}`, "Archive merges the branch and closes the version - a person decides that.");
+
+    return steps;
+  }
+
+  if (pending === "specification" || pending === "planning") {
+    add(`/sdrive:propose ${name}`, `The "${pending}" gate needs the artifact that command writes.`);
+    add(`sdrive approve ${name} ${pending}`, "Approving is a sign-off, so it stays with you.");
+
+    return steps;
+  }
+
+  if (pending === "implementation") {
+    add(`sdrive verify ${name}`, "Verify compares plan.json to the code before any gate reads it.");
+    add(`sdrive test ${name}`, "The implementation gate needs a recorded passing run.");
+    add(`sdrive approve ${name} implementation`, "Approving is a sign-off, so it stays with you.");
+
+    return steps;
+  }
+
+  // review: a recorded failure names its own fix; without one the tests come first.
+  const handoff = reviewRemediation(feature, version, root);
+
+  if (handoff) {
+    for (const item of handoff.items) {
+      add(item.fixWith, `${item.severity || "unspecified"} severity, round ${handoff.round} of 3: ${item.finding}`);
+    }
+
+    add(`sdrive test ${name}`, "A fix moves HEAD, so the test record must be re-stamped before review can read it.");
+    add(`sdrive approve ${name} implementation`, "New fix tasks leave the implementation sign-off unsatisfied until it is given again.");
+    add(`/sdrive:review ${name}`, "Review re-audits the new commit and clears the verdict.");
+
+    return steps;
+  }
+
+  add(`sdrive test ${name}`, "Review needs passing test evidence; run the tests first.");
+  add(`sdrive approve ${name} review`, "Approving is a sign-off, so it stays with you.");
+
+  return steps;
+}
+
+// What a session should pick up, written to disk so it survives the window. Chat is
+// scratch paper: a session that ends mid-feature must leave the next step in the repo,
+// or reopening the project in another editor means re-deriving it from nothing.
+function writeHandoff(root, feature, version, steps, by) {
+  const file = path.join(root, ".sdrive", "handoff.json");
+
+  stateStore.writeJsonAtomic(file, {
+    feature: feature.name,
+    version: version.id,
+    recordedAt: new Date().toISOString(),
+    by: by || process.env.SDRIVE_ACTOR || null,
+    steps
+  });
+
+  return file;
 }
 
 program
@@ -1768,6 +1871,116 @@ program
       }
       console.log("");
     });
+  });
+
+// ---------- NEXT COMMAND ----------
+//
+// One command that says exactly what to do and who can do it. Agents execute every
+// `cli` step themselves - they already have a terminal - and ask the user only for
+// `slash` (a prompt the host has to load; no agent can start another) and `human`
+// (a sign-off). `--write` records the list in `.sdrive/handoff.json`, so a session
+// that ends today is resumable in any editor tomorrow.
+program
+  .command("next [feature]")
+  .description("Print the exact next steps, marking which an agent runs itself and which need a person")
+  .option("--write", "Record the steps in .sdrive/handoff.json")
+  .option("--json", "Print the result as JSON")
+  .action((featureName, options) => {
+    output.setJson(options.json);
+
+    const projectRoot = process.cwd();
+    const statePath = stateStore.statePath(projectRoot);
+
+    if (!fs.existsSync(statePath)) {
+      process.exit(
+        output.fail("next", EXIT.NOT_INITIALIZED, "❌ workflow-state.json not found. Run `sdrive init` first.")
+      );
+    }
+
+    const state = stateStore.readJson(statePath, null);
+
+    if (!state) {
+      process.exit(
+        output.fail("next", EXIT.VALIDATION, "❌ workflow-state.json is not valid JSON.")
+      );
+    }
+
+    const all = state.features || [];
+    const targets = featureName ? all.filter((feature) => feature.name === featureName) : all;
+
+    if (featureName && targets.length === 0) {
+      process.exit(
+        output.fail("next", EXIT.USAGE, `❌ Feature "${featureName}" not found in workflow-state.json.`)
+      );
+    }
+
+    const versionOf = (feature) =>
+      (feature.versions || []).find((entry) => entry.id === feature.currentVersion) ||
+      (feature.versions || [])[0] ||
+      null;
+
+    const plan = targets.map((feature) => {
+      const version = versionOf(feature);
+
+      return {
+        feature: feature.name,
+        version: version ? version.id : null,
+        steps: version ? stepsFor(feature, version, projectRoot) : []
+      };
+    });
+
+    if (options.write) {
+      // A handoff is one session's next move, not a status dump: writing it for every
+      // feature at once would leave the next session guessing which entry it meant.
+      if (plan.length !== 1) {
+        process.exit(
+          output.fail("next", EXIT.USAGE, "❌ --write needs a single feature: `sdrive next <feature> --write`.")
+        );
+      }
+
+      const version = versionOf(targets[0]);
+
+      plan[0].handoff = path.relative(
+        projectRoot,
+        writeHandoff(projectRoot, targets[0], version, plan[0].steps)
+      );
+    }
+
+    output.finish({
+      command: "next",
+      ok: true,
+      code: EXIT.OK,
+      data: { plan },
+      human: () => {
+        plan.forEach((entry) => {
+          console.log(`\n📁 ${entry.feature}${entry.version ? ` ${entry.version}` : ""}`);
+
+          if (entry.steps.length === 0) {
+            console.log("   Nothing recorded for this feature yet.");
+            return;
+          }
+
+          entry.steps.forEach((step, index) => {
+            const tag =
+              step.kind === "cli"
+                ? "run yourself"
+                : step.kind === "human"
+                  ? "needs you"
+                  : "next command";
+            console.log(`   ${index + 1}. [${tag}] ${step.command}`);
+            console.log(`      ${step.why}`);
+          });
+        });
+
+        if (plan.some((entry) => entry.handoff)) {
+          console.log(`\n   Handoff recorded: ${plan.find((entry) => entry.handoff).handoff}`);
+        }
+
+        console.log("");
+      }
+    });
+
+    process.exit(EXIT.OK);
   });
 
 // ---------- APPROVE COMMAND ----------

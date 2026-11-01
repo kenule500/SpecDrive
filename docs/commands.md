@@ -26,6 +26,7 @@ SpecDrive has two types of commands:
 | `sdrive config:get <key>` | Read a config value by dot path |
 | `sdrive config:set <key> <value>` | Write a config value |
 | `sdrive status` | Show feature lifecycle state and the next action |
+| `sdrive next [feature]` | Print the exact next steps, marking which an agent runs itself and which need a person |
 | `sdrive test <feature>` | Run tests and record `test-evidence.json` |
 | `sdrive check` | Run doctor + validation (+ tests with `--tests`) |
 | `sdrive approve <feature> <gate>` | Approve a workflow gate (verifies the stage is genuinely complete) |
@@ -337,6 +338,58 @@ sdrive status
 ```
 
 For each feature, it lists every version and its phase, step, and gate status.
+
+---
+
+### `sdrive next [feature]`
+
+Prints the exact next steps and **who can run each one**. This is the command an agent
+runs instead of writing you a to-do list.
+
+```bash
+sdrive next checkout
+sdrive next checkout --write     # also record it in .sdrive/handoff.json
+sdrive next --json               # every feature, machine-readable
+```
+
+```text
+📁 checkout v1
+   1. [run yourself] sdrive verify checkout
+      Verify compares plan.json to the code before any gate reads it.
+   2. [run yourself] sdrive test checkout
+      The implementation gate needs a recorded passing run.
+   3. [needs you] sdrive approve checkout implementation
+      Approving is a sign-off, so it stays with you.
+```
+
+Three kinds, and the split is a fact about the tool rather than a preference:
+
+| `kind` | What it means | Who runs it |
+|---|---|---|
+| `cli` | a script — `verify`, `test`, `check`, `validate`, `archive:check` | **the agent**, with its terminal |
+| `slash` | a prompt the host loads, e.g. `/sdrive:review` | **you** — every agent declares `agents: []`, so no agent can start another |
+| `human` | `sdrive approve` | **you** — the approval *is* the governance act |
+
+A failed review changes the answer without changing the command: when `review.json`
+carries a `remediation` block, the `slash` steps come from it (each finding names the
+command that clears it), followed by `sdrive test`, a re-approval of `implementation`
+(new fix tasks leave that gate unsatisfied), and `/sdrive:review` again.
+
+`--write` requires a single feature and writes `.sdrive/handoff.json`:
+
+```json
+{
+  "feature": "checkout",
+  "version": "v1",
+  "recordedAt": "2026-11-01T10:04:00.000Z",
+  "by": "sam",
+  "steps": [{ "command": "sdrive test checkout", "kind": "cli", "why": "…" }]
+}
+```
+
+That file is git-ignored on purpose: it describes one working copy's next move, not a
+governance record, and merging it between branches would be meaningless. It exists so a
+session that ends today is resumable tomorrow, in any editor, without a chat log.
 
 ---
 

@@ -193,6 +193,9 @@ When invoked as `/sdrive:test --all`, test every ongoing feature sequentially.
      - Test results
      - Any failures
      - Coverage percentage
+   - Run `sdrive next <feature> --write` so the handoff is recorded in
+     `.sdrive/handoff.json`. `/sdrive:review` cannot be started from here — no agent can
+     launch another — so your job is to leave the next step on disk and name it once.
    - Recommend next step: `/sdrive:review`.
 </workflow>
 

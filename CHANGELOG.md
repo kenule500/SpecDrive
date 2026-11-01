@@ -13,6 +13,48 @@ Nothing yet.
 
 ---
 
+## 0.1.57 — 2026-11-01
+
+**Agents run the mechanics themselves, and `sdrive next` says who can run each step.**
+
+Every phase used to end by handing the user a list of commands. Most were shell
+commands an agent already held a terminal for, so the handoff moved work for no reason.
+
+### Added
+
+- **`sdrive next [feature]`** prints the exact next steps, each tagged by kind:
+  - `cli` — a script (`verify`, `test`, `check`, `validate`, `archive:check`). **An agent
+    runs it.** The user should never be asked to.
+  - `slash` — a prompt the host loads (`/sdrive:review`). **Only the user can start it**,
+    because every agent declares `agents: []` and cannot launch another.
+  - `human` — `sdrive approve`. **Only the user**, because the approval is the
+    governance act itself.
+- **`sdrive next <feature> --write`** records the list in `.sdrive/handoff.json`, so a
+  session that ends mid-feature is resumable in another editor without a chat log. The
+  file is git-ignored: it is one working copy's next move, not a governance record.
+- **`/sdrive:apply` now runs `sdrive verify` and `sdrive test` before reporting.** It
+  reports both outcomes honestly, including failure and "no test command configured",
+  and stops asking the user to type them. It still does not *write* tests — that is
+  `/sdrive:test`.
+- **`/sdrive:review` and `/sdrive:test` run `sdrive next <feature> --write`** before
+  reporting, so the handoff survives the session.
+- **CON-715** in the constitution: an agent MUST run every deterministic step itself;
+  it MUST NOT run `sdrive approve`, cannot run another `/sdrive:*`, and must not touch
+  credentials or a merge decision.
+
+A failed review is handled without a new command: the `slash` steps come from
+`review.json.remediation`, followed by `sdrive test`, a re-approval of `implementation`
+(fix tasks leave that gate unsatisfied) and `/sdrive:review` again.
+
+### Fixed
+
+- `/sdrive:apply` ended with "Next: run `/sdrive:test <feature>`" — a slash command the
+  user had to be told to run, when the actionable step (recording test evidence) was a
+  script the agent could run. `test/test-agent-autonomy-contract.js` pins the new
+  behaviour and re-asserts the branch guards so the rewrite cannot drop them.
+
+---
+
 ## 0.1.56 — 2026-11-01
 
 **Red before green: `sdrive test --prove` records whether the tests fail without the

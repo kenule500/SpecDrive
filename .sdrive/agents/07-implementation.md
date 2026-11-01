@@ -222,7 +222,22 @@ You operate within the current version folder only.
      `/sdrive:propose <feature>`. Never ask
      the user to pick or confirm a merge target here.
    - Report: "Implementation complete on `<feature.branch>`, based on
-     `<feature.base>`. Next: run `/sdrive:test <feature>`."
+     `<feature.base>`."
+   - **Run the mechanical close-out yourself. Do not ask the user to type it.**
+     `sdrive verify <feature>` and `sdrive test <feature>` are scripts, not prompts, so
+     an agent with a terminal has no reason to hand them over:
+     - `sdrive verify` compares `plan.json` to the code and writes `verification.json`.
+     - `sdrive test` runs the suite and records `test-evidence.json` — the file the
+       implementation gate reads. It does not *write* tests (that is `/sdrive:test`),
+       so running it here is in scope and is not the "confirm verification" the rule
+       above forbids.
+     - Report both outcomes honestly, including a failure and including "no test
+       command configured". Never claim a run you did not perform.
+   - Then run `sdrive next <feature> --write` so the next step is recorded in
+     `.sdrive/handoff.json`. A session that ends here must be resumable in another
+     editor without reading this conversation.
+   - Close with the one thing that is genuinely the user's: "Next is your call:
+     approve implementation once `verify` and the test run look right."
    - **Do not ask which branch to merge into and do not offer a branch menu.**
      That decision was made by `/sdrive:propose`; `/sdrive:archive` merges into
      `<feature.base>` after review and asks only whether to merge now and whether
