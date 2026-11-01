@@ -3663,7 +3663,7 @@ program
     }
 
     const groupLib = require("../scripts/lib/group");
-    const { parseBacklog } = require("../scripts/lib/product-plan");
+    const { parseBacklog, annotateBacklog } = require("../scripts/lib/product-plan");
 
     const backlogPath = path.join(sdriveRoot, "product", "backlog.md");
     const markdown = fs.existsSync(backlogPath) ? fs.readFileSync(backlogPath, "utf8") : "";
@@ -3671,7 +3671,10 @@ program
     const body = parsed.isGroup ? parsed.expression : expression;
     const resolved = groupLib.resolveGroup({
       expression: body,
-      backlog: parseBacklog(markdown)
+      // Annotated, because `waveN` selects the dependency-derived wave: the raw rows only have
+      // a milestone number, and silently matching that instead would select the wrong items on
+      // any plan where a milestone holds more than one wave.
+      backlog: annotateBacklog(parseBacklog(markdown))
     });
 
     // `--exclude-gated` is the mechanical form of "drop anything whose access is not

@@ -255,3 +255,164 @@ test("/sdrive:worktree respects waves, dependencies, and records preparation", (
   assert.notStrictEqual(completed.status, 0, completed.output);
   assert.match(completed.output, /feature already exists \(parser\)/);
 });
+
+// A second repo, because this covers the questions the first test does not ask: one branch for
+// several items, a preview that writes nothing, a record whose directory was deleted by hand,
+// and undoing a preparation.
+const SHARED_BACKLOG = [
+  "# Product Backlog",
+  "",
+  "## Start",
+  "",
+  "| ID | Feature | Kind | Batch | Priority | Depends on | Status |",
+  "|---|---|---|---|---|---|---|",
+  "| BP-001 | Signup | build | b1 | P0 | - | backlog |",
+  "| BP-002 | Language | build | b1 | P0 | - | backlog |",
+  "| BP-003 | Video | build | - | P1 | - | backlog |",
+  "| BP-004 | Partner adapter | build | - | P1 | partner access | backlog |",
+  "| BP-005 | Decide crate | decision | - | P1 | - | backlog |",
+  ""
+].join("\n");
+
+test("/sdrive:worktree shares one branch, previews, and can undo a preparation", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "sdrive-shared-"));
+  const repo = path.join(base, "demo");
+  const sharedWorktree = path.join(base, "wt-onboarding");
+  fs.mkdirSync(repo);
+
+  t.after(() => {
+    fs.rmSync(base, { recursive: true, force: true });
+  });
+
+  git(repo, ["init"]);
+  git(repo, ["config", "user.email", "test@example.com"]);
+  git(repo, ["config", "user.name", "Test"]);
+  git(repo, ["checkout", "-b", "main"]);
+  fs.writeFileSync(path.join(repo, "README.md"), "# demo\n");
+
+  const sdrive = path.join(repo, ".sdrive");
+  fs.mkdirSync(path.join(sdrive, "product"), { recursive: true });
+  fs.writeFileSync(path.join(sdrive, "product", "backlog.md"), SHARED_BACKLOG);
+  // `create` reads this file before it writes it, and `git worktree add` needs a commit to cut
+  // from, so both exist before the first assertion runs.
+  fs.writeFileSync(
+    path.join(sdrive, "workflow-state.json"),
+    JSON.stringify({ features: [], worktrees: [] }, null, 2)
+  );
+
+  git(repo, ["add", "-A"]);
+  git(repo, ["commit", "-m", "chore: seed shared backlog"]);
+
+  // --- 1. The branch question is answered before anything is created ---
+  const plan = listPlan(repo);
+  const options = plan.topologies.options;
+
+  // The declared batch comes first: the backlog already says these two land together.
+  assert.strictEqual(options[0].id, "batch:b1");
+  assert.deepStrictEqual(options[0].shared, ["BP-001", "BP-002"]);
+
+  // A later grouping is offered only if it can finish. BP-004 needs partner access, so it is
+  // never in the ready set to begin with and the reason it is waiting is reported instead.
+  assert.deepStrictEqual(
+    options.map((option) => option.id),
+    ["batch:b1", "shared-all", "per-feature"]
+  );
+  assert.strictEqual(
+    plan.eligible.some((item) => item.id === "BP-004"),
+    false
+  );
+  assert.match(plan.waiting.find((item) => item.id === "BP-004").reason, /outside blocker/);
+  assert.deepStrictEqual(plan.topologies.rejected, []);
+
+  // A decision is not a feature in any topology, and it is stated rather than dropped.
+  assert.deepStrictEqual(
+    plan.topologies.excluded.map((entry) => entry.item),
+    ["BP-005"]
+  );
+
+  // --- 2. A preview creates nothing and records nothing ---
+  const preview = runHelper(repo, [
+    "create",
+    "--items",
+    "BP-001,BP-002",
+    "--branch",
+    "feature/onboarding",
+    "--path",
+    sharedWorktree,
+    "--dry-run",
+    "--json"
+  ]);
+  assert.strictEqual(preview.status, 0, preview.output);
+  assert.strictEqual(JSON.parse(preview.output).dryRun, true);
+  assert.strictEqual(fs.existsSync(sharedWorktree), false);
+  assert.strictEqual(readState(repo).worktrees.length, 0);
+
+  // --- 3. One record carries the whole branch, and one spec covers it ---
+  const created = runHelper(repo, [
+    "create",
+    "--items",
+    "BP-001,BP-002",
+    "--branch",
+    "feature/onboarding",
+    "--path",
+    sharedWorktree,
+    "--json"
+  ]);
+  assert.strictEqual(created.status, 0, created.output);
+
+  const result = JSON.parse(created.output);
+  assert.deepStrictEqual(result.items, ["BP-001", "BP-002"]);
+  assert.strictEqual(result.item, "BP-001");
+  assert.strictEqual(result.title, "Signup + Language");
+  assert.match(result.next, /\/sdrive:propose "\[BP-001, BP-002\]"/);
+
+  const state = readState(repo);
+  assert.strictEqual(state.worktrees.length, 1);
+  assert.deepStrictEqual(state.worktrees[0].items, ["BP-001", "BP-002"]);
+  assert.strictEqual(typeof state.worktrees[0].updatedAt, "string");
+
+  // Both members are now busy, so neither is eligible any more.
+  const afterCreate = listPlan(repo);
+  assert.strictEqual(
+    afterCreate.eligible.some((item) => item.id === "BP-002"),
+    false
+  );
+  assert.strictEqual(afterCreate.worktrees[0].present, true);
+
+  // --- 4. A member of the branch cannot be prepared a second time ---
+  const duplicate = runHelper(repo, [
+    "create",
+    "--item",
+    "BP-002",
+    "--branch",
+    "feature/BP-002-v2",
+    "--path",
+    path.join(base, "wt-duplicate")
+  ]);
+  assert.notStrictEqual(duplicate.status, 0, duplicate.output);
+  assert.match(duplicate.output, /worktree already prepared|already has a prepared worktree/);
+
+  // --- 5. A record whose directory is gone is reported, not pretended ---
+  fs.rmSync(sharedWorktree, { recursive: true, force: true });
+  assert.strictEqual(listPlan(repo).worktrees[0].present, false);
+
+  // --- 6. Removing the preparation frees every member again ---
+  const removed = runHelper(repo, ["remove", "--item", "BP-002", "--json"]);
+  assert.strictEqual(removed.status, 0, removed.output);
+
+  const removal = JSON.parse(removed.output);
+  assert.deepStrictEqual(removal.removed.items, ["BP-001", "BP-002"]);
+  assert.strictEqual(removed.output.includes("feature/onboarding"), true);
+  assert.strictEqual(readState(repo).worktrees.length, 0);
+
+  const afterRemove = listPlan(repo);
+  assert.strictEqual(
+    afterRemove.eligible.some((item) => item.id === "BP-002"),
+    true
+  );
+  assert.strictEqual(
+    afterRemove.eligible.some((item) => item.id === "BP-001"),
+    true
+  );
+});
+

@@ -12,6 +12,7 @@ const {
   checkBatch,
   singleBatch,
   topologies,
+  branchOptions,
   suggestBranchName,
   selectorFor,
   waveValue
@@ -278,3 +279,85 @@ test("a batch containing a decision, a gated item, or two waves is refused", () 
   assert.strictEqual(verdict.ok, false);
   assert.match(verdict.blockers.join(" "), /span 2 waves/);
 });
+
+// The worktree step asks the same question about the items that are ready NOW, which is a set
+// rather than an expression - so the answer is built from candidates and offers only groupings
+// a user can name and finish.
+const READY_WAVE = [
+  { id: "BP-011", name: "signup", title: "Signup", kind: "build", batch: "b1", wave: 2, gated: false },
+  { id: "BP-012", name: "language", title: "Language", kind: "build", batch: "b1", wave: 2, gated: false },
+  { id: "BP-013", name: "video", title: "Video", kind: "build", batch: "", wave: 2, gated: false },
+  { id: "BP-014", name: "audit", title: "Audit", kind: "decision", batch: "", wave: 2, gated: false }
+];
+
+const build = (number, extra = {}) => ({
+  id: `BP-${number}`,
+  name: `item-${number}`,
+  title: `Item ${number}`,
+  kind: "build",
+  batch: "",
+  wave: 2,
+  gated: false,
+  ...extra
+});
+
+test("the declared batch is offered first, and a decision is excluded rather than offered", () => {
+  const { options, rejected, excluded } = branchOptions(READY_WAVE);
+
+  // Declaration beats preference: the backlog already promised these two land together.
+  assert.deepStrictEqual(
+    options.map((option) => option.id),
+    ["batch:b1", "shared-all", "per-feature"]
+  );
+  assert.deepStrictEqual(options[0].shared, ["BP-011", "BP-012"]);
+  assert.match(options[0].note, /already declares/);
+
+  // The whole wave includes the third build, and per-item is always the safe fallback.
+  assert.deepStrictEqual(options[1].shared, ["BP-011", "BP-012", "BP-013"]);
+  assert.deepStrictEqual(options[2].separate, ["BP-011", "BP-012", "BP-013"]);
+
+  // A decision has no test to pass, so it is not a feature in any topology - and it is stated.
+  assert.deepStrictEqual(excluded.map((entry) => entry.item), ["BP-014"]);
+  assert.match(excluded[0].reason, /no test to pass/);
+  assert.deepStrictEqual(rejected, []);
+});
+
+test("a wave over the cap is refused with the reason instead of being offered", () => {
+  const five = [build(101), build(102), build(103), build(104), build(105)];
+  const { options, rejected } = branchOptions(five);
+
+  // Five features on one branch is 10 approval stops and one freeze; it is not a choice.
+  assert.deepStrictEqual(
+    options.map((option) => option.id),
+    ["per-feature"]
+  );
+  assert.deepStrictEqual(rejected.map((entry) => entry.id), ["shared-all"]);
+  assert.match(rejected[0].reasons.join(" "), /cap/);
+});
+
+test("one gated member rejects the shared branch instead of hiding the option", () => {
+  const { options, rejected } = branchOptions([
+    build(201),
+    build(202, { gated: true, name: "partner-adapter", title: "Partner adapter" })
+  ]);
+
+  assert.deepStrictEqual(
+    options.map((option) => option.id),
+    ["per-feature"]
+  );
+  assert.deepStrictEqual(rejected.map((entry) => entry.id), ["shared-all"]);
+  assert.match(rejected[0].reasons.join(" "), /need access/);
+});
+
+test("one item asks no topology question, and an empty set answers nothing", () => {
+  assert.deepStrictEqual(branchOptions([]), {
+    options: [],
+    rejected: [],
+    excluded: [],
+    maxFeatures: 4
+  });
+
+  // A single item has exactly one branch, so offering "one branch per item" would be noise.
+  assert.deepStrictEqual(branchOptions([build(301)]).options, []);
+});
+

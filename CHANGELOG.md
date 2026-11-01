@@ -13,6 +13,57 @@ Nothing yet.
 
 ---
 
+## 0.1.53 — 2026-11-01
+
+**`/sdrive:worktree` asks the same branch question `/sdrive:propose` asks, and can undo a
+preparation.**
+
+This release supersedes `0.1.52`. If `0.1.52` never reached the registry, install `0.1.53`
+and ignore that section; it is repeated here in full.
+
+### Added
+
+- **The branch-topology question at worktree time.** `worktree.js list` now returns
+  `topologies` — `options` (only groupings that can reach archive), `rejected` (with the reason
+  each one is impossible), and `excluded` (items no topology can help, e.g. a `decision`).
+  A declared `Batch` is offered first because the backlog already promised those items land
+  together; "one branch for everything" is only offered when the set is within the
+  four-feature cap and nothing in it is gated; "one branch per item" is always last as the
+  safe fallback. `/sdrive:worktree` builds its question from that list instead of inventing
+  its own, which is how a deadlocked grouping got offered as a choice.
+- **One shared branch for several items.** `worktree.js create --items BP-001,BP-002` prepares
+  a single worktree and records `items: ["BP-001","BP-002"]` (plus `item`, so a reader written
+  before shared branches existed still works). The whole selection is validated by the same
+  `checkBatch` rules `/sdrive:propose` uses, so `--items` cannot smuggle in a group that could
+  not finish. `next` becomes `/sdrive:propose "[BP-001, BP-002]"` — one branch is one feature.
+- **`worktree.js remove`** — the missing half of `create`. It removes the worktree, drops the
+  record, and deletes the branch with `git branch -d` (never `-D`; a branch holding unmerged
+  commits is kept and reported). Without it, a directory deleted by hand left a record stuck at
+  `prepared`, which made its items permanently ineligible with no command to correct it.
+- **`--dry-run` on `create`** — prints the branch, path, base, the record, and `next`, and
+  writes nothing. Two items or four, the guards are visible before any repository state changes.
+- **`present` on every `list` record**, and a `[missing: the directory is gone]` marker in the
+  text output, so a stale record is reported rather than pretended.
+
+### Fixed
+
+- **A prepared worktree could be recorded twice.** `create` read the state, checked the
+  duplicate guard, then wrote it back with a plain `writeFileSync` — two runs at once both
+  passed the guard and both wrote, losing one record. The git command and the state write now
+  happen under `.sdrive/.state.lock` (the file `src/lib/state.js` already uses) and the state is
+  replaced through a temporary file, so a reader can never see half a JSON document.
+- **`create --items` checked only the first id for a duplicate.** One record per branch means
+  any item it already carries makes the whole selection a duplicate; checking the first id let
+  `--items BP-003,BP-004` pick up an item whose branch was already prepared under another name.
+
+### Changed
+
+- **`workflow-state.json` is tracked, and every worktree keeps its own copy.** `create` now says
+  so in its output, with the merge rule: keep every feature, worktree and version entry; the
+  newer `updatedAt` wins a clash. Nothing is resolved by deleting records.
+
+---
+
 ## 0.1.52 — 2026-10-31
 
 ### Fixed

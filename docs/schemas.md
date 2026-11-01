@@ -277,17 +277,24 @@ Each version records a `history` array. Every entry has:
 
 | Field | Description |
 |-------|-------------|
-| `item` | The Product Plan item (`BP-###`) prepared in this worktree |
-| `branch` | The branch created in the worktree (`feature/BP-003` or `feature/chat`) |
+| `item` | The first Product Plan item (`BP-###`) prepared in this worktree. Kept so readers written before shared branches existed still match. |
+| `items` | Every item the branch carries, as an array. Present on shared branches; a single-item worktree may also carry it as `["BP-003"]`. |
+| `branch` | The branch created in the worktree (`feature/BP-003` or `feature/chat`). **One record per branch.** |
 | `base` | The integration branch the worktree was cut from |
 | `path` | Absolute path of the worktree |
-| `title` | The backlog feature title at preparation time |
+| `title` | The backlog feature title(s) at preparation time; a shared branch joins them with ` + ` |
 | `createdAt` | ISO-8601 timestamp |
+| `updatedAt` | ISO-8601 timestamp of the last write. When two branches change this file, the merge keeps every entry and the newer `updatedAt` wins a clash. |
 | `status` | `prepared`; `active` and `released` are reserved for later lifecycle updates |
 
 A worktree record makes the item `ongoing` in the Product Plan, but it is not a
 feature. `/sdrive:propose` still creates the feature and records `branch` and
-`base` on it.
+`base` on it — and because one branch is one feature, a shared branch becomes a
+single feature whose `productItems` lists every member.
+
+`list` also reports `present` per record: `false` means the directory is gone, so
+`worktree.js remove` is the supported way to clear it. A hand-deleted directory
+otherwise leaves a record stuck at `prepared`, which keeps its items ineligible.
 
 ### Onboarding Fields
 

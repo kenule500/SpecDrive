@@ -259,6 +259,75 @@ the waves and priorities that are selectable.
 
 ---
 
+### `node .sdrive/scripts/worktree.js`
+
+The deterministic helper behind `/sdrive:worktree`: it decides what is ready, opens the branch and
+worktree, and records the preparation. The agent asks the questions; this does the part that must
+be exact, so a model cannot open a later-wave branch while its dependency is still ongoing.
+
+```bash
+node .sdrive/scripts/worktree.js list [--json]
+node .sdrive/scripts/worktree.js create --item BP-003 --branch feature/BP-003 [--base main] [--path <dir>] [--dry-run] [--json]
+node .sdrive/scripts/worktree.js create --items BP-003,BP-004 --branch feature/start [--base main] [--dry-run] [--json]
+node .sdrive/scripts/worktree.js remove (--item BP-003 | --items BP-003,BP-004 | --branch feature/x | --path <dir>) [--keep-branch] [--force] [--json]
+```
+
+| Command | What it does |
+|---|---|
+| `list` | readiness, the current wave, and `topologies` — the branch groupings that can actually finish |
+| `create` | one branch, one worktree, one record. `--items` puts several items on **one** branch |
+| `remove` | deletes the worktree, clears the record, and `git branch -d`s the branch (kept if it holds unmerged commits) |
+
+#### The branch topology question
+
+`list` returns `topologies` with three parts, and the agent offers only what is in `options`:
+
+| Field | Contents |
+|---|---|
+| `options` | groupings that **can** reach archive: a declared batch first, then one branch for the whole ready set (only within the four-feature cap and with nothing gated), then one branch per item as the safe fallback |
+| `rejected` | a grouping the user may expect but that cannot finish — e.g. `shared-all` over the cap, or one containing a gated item — with the reason |
+| `excluded` | items no topology helps: a `decision` has no test to pass, a `release` step runs after the merge |
+
+One shared branch merges once, when every member passes review (CON-611). Per-item branches merge
+independently, so a stalled item blocks nobody.
+
+#### Guards on `create`
+
+Applied before any git command runs, in both `--item` and `--items` form:
+
+- the item exists in the backlog and is `backlog` (no feature, no prepared worktree);
+- its plan status is not `deferred` / `needs discovery`, and it has no outside blocker;
+- every `Depends on` entry is `completed`;
+- it is in the **current wave** — a later wave is refused, naming the wave to finish first;
+- for `--items`, the selection passes the same `checkBatch` rules `/sdrive:propose` uses, so it
+  cannot smuggle in a group that could not finish;
+- the branch does not exist, the path is free, and the base exists.
+
+`--dry-run` prints the branch, path, base, the record, and the next command, and writes nothing.
+
+#### One branch is one feature
+
+`create --items BP-001,BP-002` records `items: ["BP-001","BP-002"]` (and `item` for readers
+written before shared branches existed), and returns
+`next: /sdrive:propose "[BP-001, BP-002]"`. A shared branch therefore becomes **one** feature
+whose `productItems` lists every member — never two features on one branch.
+
+#### Undoing a preparation
+
+`remove` exists because a directory deleted by hand left a record stuck at `prepared`, which made
+its item permanently ineligible with no command to correct it. `list` marks each record `present`,
+or `missing` when the directory is gone. `--force` discards uncommitted work, so it is never
+automatic.
+
+#### State ownership
+
+`.sdrive/workflow-state.json` is **tracked**, and every worktree carries its own copy. When two
+branches change it, the merge keeps every feature, worktree and version entry; the newer
+`updatedAt` wins a clash. Nothing is ever resolved by deleting records. Writes take
+`.sdrive/.state.lock` and replace the file atomically, so two `create` runs cannot lose a record.
+
+---
+
 ### `sdrive status`
 
 Shows all features and their lifecycle state.

@@ -725,10 +725,31 @@ The **Product Plan** page shows backlog, ongoing, and completed counts, sorts
 items by dependency wave, and searches by ID or feature name. Status, wave,
 milestone, and priority filters narrow the table, which shows 20 items per page.
 
+Two further columns come from the backlog and are never derived: **Kind**
+(`build` / `decision` / `release` — only a build can pass a coverage gate) and
+**Batch** (`b1`, `b2`, … — the items that land together on one branch). An empty
+cell renders `—`, and an empty `Kind` is treated as `build`.
+
 Each row has a **View more** button that opens an animated right-side drawer with
 the feature description, user value, confidence/source, dependencies, lifecycle,
 branch or prepared worktree, and the recommended next step. New backlogs can add
 a `Details` column for the description; older backlogs fall back to `User value`.
+
+### Parallel work and one branch for several items
+
+`/sdrive:worktree` prepares branches and worktrees for ready backlog items, and it
+asks the same question `/sdrive:propose` asks: **one branch per item, or one shared
+branch for a group?** The helper returns only groupings that can reach archive — a
+declared `Batch` first, then the whole ready set (within the four-feature cap and
+with nothing gated), then one branch per item — and reports why an obvious grouping
+was refused. A `decision` is never offered as a branch: it has no test to pass.
+
+`create --items BP-003,BP-006` puts both items on one branch, and **one branch is one
+feature**: `/sdrive:propose "[BP-003, BP-006]"` writes a single spec whose
+`productItems` lists every member. A shared branch merges once, when every member
+passes review (CON-611); per-item branches merge independently, so a stalled item
+blocks nobody. `list` marks a record `missing` when its directory was removed by hand,
+and `remove` is the supported way to undo a preparation and free its items again.
 
 ### Feature Detail Page
 

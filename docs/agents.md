@@ -171,11 +171,15 @@ batch must be all `build`, ungated, and inside a single wave, and it lands as on
 
 **What it does:**
 
-- Reads the backlog's `Depends on` and `Wave` columns and the live feature lifecycle
+- Reads the backlog's `Depends on`, `Wave`, `Kind` and `Batch` columns and the live feature lifecycle
 - Prepares only the lowest ready wave; an item with an incomplete dependency, outside blocker, `deferred`/`needs discovery` status, existing feature, or existing worktree is skipped with the reason
-- Offers Product ID branches (`feature/BP-003`) or readable names (`feature/chat`) with suggestions and custom input
-- Creates one branch and worktree per selected item and records them under `worktrees` in `workflow-state.json`
+- **Asks the branch topology before creating anything.** The helper returns `topologies.options` — the groupings that can actually reach archive — plus `topologies.rejected` (with the reason each impossible one is refused) and `topologies.excluded` (an item no topology helps, such as a `decision`). The agent offers only what is listed; it never invents a grouping.
+- **One shared branch for several items is supported.** A declared `Batch` is offered first, then one branch for the whole ready set (within the four-feature cap, nothing gated), then one branch per item. `create --items BP-003,BP-006` records both on one worktree, and one branch is one feature: `/sdrive:propose "[BP-003, BP-006]"` writes a single spec whose `productItems` lists every member.
+- Offers Product ID branches (`feature/BP-003`) or readable names (`feature/chat`) with suggestions and custom input. A shared branch is named for the group, never for one member.
+- Creates one branch and worktree per selection and records them under `worktrees` in `workflow-state.json`, with `items[]` for a shared branch
+- `--dry-run` shows every guard's verdict without creating or recording anything
 - Hands off to `/sdrive:propose`, which detects the prepared worktree and reuses its branch instead of creating another
+- Undoes a preparation with `remove` (the worktree, the record, and the branch when it holds no unmerged commits) instead of deleting the directory by hand
 - Does not write specs, plans, tasks, code, or tests; does not commit or push
 
 ---
