@@ -367,6 +367,7 @@ batch must be all `build`, ungated, and inside a single wave, and it lands as on
 - Checks test quality (`.only`, `xit`, unjustified skips, empty assertions, AC IDs)
 - Checks security, NFR evidence, docs, and CI status; unverified items are recorded as `not_verified`, not passed
 - **Audits security and performance itself** — secret scan, dependency audit, the constitution's CON-51x Security Baseline verified as *wired in* (not just present in the manifest), and NFRs measured over ≥5 iterations with the median reported. Each result goes into `review.json.security` / `review.json.performance` as `pass`, `fail`, `not_applicable` (with a reason), or `not_verified` (with a reason)
+- **Never opens a credential file.** The secret scan runs through `gitleaks`/`trufflehog` against the diff and reports the variable name and location, redacted. CON-714 applies to every agent: `.env`, `.env.*`, `*.pem`, `*.key`, `id_rsa*`, `credentials.*`, `secrets.*`, `.npmrc`, and `.netrc` are off-limits for reading, printing, and editing alike
 - Audits code against spec
 - Writes `review.md` (human report) and `review.json` (machine-readable verdict) with `Status: PASS` or `Status: FAIL`
 - Asks the human to confirm a PASS verdict and records reviewer independence

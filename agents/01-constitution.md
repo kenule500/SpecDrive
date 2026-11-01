@@ -211,6 +211,7 @@ Every feature that touches authentication, user input, or an HTTP surface MUST a
 
 ## 7. AI Agent Rules (CON-7xx)
 - **CON-701:** [Rule text] <!-- source: .sdrive/context/ai-workflow-rules.md -->
+- **CON-714:** An agent MUST NEVER read, print, copy, or edit a credential file — `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `credentials.*`, `secrets.*`, `.npmrc`, `.netrc` — and MUST verify configuration by variable NAME (an example file, the config schema, or `process.env` usage) rather than by value. A finding involving a secret MUST cite the variable name and its location, redacted. A leaked value MUST be rotated, never rewritten in place: editing or deleting it does not undo the exposure. <!-- source: SpecDrive Secret Handling Policy -->
 
 ---
 

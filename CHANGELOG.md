@@ -13,6 +13,50 @@ Nothing yet.
 
 ---
 
+## 0.1.55 — 2026-11-01
+
+**Agents are forbidden from opening credential files, and the dashboard command cards
+describe the new review.**
+
+This release supersedes `0.1.54`. If `0.1.54` never reached the registry, install `0.1.55`
+and ignore that section; the review changes are in both.
+
+### Added
+
+- **CON-714 — secret files are off-limits.** The constitution agent now writes this rule
+  into every project's AI Agent Rules: an agent MUST NEVER read, print, copy, or edit
+  `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `credentials.*`,
+  `secrets.*`, `.npmrc`, or `.netrc`. Configuration is verified by variable **name** — an
+  example file, the config schema, `process.env` usage — never by value. A finding cites the
+  name and location, redacted (`STRIPE_SECRET_KEY in env/dev:12 (sk-****)`). A leaked value
+  is **rotated**, not rewritten: deleting it from the file does not undo the exposure.
+- **A Secret File Rule in the six agents that touch code** — `/sdrive:apply`,
+  `/sdrive:test`, `/sdrive:review`, `/sdrive:secure`, `/sdrive:performance`, and
+  `/sdrive:debug`. Each states what that agent specifically must not do: tests use fixtures
+  rather than a real env file, benchmarks use seeded data and never put a token in a report,
+  the review scans the diff through `gitleaks`/`trufflehog` instead of opening files, and a
+  debug trace is redacted before it is recorded.
+
+### Changed
+
+- **Dashboard command cards.** The `/sdrive:review` card now lists the security and
+  performance audits, the `review.json` record, the remediation handoff, and its four FAIL
+  destinations. `/sdrive:secure` and `/sdrive:performance` are described as the **fixers**
+  (review detects, they repair) rather than as a preliminary audit with the same name.
+
+### Upgrade
+
+```bash
+npm i -g specdrive-cli@latest
+sdrive update
+```
+
+Existing constitutions keep their current CON-7xx rules — CON-714 is written when
+`/sdrive:constitution` next runs, so adopt it by re-running that command and accepting the
+addition. The per-agent rules ship with `sdrive update`.
+
+---
+
 ## 0.1.54 — 2026-11-01
 
 **`/sdrive:review` now audits security and performance itself, and a failed review leaves a

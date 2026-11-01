@@ -513,6 +513,14 @@ sdrive config:set governance.allowUnverifiedPerformance true
 They are **off by default** so an upgrade never refuses a feature that was
 already in flight.
 
+**6. Agents never open a credential file.** CON-714 forbids reading, printing,
+copying, or editing `.env`, `.env.*`, `*.pem`, `*.key`, `id_rsa*`,
+`credentials.*`, `secrets.*`, `.npmrc`, and `.netrc`. Everything that needs to
+know about a secret works from the variable **name** — an example file, the
+config schema, `process.env` usage — and a finding cites it redacted
+(`STRIPE_SECRET_KEY in env/dev:12 (sk-****)`). `/sdrive:secure` **rotates** a
+leaked credential; deleting the line from the file does not un-leak it.
+
 Run `sdrive doctor` after upgrading. It reports anything the upgrade could not
 repair on its own.
 
