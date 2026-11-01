@@ -137,7 +137,7 @@ You operate within the current version folder only.
 5. **Test Report**: The coverage report exists at `.sdrive/reports/tests/test-report-<feature>-<version>-<date>.md` and is newer than `spec.md` and `plan.md`.
 6. **Test Evidence**: `test-evidence.json` exists, records `exitCode: 0`, zero failures, at least one result, and `commit === HEAD`.
 7. **Change Scope**: The diff against `base` contains only planned files; no other feature's commits; the branch is based on its recorded `base`; the working tree is clean.
-8. **Test Quality**: No `.only`/`xit`, no unjustified skips, no empty assertions, and every test name carries its AC ID.
+8. **Test Quality**: No `.only`/`xit`, no unjustified skips, no empty assertions, and every test name carries its AC ID. **Red before green**: a test that also passes without the work certifies nothing, so when the project requires it, `test-evidence.json.redGreen[]` must show `proven: true` for every covered criterion (`sdrive test <feature> --prove`). When `sdrive approve <feature> review` reports unproven criteria, the finding is a code finding — send it to `/sdrive:test` to strengthen the assertions, and never mark it fixed by re-running the same suite.
 9. **Code Quality**: Linter/typechecker/formatter pass (if configured).
 10. **Security**: No hardcoded secrets, no high/critical CVEs, and every `REQUIRED` control in the constitution's Security Baseline (CON-51x) is wired into the request path — a dependency in the manifest is not proof. Record the result in `review.json.security` (`status`, `secrets`, `dependencies`, `baseline[]` keyed by CON-51x ID) with a `reason` for any non-`pass` status. Auth/data/payment changes still cite a `/sdrive:secure` report or an explicit waiver.
 11. **Testing**: All tests pass.

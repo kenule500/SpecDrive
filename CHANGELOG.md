@@ -13,6 +13,64 @@ Nothing yet.
 
 ---
 
+## 0.1.56 — 2026-11-01
+
+**Red before green: `sdrive test --prove` records whether the tests fail without the
+work, and a review can be made to require it.**
+
+Every gate in SpecDrive rests on "the test passes". A vacuous test satisfies all of
+them at once — `expect(result).toBeDefined()` passes, is bound to `HEAD`, appears in
+`traceability.json`, and has no `.only` or empty assertion. This release adds the only
+check that can tell a real test from a decorative one.
+
+### Added
+
+- **`sdrive test <feature> --prove`** runs the same command a second time in a
+  throwaway worktree at the feature's base commit and records `redGreen[]` in
+  `test-evidence.json`: one entry per covered criterion with `proven`, the observed
+  `baseExitCode`, `method`, and a `reason` when it is not proven. The worktree is
+  removed with `git worktree remove --force` and `git worktree prune` immediately
+  after. `--base <ref>` overrides the base, which defaults to the feature's recorded
+  `baseBranch`, then `origin/HEAD`, then `main`, then `HEAD~1`.
+- **A crash at base is not proof.** A missing dependency or the wrong runtime also
+  exits non-zero, so a run with no recognisable results is reported as *not recorded*
+  with the reason rather than being counted as evidence.
+- **`governance.requireRedGreen`**, off by default. When on, `sdrive approve <feature>
+  review` refuses any covered criterion without `proven: true` and any criterion
+  whose tests also pass without the change, naming the criterion and the base exit
+  code so the refusal can be checked by hand.
+- **`remediation.items[].id`, `roundsFailed`, `assumption`** (optional) so a finding
+  that survives two rounds can be reported as a repeated finding rather than as a
+  fresh complaint.
+
+### Upgrading is safe for work in flight
+
+Switching `requireRedGreen` on stamps `governance.redGreenEnforceFrom` with the
+current time. A feature whose earliest recorded activity (its gate history) predates
+that stamp is **grandfathered**: the gate warns and does not refuse. A feature with no
+recorded timestamps at all counts as unknown age and is grandfathered too, because
+enforcing on work of unknowable age is how an upgrade refuses an entire project.
+
+`test-evidence.json` and `review.json` gained only optional properties — nothing was
+made required — so existing records still validate and existing reviews stay
+approved. `test/test-backcompat.js` pins exactly that, including a `review.json`
+written in the 0.1.53 shape.
+
+```bash
+npm i -g specdrive-cli@latest
+sdrive update                      # agents, scripts, schemas, dashboard
+sdrive config:set governance.requireRedGreen true   # opt in, stamps the cutoff
+sdrive test my-feature --prove
+```
+
+### Fixed
+
+- The review gate's own documentation listed "tests pass" as the last word on test
+  quality. `agents/09-review-complete.md` criterion 8 now names red-before-green, and
+  routes an unproven criterion to `/sdrive:test` instead of letting it be re-run.
+
+---
+
 ## 0.1.55 — 2026-11-01
 
 **Agents are forbidden from opening credential files, and the dashboard command cards

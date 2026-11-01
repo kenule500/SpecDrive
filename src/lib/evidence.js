@@ -213,6 +213,12 @@ function writeEvidence(projectRoot, featureName, versionId, run, extra = {}) {
     summary: run.summary,
     testIds: run.testIds,
     acIds: run.acIds,
+    // Red-before-green: per acceptance criterion, did the suite fail at the base
+    // commit? Absent on projects that have not opted in, and absent on evidence
+    // recorded before this check existed - which is what lets old projects keep
+    // archiving unchanged.
+    ...(Array.isArray(extra.redGreen) ? { redGreen: extra.redGreen } : {}),
+    ...(extra.redGreenBase !== undefined ? { redGreenBase: extra.redGreenBase } : {}),
     // Keep the tail only. Full logs belong in CI artifacts, not in a governance
     // record that is committed and reviewed.
     outputTail: String(run.output || "").slice(-4000),

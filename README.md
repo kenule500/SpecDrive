@@ -521,6 +521,34 @@ config schema, `process.env` usage — and a finding cites it redacted
 (`STRIPE_SECRET_KEY in env/dev:12 (sk-****)`). `/sdrive:secure` **rotates** a
 leaked credential; deleting the line from the file does not un-leak it.
 
+**7. A test that passes without the work proves nothing — and now you can prove it
+failed.** Every other check rests on "the test passes", and a vacuous test satisfies
+all of them: `expect(result).toBeDefined()` passes, is bound to `HEAD`, appears in
+traceability, and has no `.only`. `sdrive test <feature> --prove` runs the same
+command in a throwaway worktree at the feature's base commit, so the evidence records
+whether the suite actually failed there:
+
+```text
+🧪 npm test
+   42 passed, 0 failed, 0 skipped (8104 ms)
+   Evidence: .sdrive/governance/user-login/v1/test-evidence.json
+   Red-before-green: 4 of 5 criteria fail at main — 1 pass without the change
+```
+
+A suite that *crashes* at base also exits non-zero, which would make every test look
+honest, so a run with no recognisable results is reported as not recorded rather
+than used as proof. Enforce it per project:
+
+```bash
+sdrive config:set governance.requireRedGreen true
+```
+
+That stamps `governance.redGreenEnforceFrom` with the current time, and **anything
+already in the project stays grandfathered** — a feature whose earliest recorded
+activity predates the stamp keeps the rules it was proposed under, so switching this
+on cannot refuse work that was already in flight. Only features proposed afterwards
+must prove their tests fail without the work.
+
 Run `sdrive doctor` after upgrading. It reports anything the upgrade could not
 repair on its own.
 

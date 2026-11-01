@@ -321,6 +321,8 @@ Validates `.sdrive/config.json`.
 | `governance.requireReviewPerformance` | boolean | Require the performance audit record in `review.json.performance` |
 | `governance.allowUnverifiedSecurity` | boolean | Accept a `not_verified` security audit instead of blocking it |
 | `governance.allowUnverifiedPerformance` | boolean | Accept a `not_verified` performance audit instead of blocking it |
+| `governance.requireRedGreen` | boolean | Require proof that the tests **fail without the work** (`sdrive test --prove`) |
+| `governance.redGreenEnforceFrom` | date-time | Cutoff stamped when `requireRedGreen` is switched on; earlier features are grandfathered |
 | `governance.testCommand` | string | Test command fallback |
 | `governance.lintCommand` | string | Lint command for CI integrations |
 | `governance.buildCommand` | string | Build command for CI integrations |
@@ -353,9 +355,25 @@ Validates `.sdrive/governance/<feature>/<version>/test-evidence.json`, written b
 | `outputHash` | SHA-256 of captured output |
 | `summary` | `passed`, `failed`, `skipped`, `total` |
 | `testIds`, `acIds` | `TEST-###` / `AC-###` IDs found in the output |
+| `redGreen[]` | Per criterion: `ac`, `proven`, `method`, `baseExitCode`, optional `reason`. Present only when the run used `--prove` |
+| `redGreenBase` | The ref the proof ran against |
 | `outputTail` | Last 4 KB of output (full logs belong in CI artifacts) |
 
 The schema is enforced by `sdrive validate` and read by the review gate.
+
+### Red-before-green
+
+`redGreen[]` answers a question no other field can: **would these tests have failed
+without the work?** A test that passes in both places satisfies every other check
+here — it passes, it is commit-bound, it is covered — while proving nothing.
+
+`proven: true` means the suite failed at the base commit. `baseExitCode` records what
+was actually observed there, so the claim can be checked by hand. A suite that
+*crashed* at base (missing dependency, wrong runtime) is **not** proof: a run with no
+recognisable results is reported as not recorded, with a reason.
+
+This is additive and optional. Evidence written before the field existed stays valid,
+which is what lets a project upgrade without invalidating its review history.
 
 ---
 
@@ -376,7 +394,7 @@ Validates `.sdrive/governance/<feature>/<version>/review.json`, written by
 | `findings[]` | Severity, issue, location, `fixRequired`, and linked `AC-###` IDs |
 | `security` | Optional security audit: `status`, `reason`, `secrets`, `dependencies`, `baseline[]`, `report` |
 | `performance` | Optional performance audit: `status`, `reason`, `method`, `nfr[]`, `seo`, `report` |
-| `remediation` | Optional handoff for a failed review: `round`, and `items[]` of `finding`, `severity`, `fixWith`, `task` |
+| `remediation` | Optional handoff for a failed review: `round`, and `items[]` of `id`, `finding`, `severity`, `fixWith`, `task`, optional `roundsFailed` and `assumption` |
 | `evidence` | Paths to test evidence, test report, verification, and audit record |
 
 `security.status` and `performance.status` each take four values, and the

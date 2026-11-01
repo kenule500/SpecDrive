@@ -38,6 +38,13 @@
         "allowUnverifiedPerformance": {
           "type": "boolean"
         },
+        "requireRedGreen": {
+          "type": "boolean"
+        },
+        "redGreenEnforceFrom": {
+          "type": "string",
+          "format": "date-time"
+        },
         "testCommand": {
           "type": "string"
         },

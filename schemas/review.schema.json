@@ -150,10 +150,13 @@
           "items": {
             "type": "object",
             "properties": {
+              "id": { "type": "string", "minLength": 1 },
               "finding": { "type": "string", "minLength": 3 },
               "severity": { "enum": ["high", "medium", "low", "info"] },
               "fixWith": { "type": "string", "minLength": 3 },
-              "task": { "type": "string" }
+              "task": { "type": "string" },
+              "roundsFailed": { "type": "integer", "minimum": 1 },
+              "assumption": { "type": "string" }
             },
             "required": ["finding", "fixWith"],
             "additionalProperties": false

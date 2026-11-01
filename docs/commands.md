@@ -830,6 +830,8 @@ Runs the project's tests and records machine-checkable evidence for the feature.
 sdrive test user-login
 sdrive test user-login --cmd "pnpm vitest run"
 sdrive test user-login --version v2 --timeout 900000
+sdrive test user-login --prove          # also run the suite at the base commit
+sdrive test user-login --prove --base origin/main
 sdrive test user-login --json
 ```
 
@@ -845,11 +847,53 @@ Writes `.sdrive/governance/<feature>/<version>/test-evidence.json` with the
 command, exit code, pass/fail/skip counts, commit, branch, duration, output hash,
 and `TEST-###` / `AC-###` IDs found in the output.
 
-Exit codes: `0` passed, `8` tests failed (the evidence is still written).
+#### `--prove` — red before green
+
+A test that passes both before and after a change proves nothing, and it satisfies
+every other check in the review gate: it passes, it is bound to `HEAD`, it appears in
+traceability, and it has no `.only` or empty assertion. `--prove` closes that hole by
+running the same command in a throwaway worktree at the feature's base commit:
+
+```text
+Red-before-green: 3 of 4 criteria fail at main — 1 pass without the change
+```
+
+For every acceptance criterion `traceability.json` links to a test, it records
+`redGreen[]` in the evidence:
+
+| Field | Meaning |
+|---|---|
+| `ac` | the criterion |
+| `proven` | `true` when the suite FAILED at the base commit |
+| `baseExitCode` | the exit code observed there, so the claim is checkable by hand |
+| `method` | `base-run` |
+| `reason` | why it is not proven, when it is not |
+
+**A suite that crashes at base is not proof.** A missing dependency or the wrong
+runtime also exits non-zero, which would make every test look honest. A run with no
+recognisable results is reported as *not recorded*, with the reason, instead of being
+used as evidence.
+
+The base is the feature's recorded `baseBranch`, then `origin/HEAD`, then `main`, then
+`HEAD~1`; `--base` overrides all of it. The worktree is removed with
+`git worktree remove --force` and `git worktree prune` immediately afterwards.
+
+Exit codes: `0` passed, `8` tests failed (the evidence is still written). A failure to
+record proof does **not** change the exit code — it warns, because the gate is what
+refuses, and it says why.
 
 When `governance.requireTestEvidence` is `true`, `sdrive approve <feature>
 review` requires evidence with `exitCode: 0`, no failures, and a commit matching
 `HEAD`. `governance.allowStaleEvidence: true` relaxes only the commit check.
+
+When `governance.requireRedGreen` is `true`, the gate additionally requires
+`redGreen[]` to cover every in-scope criterion with `proven: true`. Switching it on
+stamps `governance.redGreenEnforceFrom`, and **features whose earliest recorded
+activity predates that stamp are grandfathered** — the refusal names the cutoff and
+says so in a warning rather than blocking work that was already in flight. A feature
+with no recorded timestamps at all counts as unknown age and is grandfathered too;
+enforcing on work of unknowable age is how an upgrade refuses an entire project at
+once.
 
 ---
 

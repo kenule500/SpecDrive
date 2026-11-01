@@ -681,7 +681,12 @@ program
               requireReviewSecurity: false,
               requireReviewPerformance: false,
               allowUnverifiedSecurity: false,
-              allowUnverifiedPerformance: false
+              allowUnverifiedPerformance: false,
+              // Red-before-green: a test that also passes without the change proves
+              // nothing. Off for new projects too, because it costs a second suite run;
+              // switching it on stamps the cutoff, so only work proposed afterwards is
+              // governed and anything already in flight stays grandfathered.
+              requireRedGreen: false
             },
             mcp: {
               // Hosted knowledge servers are wired by default. Set this to
@@ -2980,6 +2985,8 @@ program
   .option("--cmd <command>", "Test command to run (overrides config/package.json detection)")
   .option("--version <version>", "Feature version (defaults to the current version)")
   .option("--timeout <ms>", "Test timeout in milliseconds (default: 600000)")
+  .option("--prove", "Also run the suite at the base commit to record red-before-green evidence")
+  .option("--base <ref>", "Base ref to prove against (defaults to the feature's base branch)")
   .option("--json", "Print the result as JSON")
   .action((feature, options) => {
     output.setJson(options.json);
@@ -3011,7 +3018,38 @@ program
       );
     }
 
-    const written = evidence.writeEvidence(projectRoot, feature, versionId, run);
+    // Red-before-green is opt-in per invocation, not per project: running the suite
+    // twice is expensive and only worth it when the evidence is about to be used to
+    // approve review. The acceptance criteria come from traceability - the same list
+    // the review gate measures coverage against - so "proven" and "covered" describe
+    // the same set and cannot drift.
+    let proof = null;
+
+    if (options.prove && passed) {
+      const traceJson = stateStore.readJson(
+        path.join(
+          evidence.governanceDir(projectRoot, feature, versionId),
+          "traceability.json"
+        ),
+        null
+      );
+      const { collectTestedAcceptanceCriteria } = require("../commands/gates");
+
+      proof = require("./lib/redgreen").prove(projectRoot, {
+        feature,
+        versionId,
+        base: options.base,
+        command: run.command,
+        timeoutMs: options.timeout ? Number(options.timeout) : undefined,
+        acs: collectTestedAcceptanceCriteria(traceJson)
+      });
+    }
+
+    const written = evidence.writeEvidence(projectRoot, feature, versionId, run, {
+      ...(proof && proof.ok && proof.entries.length
+        ? { redGreen: proof.entries, redGreenBase: proof.base }
+        : {})
+    });
     const passed =
       run.exitCode === 0 &&
       Number(run.summary.failed) === 0 &&
@@ -3049,8 +3087,28 @@ program
         durationMs: run.durationMs,
         evidence: path.relative(projectRoot, written.file),
         testIds: run.testIds,
-        acIds: run.acIds
+        acIds: run.acIds,
+        redGreen:
+          proof && proof.ok
+            ? {
+                base: proof.base,
+                proven: proof.entries.filter((entry) => entry.proven).map((entry) => entry.ac),
+                unproven: proof.entries.filter((entry) => !entry.proven).map((entry) => entry.ac)
+              }
+            : null
       },
+      warnings: [
+        ...(options.prove && proof && !proof.ok ? [`Red-before-green not recorded: ${proof.reason}`] : []),
+        ...(options.prove && proof && proof.ok
+          ? proof.entries
+              .filter((entry) => !entry.proven)
+              .slice(0, 5)
+              .map(
+                (entry) =>
+                  `${entry.ac} is covered by tests that also pass at ${proof.base}, so they do not depend on this change.`
+              )
+          : [])
+      ],
       blockers: passed
         ? []
         : [
@@ -3066,6 +3124,19 @@ program
         console.log(`\n🧪 ${run.command}`);
         console.log(`   ${run.summary.passed} passed, ${run.summary.failed} failed, ${run.summary.skipped} skipped (${run.durationMs} ms)`);
         console.log(`   Evidence: ${path.relative(projectRoot, written.file)}`);
+
+        if (proof && proof.ok) {
+          const unproven = proof.entries.filter((entry) => !entry.proven).length;
+
+          console.log(
+            `   Red-before-green: ${proof.entries.length - unproven} of ${proof.entries.length} criteria fail at ${proof.base}` +
+              (unproven > 0 ? ` — ${unproven} pass without the change` : "")
+          );
+        }
+
+        if (options.prove && proof && !proof.ok) {
+          console.log(`   ⚠️  Red-before-green not recorded: ${proof.reason}`);
+        }
 
         if (!passed) {
           const tail = String(run.output || "").trim().split("\n").slice(-12).join("\n");
@@ -3359,6 +3430,19 @@ program
     }
 
     cursor[parts[parts.length - 1]] = parseConfigValue(rawValue);
+
+    // Switching red-before-green on is what defines the cutoff, because that is the
+    // moment the rule starts applying. Stamping it here - not in `sdrive update` - keeps
+    // the promise that only work proposed afterwards is governed: everything already in
+    // the project carries an earlier timestamp and is grandfathered.
+    if (
+      key === "governance.requireRedGreen" &&
+      parseConfigValue(rawValue) === true &&
+      typeof (config.governance || {}).redGreenEnforceFrom !== "string"
+    ) {
+      config.governance = config.governance || {};
+      config.governance.redGreenEnforceFrom = new Date().toISOString();
+    }
 
     const verdict = stateStore.validateData(projectRoot, "config.schema.json", config);
 
