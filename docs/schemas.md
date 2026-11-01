@@ -317,6 +317,10 @@ Validates `.sdrive/config.json`.
 | `governance.requireTestEvidence` | boolean | Require `test-evidence.json` before approving review |
 | `governance.allowStaleEvidence` | boolean | Accept evidence recorded at an older commit |
 | `governance.requireStructuredReview` | boolean | Require `review.json` with a matching commit and reviewer |
+| `governance.requireReviewSecurity` | boolean | Require the security audit record in `review.json.security` |
+| `governance.requireReviewPerformance` | boolean | Require the performance audit record in `review.json.performance` |
+| `governance.allowUnverifiedSecurity` | boolean | Accept a `not_verified` security audit instead of blocking it |
+| `governance.allowUnverifiedPerformance` | boolean | Accept a `not_verified` performance audit instead of blocking it |
 | `governance.testCommand` | string | Test command fallback |
 | `governance.lintCommand` | string | Lint command for CI integrations |
 | `governance.buildCommand` | string | Build command for CI integrations |
@@ -370,7 +374,37 @@ Validates `.sdrive/governance/<feature>/<version>/review.json`, written by
 | `coverage` | Acceptance-criteria coverage percentage |
 | `criteria[]` | Per-check result: `pass`, `fail`, `warn`, or `not_verified` |
 | `findings[]` | Severity, issue, location, `fixRequired`, and linked `AC-###` IDs |
+| `security` | Optional security audit: `status`, `reason`, `secrets`, `dependencies`, `baseline[]`, `report` |
+| `performance` | Optional performance audit: `status`, `reason`, `method`, `nfr[]`, `seo`, `report` |
+| `remediation` | Optional handoff for a failed review: `round`, and `items[]` of `finding`, `severity`, `fixWith`, `task` |
 | `evidence` | Paths to test evidence, test report, verification, and audit record |
+
+`security.status` and `performance.status` each take four values, and the
+difference between the last two is the whole safety property:
+
+| Status | Meaning | Gate |
+|--------|---------|------|
+| `pass` | measured and clean | passes |
+| `fail` | a finding that requires a fix | blocks |
+| `not_applicable` | there is nothing here to measure — **reason required** | passes |
+| `not_verified` | it could not be measured — **reason required** | blocks unless `allowUnverified*` |
+
+`not_applicable` is a claim someone made; `not_verified` is an admission.
+Only the admission should stop a release.
+
+`remediation` is what makes a failed review survive the session. `sdrive status`
+reads it, so reopening the project in another editor prints the command that
+clears the finding instead of "run the tests again":
+
+```json
+"remediation": {
+  "round": 1,
+  "items": [
+    { "finding": "Hardcoded Stripe key in config/dev.env", "severity": "high",
+      "fixWith": "/sdrive:secure shop-checkout", "task": "T-014" }
+  ]
+}
+```
 
 `review.json` is validated by `sdrive validate` and read by
 `sdrive approve <feature> review` when `governance.requireStructuredReview` is

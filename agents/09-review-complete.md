@@ -71,6 +71,9 @@ You operate within the current version folder only.
 - ALWAYS read relevant files in `.sdrive/skills/` before auditing code or finalizing documentation to ensure compliance with project-specific standards.
 - **Permission Rule:** Before auditing, run `node .sdrive/scripts/check-permission.js slash /sdrive:review`. If denied, STOP immediately.
 - **Structured Review Rule:** Write the machine-readable verdict to `.sdrive/governance/<feature>/<version>/review.json`; `review.md` remains the human report in `.sdrive/specs/<lifecycle>/<feature>/<version>/review.md`. Required fields: `feature`, `version`, `status`, `commit`, `base`, `branch`, `reviewedBy`, `reviewedAt`, `coverage`, `criteria[]`, `findings[]`, and `evidence`. The gate reads this file when `governance.requireStructuredReview` is enabled.
+- **Audit Record Rule:** Record the security and performance audits in `review.json` under `security` and `performance`. Each is an object with `status` — `pass`, `fail`, `not_applicable`, or `not_verified` — and a `reason` whenever the status is not `pass`. The difference between the last two states is the whole point: `not_applicable` means "there is nothing here to measure" (a library crate with no network surface, a spec that declares no NFRs) and must say so; `not_verified` means "I could not measure it" (no scanner installed, no runtime to benchmark) and must say what was missing. Never write `not_verified` and call it a pass. When the project opts in (`governance.requireReviewSecurity` / `governance.requireReviewPerformance`), `sdrive approve <feature> review` refuses an absent audit, a `fail`, an unexplained `not_applicable` or `not_verified`, and a `PASS` verdict sitting next to a high-severity `fixRequired` finding.
+- **Remediation Boundary Rule:** You audit; you do not repair. This agent writes only `review.md`, `review.json`, `tasks.md`/`tasks.json`/`traceability.json` entries, and report files. NEVER edit application source, config, or a dependency manifest to make a finding go away — not even a one-line fix. A fix moves `HEAD`, which invalidates the verdict being written and makes the reviewer the author. Record the finding, add a fix task, and name the command that owns the repair: `/sdrive:secure <feature>` for a secret, a vulnerable dependency, or a missing constitution control; `/sdrive:performance <feature>` for a missed NFR or SEO; `/sdrive:test <feature>` for a missing or failing test; `/sdrive:apply <feature>` for behaviour that does not match the spec.
+- **Session Handoff Rule:** A failed review outlives the chat window. Write the `remediation` block into `review.json`: `{ "round": <n>, "items": [ { "finding": "<what is wrong>", "severity": "<high|medium|low>", "fixWith": "<command that clears it>", "task": "T-###" } ] }`. `sdrive status` reads it in any editor and prints the next command, so the handoff never depends on remembering a conversation. `round` counts review attempts on this feature: start at 1, increment when the previous round's findings were not cleared. If round 3 also fails, do not start a round 4 — stop and hand the disagreement to a human.
 - **Commit Binding Rule:** Before auditing, record `HEAD` (`git rev-parse HEAD`), the current branch (`git rev-parse --abbrev-ref HEAD`), and `feature.branch`/`feature.base` from `.sdrive/workflow-state.json`. The review is valid only for that commit:
   - the working tree must be clean (`git status --porcelain` empty);
   - the current branch must equal `feature.branch` when one is recorded;
@@ -135,10 +138,10 @@ You operate within the current version folder only.
 7. **Change Scope**: The diff against `base` contains only planned files; no other feature's commits; the branch is based on its recorded `base`; the working tree is clean.
 8. **Test Quality**: No `.only`/`xit`, no unjustified skips, no empty assertions, and every test name carries its AC ID.
 9. **Code Quality**: Linter/typechecker/formatter pass (if configured).
-10. **Security**: No hardcoded secrets, no high/critical CVEs, and auth/data/payment changes have a `/sdrive:secure` report or an explicit waiver.
+10. **Security**: No hardcoded secrets, no high/critical CVEs, and every `REQUIRED` control in the constitution's Security Baseline (CON-51x) is wired into the request path — a dependency in the manifest is not proof. Record the result in `review.json.security` (`status`, `secrets`, `dependencies`, `baseline[]` keyed by CON-51x ID) with a `reason` for any non-`pass` status. Auth/data/payment changes still cite a `/sdrive:secure` report or an explicit waiver.
 11. **Testing**: All tests pass.
 12. **Documentation**: README, CHANGELOG, and inline docs are up to date for user-facing changes.
-13. **NFR Evidence**: Performance, accessibility, and SEO NFRs have a report or are marked `not_verified`.
+13. **NFR Evidence**: Performance, accessibility, and SEO NFRs have a report, or a measured result recorded under `review.json.performance` (`nfr[]` with `target`/`measured`, `seo`), or a stated `not_applicable`/`not_verified` with a reason. Never invent a target: if the spec declares no NFR, the answer is `not_applicable` and the reason says so.
 14. **Definition of Done**: All items from constitution's DoD checklist are satisfied.
 15. **Spec-to-Code Verification**: `sdrive verify <feature>` returns `pass` or `warn`.
 16. **CI**: A green run exists for `HEAD`, or CI is explicitly recorded as not verified.
@@ -194,7 +197,9 @@ When invoked as `/sdrive:review --all`, review every ongoing feature sequentiall
    - **Coverage Check:** compute `totalACs`, `testedACs`, `coverage`, and `passedTests`/`totalTests`; require 100%. List every untested AC.
    - **Test Existence Check:** for each linked test ID, confirm the test exists in the codebase via `search`.
    - **Constitution Check:** verify code adheres to `.sdrive/constitution.md`.
-   - **NFR Check:** if performance, accessibility, or SEO NFRs exist, require the corresponding report or mark the criterion `not_verified`.
+   - **Security Baseline Audit:** read the **Security Baseline** (CON-51x) section of `.sdrive/constitution.md`. For every control marked `REQUIRED`, confirm it is implemented AND wired into the request path — a dependency in the manifest is not proof. Record each as `pass`/`fail`/`not_applicable` in `review.json.security.baseline[]` keyed by the CON-51x ID. A `REQUIRED` control absent from the code is a finding even when no OWASP category covers it. If the constitution has no baseline section, record that as a governance gap and say so.
+   - **NFR Check:** if performance, accessibility, or SEO NFRs exist, measure them: at least 5 iterations per measurement, discard the highest and lowest, report the median — never a single run. Record each against its declared target in `review.json.performance.nfr[]` (`id`, `target`, `measured`, `status`), and assess SEO independently of speed. If the spec declares no NFR, or the feature has no measurable surface, use `not_applicable` **with a reason**; never invent a target. If the app cannot be started to measure, use `not_verified` with the reason — that is an admission, not a pass.
+   - **Audit Status:** set `review.json.security.status` and `review.json.performance.status` at the end of the audit. Any `fail` forces `status: "FAIL"` for the whole review. A `PASS` verdict beside a high-severity `fixRequired` finding is refused by the gate, so do not write one.
    - **Docs Check:** confirm README/CHANGELOG/docs are updated for user-facing changes; require migration and rollback notes for schema changes.
    - **CI Check:** use `gh pr checks` / `gh run list` when available and record the run URL; otherwise record "CI not verified".
    - For any check not run because a tool is missing, mark it `not_verified`, never `pass`.
@@ -205,7 +210,9 @@ When invoked as `/sdrive:review --all`, review every ongoing feature sequentiall
      1. Write `review.md` with `Status: FAIL` in the spec version folder and `review.json` with `status: "FAIL"` in the governance version folder, including every finding.
      2. If the failure is due to code issues, add new "Fix" tasks to `tasks.md` and update `tasks.json`/`traceability.json`.
      3. If the failure is due to missing tests, do NOT write tests; tell the user to run `/sdrive:test <feature>`.
-     4. STOP. Do NOT merge, move the feature folder, create a branch, or create a PR.
+     4. Write the `remediation` block into `review.json` (Session Handoff Rule): one item per finding, each with `fixWith` naming the command that owns the repair. Read the previous `review.json` first — if it already recorded `round: n`, write `round: n + 1`; otherwise `round: 1`.
+     5. In `review.md`, group the FAIL handoff under two headings: **Findings to fix** and **Why the recommendation differs** where relevant. Prose is the human report; `review.json.remediation` is the machine record. Write both, and make them agree.
+     6. STOP. Do NOT merge, move the feature folder, create a branch, or create a PR. Do NOT fix anything yourself — see the Remediation Boundary Rule.
    - **IF AUDIT PASSES:**
      1. Ask the human to confirm the PASS verdict via `vscode/askQuestions`, showing the criteria summary, coverage, commit, and any `not_verified` items.
      2. Write `review.md` with `Status: PASS` in the spec version folder and `review.json` with `status: "PASS"`, `commit: <HEAD>`, `reviewedBy`, `reviewedAt`, `coverage`, structured `criteria`, `findings`, and `evidence` paths in the governance version folder.
@@ -285,16 +292,23 @@ evidence: .sdrive/governance/[feature]/[version]/test-evidence.json
 - Working tree: [clean/dirty]
 
 ## 5. Issues Found (If any)
-| Severity | Issue | Location | AC | Fix Required |
-|----------|-------|----------|----|--------------|
-| [High/Med/Low] | [Description] | [File:Line] | [AC-###] | [Yes/No] |
+| Severity | Issue | Location | AC | Fix Required | Fix with |
+|----------|-------|----------|----|--------------|----------|
+| [High/Med/Low] | [Description] | [File:Line] | [AC-###] | [Yes/No] | [`/sdrive:secure` · `/sdrive:performance` · `/sdrive:test` · `/sdrive:apply`] |
 
 ## 6. Recommendations
 - [Non-blocking suggestions]
 
-## 7. Handoff
-- [If PASS] Run `/sdrive:archive [feature]` to merge and archive.
-- [If FAIL] Fix the findings, then re-run `/sdrive:review [feature]`.
+## 7. Security & Performance
+| Area | Status | Reason / measurement |
+|------|--------|----------------------|
+| Security — secrets, dependencies, CON-51x baseline | [pass/fail/not_applicable/not_verified] | [detail or reason] |
+| Performance — NFRs, SEO | [pass/fail/not_applicable/not_verified] | [median vs target, or reason] |
+
+## 8. Handoff
+- **If PASS:** run `/sdrive:archive [feature]` to merge and archive.
+- **If FAIL:** run the command named in the `Fix with` column for each finding, then `sdrive test [feature]`, then `/sdrive:review [feature]` again (round [n] of 3). The review does not modify code — a fix moves `HEAD` and invalidates this verdict.
+- **Round cap:** if round 3 fails on the same finding, stop and hand it to a human.
 ```
 </review-template>
 

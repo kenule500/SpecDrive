@@ -13,6 +13,81 @@ Nothing yet.
 
 ---
 
+## 0.1.54 — 2026-11-01
+
+**`/sdrive:review` now audits security and performance itself, and a failed review leaves a
+handoff that survives the session.**
+
+Security and speed used to be checked only if someone remembered to run `/sdrive:secure` or
+`/sdrive:performance` first, so "review passed" meant "the tests pass" and nothing more. Review
+now performs the *analysis* for both, and refuses to pass a feature with a leaked secret, a
+vulnerable dependency, a missing constitution control, or a missed NFR.
+
+It does **not** repair what it finds, and that boundary is deliberate: a fix moves `HEAD`,
+which invalidates the verdict being written and makes the reviewer the author.
+
+### Added
+
+- **Security and performance audits inside `/sdrive:review`.** The secret scan, dependency
+  audit, and CON-51x Security Baseline check (verified as *wired into the request path*, not
+  merely present in the manifest) now run during review, as do NFR measurements — at least 5
+  iterations, highest and lowest discarded, median reported. Results go into `review.json`
+  under `security` and `performance`.
+- **Four audit states, not two.** `pass`, `fail`, `not_applicable` (nothing here to measure —
+  reason required), and `not_verified` (could not measure — reason required). The distinction
+  is the safety property: `not_applicable` is a claim someone made, `not_verified` is an
+  admission, and only the admission blocks.
+- **`review.json.remediation`** — a failed review records every finding with the command that
+  owns the repair (`/sdrive:secure`, `/sdrive:performance`, `/sdrive:test`, `/sdrive:apply`)
+  and a `round` counter. `sdrive status` reads it, so reopening the project in another editor
+  or on another machine prints the next command instead of "run the tests again". The loop is
+  capped at three rounds; a fourth is refused in favour of a human.
+
+### Enforced (opt-in)
+
+`sdrive approve <feature> review` now refuses, when the policy is on:
+
+- an absent `security` / `performance` audit;
+- a `fail`;
+- `not_applicable` or `not_verified` without a reason;
+- `not_verified` at all, unless `allowUnverified*` is set;
+- a `PASS` verdict next to a high-severity `fixRequired` finding.
+
+Both policies are **off by default**, so an upgrade never refuses a feature that was already
+in flight:
+
+```bash
+sdrive config:set governance.requireReviewSecurity true
+sdrive config:set governance.requireReviewPerformance true
+```
+
+And for environments that genuinely cannot run a scanner or start the app:
+
+```bash
+sdrive config:set governance.allowUnverifiedSecurity true
+sdrive config:set governance.allowUnverifiedPerformance true
+```
+
+### Changed
+
+- **`sdrive status` names a failed review's fix**, not the test run that already passes.
+- **`/sdrive:secure` and `/sdrive:performance` lose their duplicate audit** when review already
+  recorded a failing one — go straight to the remediation.
+- `sdrive init` writes all four new keys explicitly (`false`) so the options are discoverable
+  rather than hidden.
+
+### Upgrade
+
+```bash
+npm i -g specdrive-cli@latest
+sdrive update
+```
+
+Existing `review.json` files stay valid — every new field is optional. Nothing changes until a
+project opts in.
+
+---
+
 ## 0.1.53 — 2026-11-01
 
 **`/sdrive:worktree` asks the same branch question `/sdrive:propose` asks, and can undo a

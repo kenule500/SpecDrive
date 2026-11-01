@@ -366,12 +366,15 @@ batch must be all `build`, ungated, and inside a single wave, and it lands as on
 - Audits the diff against `base`, flagging unplanned files, untracked files, and commits from another feature
 - Checks test quality (`.only`, `xit`, unjustified skips, empty assertions, AC IDs)
 - Checks security, NFR evidence, docs, and CI status; unverified items are recorded as `not_verified`, not passed
+- **Audits security and performance itself** — secret scan, dependency audit, the constitution's CON-51x Security Baseline verified as *wired in* (not just present in the manifest), and NFRs measured over ≥5 iterations with the median reported. Each result goes into `review.json.security` / `review.json.performance` as `pass`, `fail`, `not_applicable` (with a reason), or `not_verified` (with a reason)
 - Audits code against spec
 - Writes `review.md` (human report) and `review.json` (machine-readable verdict) with `Status: PASS` or `Status: FAIL`
 - Asks the human to confirm a PASS verdict and records reviewer independence
-- On failure: records the findings, adds fix tasks, and stops (no PR, no branch, no merge)
+- On failure: records the findings, adds fix tasks, writes a `remediation` block naming the command that clears each one, and stops — **it never edits source to make a finding go away**, because a fix moves `HEAD` and would invalidate the verdict it just wrote
 - On pass: notifies the user to run `/sdrive:archive <feature>`
 - Verifies permission before and after the audit
+
+**The FAIL handoff:** every finding names its owner command — `/sdrive:secure` for a secret, a vulnerable dependency, or a missing baseline control; `/sdrive:performance` for a missed NFR or SEO; `/sdrive:test` for a missing or failing test; `/sdrive:apply` for behaviour that does not match the spec. The loop is fix → `sdrive test` → `/sdrive:review` again, capped at three rounds. Because `remediation` lives in `review.json`, `sdrive status` reproduces the handoff in any editor — the next step does not depend on remembering a conversation.
 
 **Lifecycle ownership:** `/sdrive:apply` owns `backlog/` → `ongoing/`; `/sdrive:archive` owns `ongoing/` → `completed/`. `completed/` is immutable: there is no reopen or amend path. New work on a released feature is `sdrive version:new`, which creates a new version and leaves the released one in `completed/`.
 

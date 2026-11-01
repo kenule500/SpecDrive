@@ -671,7 +671,17 @@ program
               // `sdrive config:set governance.requireTestEvidence true`.
               requireTestEvidence: true,
               allowStaleEvidence: false,
-              requireStructuredReview: true
+              requireStructuredReview: true,
+              // The security and performance audits inside review are off by default so
+              // an upgrade never refuses a feature that was already in flight. Turn them
+              // on per project: `sdrive config:set governance.requireReviewSecurity true`.
+              // `allowUnverified*` is the documented escape hatch for environments that
+              // cannot run a scanner or start the app - without it, review would deadlock
+              // in CI.
+              requireReviewSecurity: false,
+              requireReviewPerformance: false,
+              allowUnverifiedSecurity: false,
+              allowUnverifiedPerformance: false
             },
             mcp: {
               // Hosted knowledge servers are wired by default. Set this to
@@ -1541,13 +1551,67 @@ program
 // The next action is derived from the current version's gates, in order. It is
 // the same information the dashboard's health panel shows, exposed where CI and
 // agents can read it.
-function nextActionFor(feature, version) {
+// The review record survives the session, and so does the handoff. A FAIL verdict
+// carries a `remediation` block naming the command that clears each finding, so a
+// developer who reopens the project in another editor - or on another machine - learns
+// what to do from `sdrive status` instead of from a chat log that no longer exists.
+// Without it the answer is "run the tests", which is true and useless when the finding
+// is a leaked key.
+function remediationFor(feature, version, root) {
+  if (!feature || !version || !version.id) {
+    return null;
+  }
+
+  const record = stateStore.readJson(
+    path.join(root, ".sdrive", "governance", feature.name, version.id, "review.json"),
+    null
+  );
+
+  if (!record || record.status === "PASS") {
+    return null;
+  }
+
+  const remediation = record.remediation || {};
+  const items = Array.isArray(remediation.items)
+    ? remediation.items.filter((item) => item && item.fixWith)
+    : [];
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  const round = Number(remediation.round) || 1;
+  const first = items[0];
+  const others = items.length > 1 ? ` (and ${items.length - 1} more on the list)` : "";
+  const tail =
+    round >= 3
+      ? " Round 3 of 3 - if this finding is no smaller than the last round, stop and hand it to a human."
+      : " After the fix: `sdrive test`, then `/sdrive:review`.";
+
+  return {
+    command: first.fixWith,
+    reason: `Review FAILED, round ${round} of 3: ${first.finding}${others}.${tail}`
+  };
+}
+
+function nextActionFor(feature, version, root) {
   // Gate state is read through the shared accessors, never by comparing the
   // stored string here. A second copy of "what approved means" is exactly the
   // drift commands/gates.js exists to prevent.
   const { GATE_ORDER, isGateApprovedFor } = require("../commands/gates");
   const gates = (version && version.gates) || {};
   const pending = GATE_ORDER.find((gate) => !isGateApprovedFor(version, gate));
+
+  // A failed review is not an unrun one. Consult the recorded handoff first, so the
+  // next command names the audit that must clear the finding rather than the tests
+  // that already pass.
+  if (pending === "review") {
+    const remediation = remediationFor(feature, version, root || process.cwd());
+
+    if (remediation) {
+      return remediation;
+    }
+  }
 
   if (!pending) {
     return {
@@ -1595,7 +1659,7 @@ program
 
     const features = (state.features || []).map((feature) => {
       const versions = (feature.versions || []).map((version) => {
-        const action = nextActionFor(feature, version);
+        const action = nextActionFor(feature, version, projectRoot);
         return {
           id: version.id,
           phase: version.phase,

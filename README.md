@@ -490,6 +490,29 @@ in:
 sdrive config:set governance.requireStructuredReview true
 ```
 
+**5. Security and performance audits inside review are opt-in.** `/sdrive:review`
+always *can* audit both; whether the gate *requires* them is per project:
+
+```bash
+sdrive config:set governance.requireReviewSecurity true
+sdrive config:set governance.requireReviewPerformance true
+```
+
+When on, `sdrive approve <feature> review` refuses an absent audit, a failing
+audit, an unexplained `not_applicable`/`not_verified`, and a `PASS` verdict next
+to a high-severity `fixRequired` finding. `not_verified` — "I could not check" —
+blocks by default, because an unverified security check on a release is exactly
+what a prompt-only rule used to let through. Environments that genuinely cannot
+run a scanner or start the app opt out explicitly:
+
+```bash
+sdrive config:set governance.allowUnverifiedSecurity true
+sdrive config:set governance.allowUnverifiedPerformance true
+```
+
+They are **off by default** so an upgrade never refuses a feature that was
+already in flight.
+
 Run `sdrive doctor` after upgrading. It reports anything the upgrade could not
 repair on its own.
 

@@ -26,6 +26,18 @@
         "requireStructuredReview": {
           "type": "boolean"
         },
+        "requireReviewSecurity": {
+          "type": "boolean"
+        },
+        "requireReviewPerformance": {
+          "type": "boolean"
+        },
+        "allowUnverifiedSecurity": {
+          "type": "boolean"
+        },
+        "allowUnverifiedPerformance": {
+          "type": "boolean"
+        },
         "testCommand": {
           "type": "string"
         },

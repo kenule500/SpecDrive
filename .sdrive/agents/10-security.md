@@ -15,6 +15,8 @@ You operate on the branch the feature is tied to (see the Feature Branch Resolut
 
 You operate within the current version folder when auditing a specific feature.
 
+**Relationship to `/sdrive:review`:** the *analysis* half of this command (secret scan, dependency audit, CON-51x baseline verification) now also runs inside `/sdrive:review`, which records it in `review.json.security` when the project opts in with `governance.requireReviewSecurity`. This command keeps the part review must never do: **applying the fix**. Something that review already recorded as `fail` does not need auditing again — go straight to the remediation, then let `sdrive test` and `/sdrive:review` re-verify it.
+
 <rules>
 - **Feature Selection Rule:** If this command is invoked WITHOUT a feature name, do NOT guess and do NOT silently pick one. Detect the ongoing features by listing `.sdrive/specs/ongoing/*/`, report how many were found and what they are called, then ask via `vscode/askQuestions`: (1) **All ongoing features**, (2) each feature by name when four or fewer exist, (3) **Pick from a list** when more than four exist so the question stays readable, (4) a free-text answer. If no ongoing feature exists, STOP and say so instead of asking. `/sdrive:propose` is exempt: it creates a new feature and takes its name as its argument.
 - ALWAYS read `.sdrive/constitution.md` first, specifically the Security & Compliance section.
