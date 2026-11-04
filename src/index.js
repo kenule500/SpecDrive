@@ -328,7 +328,7 @@ function requirePermission(cliCommand) {
 function audit(event, details = {}) {
   try {
     const { logEvent } = require(path.join(process.cwd(), ".sdrive", "scripts", "audit-log.js"));
-    logEvent(event, details);
+    logEvent(event, details, { quiet: output.isJson() });
   } catch (error) {
     // Ignore audit failures so the CLI still works when logging is unavailable.
   }
@@ -561,6 +561,10 @@ program
       }
 
       console.log("\n✅ SpecDrive initialized successfully.");
+      output.printNextAction({
+        command: "/sdrive:constitution",
+        reason: "The constitution is the first governance artifact; every later command reads it."
+      });
 
       if (options.dashboard === false) {
         console.log("💡 Dashboard skipped (--no-dashboard).");
@@ -902,6 +906,12 @@ program
         }
       }
 
+      output.printNextAction(
+        needsUpdate
+          ? { command: "sdrive update", reason: ".sdrive/ has drifted from the installed framework." }
+          : { command: "sdrive status", reason: "The installation matches the manifest; continue with the workflow." }
+      );
+
       process.exit(needsUpdate ? EXIT.DRIFT : EXIT.OK);
     }
 
@@ -1029,6 +1039,12 @@ program
         console.log("");
       }
     }
+
+    output.printNextAction(
+      options.dryRun
+        ? { command: "sdrive update", reason: "Nothing was written; re-run without --dry-run to apply." }
+        : { command: "sdrive check", reason: "Confirm the refreshed installation passes its own checks." }
+    );
   });
 
 // ---------- MCP COMMANDS ----------
@@ -1313,6 +1329,12 @@ program
       console.log("\n✅ Governance validation complete. All files are valid.");
     }
 
+    output.printNextAction(
+      verdict.ok
+        ? { command: "sdrive next", reason: "Governance files are valid; find the next gate to clear." }
+        : { command: "sdrive validate", reason: "Fix the schema errors above, then validate again." }
+    );
+
     process.exit(verdict.ok ? EXIT.OK : EXIT.VALIDATION);
   });
 
@@ -1344,6 +1366,19 @@ program
 
     if (!output.isJson()) {
       const result = execute.nodeScript(scriptPath, args, { capture: false });
+
+      output.printNextAction(
+        result.status === 0
+          ? {
+              command: `sdrive test ${feature}`,
+              reason: "Verification passed; record passing test evidence before review."
+            }
+          : {
+              command: `sdrive next ${feature}`,
+              reason: "Verification reported drift; resolve the missing or extra items, then verify again."
+            }
+      );
+
       process.exit(result.status === 0 ? EXIT.OK : EXIT.DRIFT);
     }
 
@@ -1427,6 +1462,10 @@ program
 
     audit("feature_created", { feature });
     console.log(`✅ Feature "${feature}" created in backlog.`);
+    output.printNextAction({
+      command: `/sdrive:propose ${feature}`,
+      reason: "The scaffold exists; the proposal writes the specification and plan the gates read."
+    });
   });
 
 // ---------- UPDATE-PROPOSE COMMAND ----------
@@ -1486,6 +1525,10 @@ program
     console.log("🤖 The AI tool should now read the Update Proposal agent instructions");
     console.log("   and extend the specification with the requested change.");
     console.log("⏸️  Remember to stop for human approval after the command completes.\n");
+    output.printNextAction({
+      command: `sdrive next ${feature}`,
+      reason: "After the spec is extended, the next command follows from the gates."
+    });
   });
 
 // ---------- ASSIGN COMMAND ----------
@@ -1803,6 +1846,10 @@ program
 
     if (features.length === 0) {
       console.log("No features found.");
+      output.printNextAction({
+        command: "/sdrive:propose <feature>",
+        reason: "Nothing is in flight; the proposal creates the specification and plan."
+      });
       return;
     }
 
@@ -1871,6 +1918,12 @@ program
       }
       console.log("");
     });
+
+    output.printNextAction(
+      features.length === 1 && features[0].nextAction
+        ? features[0].nextAction
+        : { command: "sdrive next", reason: "List the exact next steps for every feature." }
+    );
   });
 
 // ---------- NEXT COMMAND ----------
@@ -1963,10 +2016,10 @@ program
           entry.steps.forEach((step, index) => {
             const tag =
               step.kind === "cli"
-                ? "run yourself"
+                ? "run yourself · terminal"
                 : step.kind === "human"
-                  ? "needs you"
-                  : "next command";
+                  ? "needs you · terminal"
+                  : "next command · chat";
             console.log(`   ${index + 1}. [${tag}] ${step.command}`);
             console.log(`      ${step.why}`);
           });
@@ -2926,6 +2979,10 @@ program
     console.log("📋 The scan is complete.");
     console.log("   You can now run `/sdrive:onboard` in your AI tool,");
     console.log("   or the agent will run this scan for you if needed.");
+    output.printNextAction({
+      command: "/sdrive:constitution",
+      reason: "Onboarding inventories the project; the constitution records the rules the rest of the workflow enforces."
+    });
 
     if (options.dashboard === false) {
       console.log("💡 Dashboard skipped (--no-dashboard).");
@@ -2957,6 +3014,10 @@ program
     }
 
     audit("version_created", { feature });
+    output.printNextAction({
+      command: `sdrive next ${feature}`,
+      reason: "The new version starts at the first gate; `next` names the command that clears it."
+    });
   });
 
 // ---------- DIFF VERSION ----------
@@ -3236,6 +3297,11 @@ program
     // approve review. The acceptance criteria come from traceability - the same list
     // the review gate measures coverage against - so "proven" and "covered" describe
     // the same set and cannot drift.
+    const passed =
+      run.exitCode === 0 &&
+      Number(run.summary.failed) === 0 &&
+      evidence.hasRecognisableResults(run);
+
     let proof = null;
 
     if (options.prove && passed) {
@@ -3263,10 +3329,6 @@ program
         ? { redGreen: proof.entries, redGreenBase: proof.base }
         : {})
     });
-    const passed =
-      run.exitCode === 0 &&
-      Number(run.summary.failed) === 0 &&
-      evidence.hasRecognisableResults(run);
 
     if (!passed) {
       // The evidence is still written: a failing run is a fact worth recording,
@@ -3878,6 +3940,10 @@ program
         ok: true,
         code: EXIT.OK,
         data: { plan },
+        next: {
+          command: `sdrive migrate:apply ${framework} --yes`,
+          reason: "Nothing was written; this is the plan, not the migration."
+        },
         human: () => {
           console.log(`\nPlanned migration: ${plan.summary.features} feature(s), ${plan.summary.conflicts} conflict(s).`);
           console.log("Nothing was written. Re-run with --yes to apply.\n");
@@ -3904,6 +3970,12 @@ program
       data: { report: applied.report, verification },
       blockers: verification.blockers,
       warnings: verification.warnings,
+      next: failed
+        ? { command: "sdrive migrate:rollback", reason: "The import did not verify; roll it back before relying on it." }
+        : {
+            command: `sdrive migrate:verify ${applied.report.migrationId}`,
+            reason: "Confirm every expected file was imported."
+          },
       human: () => {
         console.log(`\n✅ Migration ${applied.report.migrationId}`);
         console.log(`   Imported: ${applied.report.counts.imported}`);

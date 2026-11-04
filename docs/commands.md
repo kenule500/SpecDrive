@@ -7,6 +7,26 @@ SpecDrive has two types of commands:
 
 ---
 
+## The next-action notice
+
+Every execution ends by naming the next action and where it runs:
+
+```
+Next Action: sdrive validate checkout
+   where: on the terminal
+```
+
+- `/sdrive:*` is marked **on the chat** — only the AI tool can load it.
+- `sdrive ...` is marked **on the terminal** — an agent with a shell runs it itself
+  (CON-715); the user only types it when no agent is in the loop.
+- `sdrive approve ...` also runs on the terminal, but only the user gives it: the
+  approval is the governance sign-off.
+
+Commands rendered through the shared result helper carry the same answer in
+`--json` as `next: { command, where, reason }`.
+
+---
+
 ## Terminal Commands
 
 | Command | Purpose |

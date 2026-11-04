@@ -9,8 +9,12 @@ release can go live without a maintainer approving it with 2FA.
 1. Bump the version, without letting npm create the tag yet:
 
    ```bash
-   npm version patch --no-git-tag-version
+   npm version patch|minor|major --no-git-tag-version
    ```
+
+   `patch` is a fix, `minor` is new behavior, and `major` is a breaking change to a
+   public contract (see [Versioning](#versioning)). The command updates
+   `package.json` and `package-lock.json` together and creates no commit or tag.
 
 2. Commit it:
 
@@ -45,6 +49,32 @@ release can go live without a maintainer approving it with 2FA.
 The workflow refuses to publish if the tag and the `package.json` version
 disagree, and it prints the exact tarball contents first so you can see what is
 about to ship.
+
+## Versioning
+
+`specdrive-cli` follows SemVer from 1.0.0. These are the public contracts:
+
+- CLI command names and flags
+- `--json` payloads and the stable exit codes `0`–`9`
+- the `.sdrive/` directory layout
+- the governance JSON schemas in `schemas/`
+- the MCP tool names and payloads
+
+A breaking change to any of them requires a **major** release and a migration path.
+New behavior is a **minor**; a fix is a **patch**.
+
+### Prereleases
+
+A prerelease version (`1.1.0-rc.1`) must never become `latest`. The publish workflow
+runs `npm stage publish` without a tag, so a prerelease would be staged as `latest`
+unless the final step is changed to:
+
+```bash
+npm stage publish --tag next
+```
+
+Keep the stable release on `latest`; install prereleases explicitly with
+`npm i -g specdrive-cli@next`.
 
 ## One-time setup
 

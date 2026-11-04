@@ -3,13 +3,53 @@
 Notable changes to `specdrive-cli`. Everything here is user-facing: what shipped,
 what it changes for an existing project, and what to run after upgrading.
 
-SpecDrive is pre-1.0, so a release that adds features ships as a patch bump.
+Public contracts follow SemVer: a breaking change to the CLI, `--json` payloads,
+exit codes `0`–`9`, the `.sdrive/` layout, governance schemas, or MCP tools ships as
+a major release with a migration.
 
 ---
 
-## Unreleased
+## 1.0.0 — 2026-11-04
 
-Nothing yet.
+**SpecDrive is stable. Every execution ends by naming the next action, and where to run it.**
+
+1.0 makes the public contracts explicit: CLI command names and flags, `--json`
+payloads, exit codes, the `.sdrive/` layout, the governance JSON schemas, and the MCP
+tools. A breaking change to any of them ships as a major release with a migration;
+new behavior ships as a minor; fixes ship as a patch.
+
+A result used to say what happened and leave the reader to work out what to do next.
+Commands now close with the answer:
+
+```
+Next Action: /sdrive:propose checkout
+   where: on the chat
+```
+
+### Added
+
+- **Next-action notice on every command.** `/sdrive:*` actions are marked
+  `where: on the chat`; `sdrive ...` actions are marked `where: on the terminal`.
+  A command may name the exact follow-on (for example a passing `sdrive test` names
+  `sdrive approve <feature> review`); otherwise the notice falls back to
+  `sdrive next`, which derives the step from the gates.
+- **`next` in `--json`** for commands rendered through the shared result helper:
+  `{ command, where, reason }`.
+- **CON-716** in the constitution: an agent MUST end with the one next action and its
+  location, never a menu of possibilities.
+
+### Changed
+
+- `sdrive init`, `sdrive update`, `sdrive validate`, `sdrive verify`, `sdrive create`,
+  `sdrive update-propose`, `sdrive status`, `sdrive onboard` and the migration
+  commands print the notice themselves because they render their own output.
+
+### Fixed
+
+- `sdrive test --prove` no longer crashes before recording red-before-green evidence;
+  the pass/fail verdict is computed before the proof run starts.
+- `--json` no longer has `📝 Audit: …` written to stdout before the payload, so
+  `approve`, `assign`, and `test` results can be parsed by a machine again.
 
 ---
 
