@@ -22,6 +22,26 @@ pushes that branch. `/sdrive:worktree` is also an exception: it prepares local
 branches and worktrees and records them in `workflow-state.json`, but it does not
 commit or push. `/sdrive:propose` commits its own artifacts inside the worktree.
 
+## Delegated approvals
+
+Approvals are human by default. A project can opt into delegated approvals for
+the mechanical gates:
+
+```bash
+sdrive config:set governance.approvalMode delegated
+sdrive config:set governance.delegatedGates '["specification","planning","implementation"]'
+```
+
+An agent may then run:
+
+```bash
+sdrive approve <feature> <gate> --delegated --reason "..."
+```
+
+The requirement checks still run first. The history records
+`by: "agent:<git-user>"`, `delegated: true`, and the reason. `review` can never
+be delegated, and `archive` still requires the human merge decision.
+
 ---
 
 ## Agent List

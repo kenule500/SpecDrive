@@ -1585,7 +1585,7 @@ Audits and manages AI skills.
 | `sdrive group:resolve <expression>` | Resolve a group like `[wave1 p2]` against the product backlog — `--json` for agents |
 | `sdrive test <feature>` | Run the project's tests and record `test-evidence.json` |
 | `sdrive check` | Run doctor + validation (+ tests with `--tests`) in one pass |
-| `sdrive approve <feature> <gate>` | Approve a workflow gate (verifies the stage is genuinely complete) |
+| `sdrive approve <feature> <gate>` | Approve a workflow gate (verifies the stage is genuinely complete). `--delegated` is available only when the project opts in |
 | `sdrive archive:check <feature>` | Report whether a feature may be archived, and why not. Reads only — changes nothing |
 | `sdrive archive:finalize <feature> [--merge-commit <sha>]` | Record a completed archive. Refuses unless all four gates are already approved |
 | `sdrive create <feature>` | Create feature scaffold (internal) |
@@ -1613,6 +1613,27 @@ Audits and manages AI skills.
 | `sdrive verify <feature>` | Verify code matches plan.json |
 | `sdrive version:new <feature>` | Create a new version of a feature |
 | `sdrive diff:version <feature> <vA> <vB>` | Compare two versions of a feature |
+
+### Delegated approvals
+
+By default every gate is a human sign-off. A project can opt into delegated
+approvals for the mechanical gates:
+
+```bash
+sdrive config:set governance.approvalMode delegated
+sdrive config:set governance.delegatedGates '["specification","planning","implementation"]'
+```
+
+Then an agent may run:
+
+```bash
+sdrive approve user-login specification --delegated --reason "Spec artifacts verified by sdrive check"
+```
+
+The gate requirements still run first. The history records
+`by: "agent:<git-user>"`, `delegated: true`, and the reason, so the audit shows
+that this was not a human signature. `review` can never be delegated, and
+`archive` still requires the human merge decision.
 
 ---
 

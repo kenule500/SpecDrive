@@ -9,6 +9,19 @@ a major release with a migration.
 
 ---
 
+## Unreleased
+
+### Added
+
+- **Delegated approvals** for the mechanical gates. Set
+  `governance.approvalMode: "delegated"` and list gates in
+  `governance.delegatedGates`; an agent can then run
+  `sdrive approve <feature> <gate> --delegated --reason "..."` after checks pass.
+  The history records `by: "agent:<git-user>"`, `delegated: true`, and the
+  reason. `review` can never be delegated, and `archive` remains human.
+
+---
+
 ## 1.0.0 — 2026-11-04
 
 **SpecDrive is stable. Every execution ends by naming the next action, and where to run it.**

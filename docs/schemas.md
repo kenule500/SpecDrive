@@ -315,6 +315,8 @@ Validates `.sdrive/config.json`.
 |-------|------|-------------|
 | `defaultTemplate` | string | Required. One of `generic`, `react-node`, `nextjs`, `expo`, `fastapi`, `turborepo` |
 | `governance.requireTestEvidence` | boolean | Require `test-evidence.json` before approving review |
+| `governance.approvalMode` | string | `manual` (default) or `delegated`; delegated lets an agent approve the mechanical gates with `--delegated` |
+| `governance.delegatedGates` | array | Gates an agent may delegate: `specification`, `planning`, `implementation`. `review` is never allowed |
 | `governance.allowStaleEvidence` | boolean | Accept evidence recorded at an older commit |
 | `governance.requireStructuredReview` | boolean | Require `review.json` with a matching commit and reviewer |
 | `governance.requireReviewSecurity` | boolean | Require the security audit record in `review.json.security` |
@@ -330,12 +332,19 @@ Validates `.sdrive/config.json`.
 | `test.timeoutMs` | integer | Test timeout in milliseconds |
 
 New projects write `governance.requireTestEvidence: true` and
-`governance.requireStructuredReview: true`. Existing projects keep the old
-behaviour until they opt in:
+`governance.requireStructuredReview: true`, with `approvalMode: "manual"`.
+Existing projects keep the old behaviour until they opt in:
 
 ```bash
 sdrive config:set governance.requireTestEvidence true
 sdrive config:set governance.requireStructuredReview true
+```
+
+Delegated approvals are opt-in:
+
+```bash
+sdrive config:set governance.approvalMode delegated
+sdrive config:set governance.delegatedGates '["specification","planning","implementation"]'
 ```
 
 ---

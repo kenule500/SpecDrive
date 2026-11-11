@@ -444,21 +444,26 @@ test("dashboards started together share one project list", async () => {
     delete env.SDRIVE_NO_REGISTRY;
     delete env.SDRIVE_PROJECTS;
 
-    const base = await freePort();
+    const ports = [];
+    while (ports.length < projects.length) {
+      const candidate = await freePort();
+      if (!ports.includes(candidate)) ports.push(candidate);
+    }
+
     const servers = projects.map((dir, index) =>
       spawn(
         process.execPath,
         [path.join(dir, ".sdrive", "dashboard", "server.js")],
         {
           cwd: dir,
-          env: { ...env, SDRIVE_PORT: String(base + index) },
+          env: { ...env, SDRIVE_PORT: String(ports[index]) },
           stdio: "ignore"
         }
       )
     );
 
     try {
-      await Promise.all(servers.map((server, index) => waitForServer(base + index)));
+      await Promise.all(servers.map((server, index) => waitForServer(ports[index])));
 
       // Registration happens at listen, so these four writes overlap. None of
       // them may erase another project from the shared list.

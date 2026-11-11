@@ -421,6 +421,19 @@ Approves a workflow gate — but only after verifying that the stage's artifacts
 sdrive approve user-login specification
 ```
 
+Delegated approval is opt-in and intended for agents clearing the mechanical
+gates:
+
+```bash
+sdrive approve user-login specification --delegated --reason "Spec artifacts verified by sdrive check"
+```
+
+It requires `governance.approvalMode: "delegated"`, the gate must be listed in
+`governance.delegatedGates`, and `--reason` is mandatory. The history records
+`by: "agent:<git-user>"`, `delegated: true`, and the reason. `review` can never
+be delegated, and `archive` still requires the human merge decision. Manual
+approval continues to work in either mode.
+
 Allowed gates, in order:
 
 - `specification` — requires `spec.md` and `spec.json`

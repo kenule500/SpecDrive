@@ -676,6 +676,9 @@ program
               requireTestEvidence: true,
               allowStaleEvidence: false,
               requireStructuredReview: true,
+              // Approvals are human by default. A project can opt into delegated
+              // approvals for the mechanical gates; `review` is never delegatable.
+              approvalMode: "manual",
               // The security and performance audits inside review are off by default so
               // an upgrade never refuses a feature that was already in flight. Turn them
               // on per project: `sdrive config:set governance.requireReviewSecurity true`.
@@ -2041,6 +2044,8 @@ program
   .command("approve <feature> <gate>")
   .description("Approve a workflow gate (specification, planning, implementation, review)")
   .option("--json", "Print the result as JSON")
+  .option("--delegated", "Approve under governance.approvalMode=delegated")
+  .option("--reason <text>", "Reason recorded for a delegated approval")
   .action((featureName, gate, options) => {
     output.setJson(options.json);
     requirePermission("approve");
@@ -2048,6 +2053,7 @@ program
     const {
       GATE_ORDER,
       GATE_APPROVED,
+      approvalPolicy,
       checkGateRequirements,
       findFeature,
       resolveVersion
@@ -2069,6 +2075,40 @@ program
       process.exit(
         output.fail("approve", EXIT.NOT_INITIALIZED, "❌ workflow-state.json not found. Run `sdrive init` first.")
       );
+    }
+
+    if (options.delegated) {
+      const policy = approvalPolicy(projectRoot);
+
+      if (policy.mode !== "delegated") {
+        process.exit(
+          output.fail(
+            "approve",
+            EXIT.USAGE,
+            "❌ Delegated approval is not enabled. Set `governance.approvalMode` to `delegated` first."
+          )
+        );
+      }
+
+      if (!policy.gates.includes(gate)) {
+        process.exit(
+          output.fail(
+            "approve",
+            EXIT.USAGE,
+            `❌ Gate "${gate}" is not delegatable. Allowed delegated gates: ${policy.gates.join(", ") || "none"}.`
+          )
+        );
+      }
+
+      if (!options.reason || String(options.reason).trim().length < 10) {
+        process.exit(
+          output.fail(
+            "approve",
+            EXIT.USAGE,
+            "❌ A delegated approval needs `--reason` (at least 10 characters) so the audit explains itself."
+          )
+        );
+      }
     }
 
     let outcome;
@@ -2135,6 +2175,7 @@ program
         }
 
         const actor = currentActor();
+        const recordedBy = options.delegated ? `agent:${actor}` : actor;
 
         // The stored value is the schema's business. Naming it here would recreate the
         // duplication this command was just moved off of, one line lower down.
@@ -2143,9 +2184,15 @@ program
         version.history.push({
           event: `${gate}_approved`,
           // `by` is the schema's field; `actor` is retained for existing readers.
-          by: actor,
+          by: recordedBy,
           actor,
           previousValue: verdict.current || "pending",
+          ...(options.delegated
+            ? {
+                delegated: true,
+                delegationReason: String(options.reason).trim()
+              }
+            : {}),
           timestamp: new Date().toISOString()
         });
 
@@ -2157,7 +2204,16 @@ program
           already: false,
           warnings,
           previous: verdict.current || "pending",
-          data: { feature: featureName, version: version.id, gate, actor }
+          delegated: Boolean(options.delegated),
+          data: {
+            feature: featureName,
+            version: version.id,
+            gate,
+            actor,
+            ...(options.delegated
+              ? { delegated: true, by: recordedBy, reason: String(options.reason).trim() }
+              : {})
+          }
         };
       });
     } catch (error) {
@@ -2189,7 +2245,9 @@ program
         feature: featureName,
         version: outcome.data.version,
         gate,
-        previousValue: outcome.previous
+        previousValue: outcome.previous,
+        delegated: Boolean(options.delegated),
+        ...(options.delegated ? { reason: String(options.reason).trim() } : {})
       });
     }
 
@@ -2210,6 +2268,10 @@ program
 
         console.log(`\n✅ Gate "${gate}" approved for feature "${featureName}" version "${outcome.data.version}".`);
         console.log(`   "${outcome.previous}" → "${GATE_APPROVED}"`);
+        if (options.delegated) {
+          console.log(`   Delegated approval recorded as "${outcome.data.by}".`);
+          console.log(`   Reason: ${outcome.data.reason}`);
+        }
         console.log("");
       }
     });
