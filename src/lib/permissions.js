@@ -30,6 +30,7 @@ const MUTATING = new Set([
   "mcp:sync",
   "knowledge:fetch",
   "test",
+  "review:cold",
   "check",
   "config:set",
   "migrate:apply",

@@ -1584,6 +1584,7 @@ Audits and manages AI skills.
 | `sdrive next [feature]` | Print the exact next steps, marking each `cli` (an agent runs it), `slash` (only you can start it), or `human` (a sign-off) |
 | `sdrive group:resolve <expression>` | Resolve a group like `[wave1 p2]` against the product backlog — `--json` for agents |
 | `sdrive test <feature>` | Run the project's tests and record `test-evidence.json` |
+| `sdrive review:cold <feature>` | Write a context-blind review packet (advisory only; no gate changes) |
 | `sdrive check` | Run doctor + validation (+ tests with `--tests`) in one pass |
 | `sdrive approve <feature> <gate>` | Approve a workflow gate (verifies the stage is genuinely complete). `--delegated` is available only when the project opts in |
 | `sdrive archive:check <feature>` | Report whether a feature may be archived, and why not. Reads only — changes nothing |
@@ -1634,6 +1635,30 @@ The gate requirements still run first. The history records
 `by: "agent:<git-user>"`, `delegated: true`, and the reason, so the audit shows
 that this was not a human signature. `review` can never be delegated, and
 `archive` still requires the human merge decision.
+
+### Cold review packet
+
+SpecDrive can prepare a context-blind packet for a fresh reviewer:
+
+```bash
+sdrive review:cold user-login
+sdrive review:cold user-login --json
+```
+
+It writes:
+
+```text
+.sdrive/reports/reviews/cold-review-<feature>-<version>-<date>.md
+```
+
+The packet contains only `spec.md`, `plan.md`, `tasks.md`, and the acceptance
+criteria. It intentionally excludes test evidence, review records, and the
+conversation. Use it with a reviewer that starts from zero — or with an EGM-style
+tool such as [egm.dev](https://egm.dev).
+
+This is **advisory**. It does not change a gate, write `review.json`, or count as
+evidence. Run `/sdrive:review --cold` to have the Review Agent prepare the
+packet and fold the findings into the human report without changing PASS/FAIL.
 
 ---
 

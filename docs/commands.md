@@ -48,6 +48,7 @@ Commands rendered through the shared result helper carry the same answer in
 | `sdrive status` | Show feature lifecycle state and the next action |
 | `sdrive next [feature]` | Print the exact next steps, marking which an agent runs itself and which need a person |
 | `sdrive test <feature>` | Run tests and record `test-evidence.json` |
+| `sdrive review:cold <feature>` | Write a context-blind cold-review packet (advisory only) |
 | `sdrive check` | Run doctor + validation (+ tests with `--tests`) |
 | `sdrive approve <feature> <gate>` | Approve a workflow gate (verifies the stage is genuinely complete) |
 | `sdrive create <feature>` | Create feature scaffold (internal) |
@@ -908,6 +909,39 @@ Warns, but does not block, when the username is not on the team roster. Writes
 
 ---
 
+### `sdrive review:cold`
+
+Writes a **context-blind review packet** for a fresh reviewer. It is advisory:
+it does not change a gate, write `review.json`, or count as evidence.
+
+```bash
+sdrive review:cold user-login
+sdrive review:cold user-login --json
+sdrive review:cold user-login --out review-packet.md
+```
+
+The packet contains only:
+
+- `spec.md`
+- `plan.md`
+- `tasks.md`
+- acceptance criteria extracted from `spec.json`
+
+It deliberately excludes test evidence, review records, and conversation
+history. The default path is:
+
+```text
+.sdrive/reports/reviews/cold-review-<feature>-<version>-<date>.md
+```
+
+Hand the packet to a reviewer with no prior context — or to an EGM-style tool such
+as [egm.dev](https://egm.dev) — and treat the findings as advisory.
+
+`/sdrive:review --cold` prepares this packet and records the findings in the
+human review report without changing PASS/FAIL.
+
+---
+
 ### `sdrive test`
 
 Runs the project's tests and records machine-checkable evidence for the feature.
@@ -1453,11 +1487,13 @@ Audits the implementation against the spec, traceability matrix, constitution, a
 ```text
 /sdrive:review user-login
 /sdrive:review --all
+/sdrive:review user-login --cold
 ```
 
 **What it does:**
 
 - Runs `sdrive check`, `sdrive validate`, `sdrive verify`, and `sdrive audit:verify` and reads their structured output
+- **Optional `--cold`:** runs `sdrive review:cold`, hands the packet to a fresh reviewer or EGM, and adds its findings to `review.md` as advisory. They do not change PASS/FAIL or `review.json`
 - Requires `test-evidence.json` with a zero-exit run, no failures, at least one result, and a commit matching `HEAD`
 - Binds the review to `HEAD`, the feature branch, and its recorded `base`; refuses a dirty tree or a branch mismatch
 - Audits the diff against `base` and flags unplanned files, untracked files, missing planned files, and commits from another feature

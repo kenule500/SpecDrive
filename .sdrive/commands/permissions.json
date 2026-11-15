@@ -32,6 +32,7 @@
     "verify": ["admin", "reviewer", "developer"],
     "check": ["admin", "developer"],
     "test": ["admin", "developer"],
+    "review:cold": ["admin", "reviewer", "developer"],
     "create": ["admin", "reviewer", "developer"],
     "update-propose": ["admin", "reviewer"],
     "assign": ["admin", "reviewer"],

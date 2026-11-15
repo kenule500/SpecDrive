@@ -3608,6 +3608,180 @@ program
     process.exit(ok ? EXIT.OK : EXIT.VALIDATION);
   });
 
+// ---------- COLD REVIEW ----------
+//
+// A cold review is deliberately context-blind: the reviewer gets the written
+// artifacts and nothing from the conversation. This command prepares the packet;
+// it does not invent findings and it never touches a gate.
+program
+  .command("review:cold <feature>")
+  .description("Write a context-blind review packet (advisory only; no gate changes)")
+  .option("--version <version>", "Feature version (defaults to the current version)")
+  .option("--out <path>", "Packet path (defaults to .sdrive/reports/reviews/cold-review-<feature>-<version>-<date>.md)")
+  .option("--json", "Print the result as JSON")
+  .action((feature, options) => {
+    output.setJson(options.json);
+    requirePermission("review:cold");
+
+    const projectRoot = process.cwd();
+    const state = stateStore.readState(projectRoot);
+
+    if (!state) {
+      process.exit(
+        output.fail("review:cold", EXIT.NOT_INITIALIZED, "❌ workflow-state.json not found. Run `sdrive init` first.")
+      );
+    }
+
+    const { findFeature, resolveVersion, findSpecLocation } = require("../commands/gates");
+    const featureEntry = findFeature(state, feature);
+
+    if (!featureEntry) {
+      process.exit(
+        output.fail("review:cold", EXIT.USAGE, `❌ Feature "${feature}" not found in workflow-state.json.`)
+      );
+    }
+
+    const version = options.version
+      ? (featureEntry.versions || []).find((entry) => entry.id === options.version)
+      : resolveVersion(featureEntry);
+
+    if (!version) {
+      process.exit(
+        output.fail("review:cold", EXIT.USAGE, `❌ Version "${options.version || featureEntry.currentVersion}" not found.`)
+      );
+    }
+
+    const location = findSpecLocation(projectRoot, feature, version.id);
+
+    if (!location) {
+      process.exit(
+        output.fail(
+          "review:cold",
+          EXIT.GATE_BLOCKED,
+          `❌ No spec folder for "${feature}" ${version.id} under .sdrive/specs/.`
+        )
+      );
+    }
+
+    const specMd = path.join(location.dir, "spec.md");
+    const planMd = path.join(location.dir, "plan.md");
+    const tasksMd = path.join(location.dir, "tasks.md");
+    const missing = [specMd, planMd, tasksMd].filter((file) => !fs.existsSync(file));
+
+    if (missing.length) {
+      process.exit(
+        output.fail(
+          "review:cold",
+          EXIT.GATE_BLOCKED,
+          "❌ Cold review needs the written specification, plan, and tasks.",
+          { blockers: missing.map((file) => `Missing ${path.basename(file)}.`) }
+        )
+      );
+    }
+
+    const read = (file) => fs.readFileSync(file, "utf8").trim();
+    const specJson = stateStore.readJson(
+      path.join(projectRoot, ".sdrive", "governance", feature, version.id, "spec.json"),
+      null
+    );
+    const acceptanceCriteria = [];
+
+    for (const story of (specJson && specJson.userStories) || []) {
+      for (const criterion of story.acceptanceCriteria || []) {
+        acceptanceCriteria.push({
+          id: criterion.id,
+          text: criterion.text || "",
+          story: story.id
+        });
+      }
+    }
+
+    const date = new Date().toISOString().slice(0, 10);
+    const defaultPath = path.join(
+      ".sdrive",
+      "reports",
+      "reviews",
+      `cold-review-${feature}-${version.id}-${date}.md`
+    );
+    const outputPath = options.out ? path.resolve(projectRoot, options.out) : path.join(projectRoot, defaultPath);
+
+    const packet = [
+      `# Cold review packet: ${feature} ${version.id}`,
+      "",
+      `Generated: ${new Date().toISOString()}`,
+      `Feature: ${feature}`,
+      `Version: ${version.id}`,
+      "",
+      "## Reviewer instructions",
+      "",
+      "You are reviewing only the written plan below. You have no conversation",
+      "history, no test results, and no implementation notes.",
+      "",
+      "Report what a new reader cannot resolve:",
+      "1. Missing context or unstated decisions.",
+      "2. Ambiguous terms and undefined owners.",
+      "3. Contradictions between the specification, plan, and tasks.",
+      "4. Acceptance criteria that cannot be verified from the written plan.",
+      "",
+      "This is advisory. Do not set a PASS/FAIL verdict and do not claim that",
+      "tests ran.",
+      "",
+      "## Specification",
+      "",
+      read(specMd),
+      "",
+      "## Plan",
+      "",
+      read(planMd),
+      "",
+      "## Tasks",
+      "",
+      read(tasksMd),
+      "",
+      "## Acceptance criteria",
+      "",
+      ...(acceptanceCriteria.length
+        ? acceptanceCriteria.map((criterion) => `- **${criterion.id}** (${criterion.story}): ${criterion.text}`)
+        : ["- No machine-readable acceptance criteria were found."]),
+      "",
+      "## Source files",
+      "",
+      `- ${path.relative(projectRoot, specMd)}`,
+      `- ${path.relative(projectRoot, planMd)}`,
+      `- ${path.relative(projectRoot, tasksMd)}`,
+      ""
+    ].join("\n");
+
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, packet, "utf8");
+
+    const relativePath = path.relative(projectRoot, outputPath);
+    audit("cold_review_prepared", {
+      feature,
+      version: version.id,
+      packet: relativePath,
+      acceptanceCriteria: acceptanceCriteria.length
+    });
+
+    output.finish({
+      command: "review:cold",
+      ok: true,
+      code: EXIT.OK,
+      data: {
+        feature,
+        version: version.id,
+        packet: relativePath,
+        acceptanceCriteria: acceptanceCriteria.length
+      },
+      suppressAuto: true,
+      human: () => {
+        console.log(`\n🧊 Cold review packet written to ${relativePath}\n`);
+        console.log("   Give it to a reviewer with no conversation history.");
+        console.log("   It is advisory only: it does not change a gate or PASS status.\n");
+      }
+    });
+  });
+
 // ---------- PERMISSIONS ----------
 program
   .command("permissions:check")

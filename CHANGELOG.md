@@ -19,6 +19,10 @@ a major release with a migration.
   `sdrive approve <feature> <gate> --delegated --reason "..."` after checks pass.
   The history records `by: "agent:<git-user>"`, `delegated: true`, and the
   reason. `review` can never be delegated, and `archive` remains human.
+- **Cold review packet** (`sdrive review:cold <feature>`) and optional
+  `/sdrive:review --cold`. The packet contains only spec, plan, tasks, and
+  acceptance criteria so a fresh reviewer can report missing context. It is
+  advisory: no gate, no `review.json`, no PASS/FAIL change.
 
 ---
 

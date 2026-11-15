@@ -379,6 +379,7 @@ batch must be all `build`, ungated, and inside a single wave, and it lands as on
 
 - Requires `sdrive verify <feature>` to return `pass` or `warn`
 - Runs `sdrive check`, `sdrive validate`, `sdrive verify`, and `sdrive audit:verify` as structured CLI checks
+- **Optional `--cold`:** runs `sdrive review:cold`, hands the context-blind packet to a fresh reviewer or EGM, and adds a `## Cold review (advisory)` section to `review.md`. Findings never affect PASS/FAIL or `review.json`.
 - Verifies coverage: every AC has a linked, existing, passing test — criteria marked `withdrawn: true` with a reason and citation are reported instead of counted
 - Requires the test report for the current version
 - **Requires `sdrive test` evidence** — `test-evidence.json` must record a zero-exit run with no failures, at least one result, and a commit matching `HEAD`

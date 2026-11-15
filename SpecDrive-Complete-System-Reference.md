@@ -254,6 +254,7 @@ It is like OpenSpec or Spec-Kit, but with **hard guardrails** and **enterprise c
 | `sdrive config:get/set` | Read/write config by dot path |
 | `sdrive status` | Show feature lifecycle and the next action (`--json`) |
 | `sdrive test <feature>` | Run tests and record `test-evidence.json` |
+| `sdrive review:cold <feature>` | Write a context-blind review packet (advisory) |
 | `sdrive check` | Run doctor + validation (+ tests with `--tests`) |
 | `sdrive approve <feature> <gate>` | Approve a gate (only if its requirements are met) |
 | `sdrive create <feature>` | Create feature scaffold |
