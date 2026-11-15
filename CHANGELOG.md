@@ -11,6 +11,14 @@ a major release with a migration.
 
 ## Unreleased
 
+## 1.1.0 — 2026-11-15
+
+**Delegated approvals make the mechanical gates agent-speed. Cold review checks the work a human was promised.**
+
+`review` is the gate that carries judgement, so it stays human — delegation can turn
+the other mechanical gates into agent steps the history still proves. And because a
+gate is only worth its disagreement, `review:cold` now shows what the packet is missing.
+
 ### Added
 
 - **Delegated approvals** for the mechanical gates. Set
