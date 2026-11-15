@@ -11,7 +11,12 @@ a major release with a migration.
 
 ## Unreleased
 
-## 1.1.0 — 2026-11-15
+## 1.1.0-next.0 — 2026-11-15
+
+**Staging prerelease: delegated approvals and the cold review packet, published on the `staging` dist-tag.**
+
+This builds on 1.0.0 and is not on `latest`. Install it with `npm i specdrive-cli@staging`; the
+`1.1.0` stable release is the same content once it is promoted.
 
 **Delegated approvals make the mechanical gates agent-speed. Cold review checks the work a human was promised.**
 
