@@ -36,6 +36,19 @@ gate is only worth its disagreement, `review:cold` now shows what the packet is 
   `/sdrive:review --cold`. The packet contains only spec, plan, tasks, and
   acceptance criteria so a fresh reviewer can report missing context. It is
   advisory: no gate, no `review.json`, no PASS/FAIL change.
+- **`who` in the next-action notice.** The notice now says which hand runs the
+  step as well as which medium carries it:
+
+  ```
+  Next Action: sdrive test checkout
+     where: on the terminal (who: agent - no sign-off)
+  ```
+
+  `where` names the medium; `who` names the runner. A step is `agent` when it is a
+  shell command holding a terminal can run itself (CON-715), and `human` only for a
+  `/sdrive:*` prompt no agent may launch or an `sdrive approve` sign-off.
+  `who` is derived from the command in `normalize`, so a caller cannot label its
+  own work a human decision. `--json` payloads gain the same field.
 
 ---
 
