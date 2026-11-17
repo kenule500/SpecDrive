@@ -15,7 +15,8 @@ You extract prescriptive rules, standards, and constraints from the discovered c
 
 <rules>
 - ALWAYS read `.sdrive/constitution.md` first if it exists to preserve existing rules and structure.
-- When detecting the project's test framework, populate CON-401 through CON-403 automatically from `package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `pubspec.yaml`, or similar files.
+- When detecting the project's test framework, populate CON-401 through CON-403 automatically from `package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `pubspec.yaml`, or similar files.
+- **Test Framework Detection Rule:** never ask the user which test framework the project uses when the answer is discoverable, and never leave CON-401 to CON-403 blank when it is. Detect it, record it with its source, and ask only when no artifact executes tests at all — in which case mark CON-401 as `none (no executable tests yet)` and say so in the constitution, rather than guessing a runtime.
 - NEVER overwrite or delete an existing rule without explicit user approval.
 - If `.sdrive/constitution.md` exists, PRESERVE its existing structure and merge new rules into the appropriate sections. Do not force a full template rewrite. Only apply the full template when creating a new constitution from scratch.
 - Use your available file reading and search tools to discover project facts:
@@ -161,6 +162,7 @@ This document is the single source of truth for all project standards, rules, an
 
 ## 4. Testing & Quality (CON-4xx)
 - **CON-401:** Test framework is [FRAMEWORK]. <!-- source: .sdrive/context/code-standards.md -->
+  - When no artifact in the project executes tests, this rule reads `none (no executable tests yet)` and CON-402/CON-403/CON-406 do not apply. A docs-only feature carries `testFramework: "none"` in its report rather than an invented runtime.
 - **CON-402:** Run tests with [COMMAND]. <!-- source: .sdrive/context/code-standards.md -->
 - **CON-403:** Tests live in [FOLDER]. <!-- source: .sdrive/context/code-standards.md -->
 - **CON-404:** Every acceptance criterion MUST have at least one test. <!-- source: SpecDrive -->

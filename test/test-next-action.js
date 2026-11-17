@@ -20,14 +20,30 @@ test("whereFor sends slash commands to the chat and sdrive commands to the termi
   assert.strictEqual(nextAction.whereFor("sdrive approve checkout review"), "terminal");
 });
 
-test("notice states the command and where it runs", () => {
+test("whoFor names the hand: sign-offs and chat prompts are the human's, the rest the agent's", () => {
+  assert.strictEqual(nextAction.whoFor("sdrive approve checkout review"), "human");
+  assert.strictEqual(nextAction.whoFor("sdrive approve checkout"), "human");
+  assert.strictEqual(nextAction.whoFor("/sdrive:apply checkout"), "human");
+  assert.strictEqual(nextAction.whoFor("/sdrive:archive checkout"), "human");
+
+  assert.strictEqual(nextAction.whoFor("sdrive test checkout"), "agent");
+  assert.strictEqual(nextAction.whoFor("sdrive next checkout --write"), "agent");
+  assert.strictEqual(nextAction.whoFor("sdrive check"), "agent");
+});
+
+test("whoFor does not mistake a longer command for approve", () => {
+  assert.strictEqual(nextAction.whoFor("sdrive approve-docs checkout"), "agent");
+  assert.strictEqual(nextAction.whoFor("sdrive approvals"), "agent");
+});
+
+test("notice states the command, where it runs, and who runs it", () => {
   assert.strictEqual(
     nextAction.notice("/sdrive:apply checkout"),
-    "Next Action: /sdrive:apply checkout\n   where: on the chat"
+    "Next Action: /sdrive:apply checkout\n   where: on the chat (who: human - a sign-off)"
   );
   assert.strictEqual(
     nextAction.notice({ command: "sdrive validate", reason: "Fix the errors first." }),
-    "Next Action: sdrive validate\n   where: on the terminal\n   why: Fix the errors first."
+    "Next Action: sdrive validate\n   where: on the terminal (who: agent - no sign-off)\n   why: Fix the errors first."
   );
 });
 
@@ -37,6 +53,7 @@ test("a command with no explicit next falls back to sdrive next", () => {
   assert.deepStrictEqual(resolved, {
     command: "sdrive next",
     where: "terminal",
+    who: "agent",
     reason: null
   });
 });
@@ -50,6 +67,7 @@ test("a passing test run names the approval that follows it", () => {
 
   assert.strictEqual(resolved.command, "sdrive approve checkout review");
   assert.strictEqual(resolved.where, "terminal");
+  assert.strictEqual(resolved.who, "human", "an approval is a sign-off, not agent work");
 });
 
 test("a result without a feature still yields a runnable command", () => {

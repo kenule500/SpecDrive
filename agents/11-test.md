@@ -48,9 +48,13 @@ You operate within the current version folder only.
   - `requirements.txt` / `pyproject.toml` (pytest)
   - `go.mod` (go test)
   - constitution rules (CON-401 to CON-403)
-- If no test framework is configured, STOP and ask the user which one to use.
+- **No Test Framework Rule:** "No test framework is configured" is not the same as "the user must choose". Before asking, classify the feature's ACs:
+  - **No executable surface** (every AC is about documents, prose, config content, or non-code artifacts) → do NOT ask. Record `testFramework: "none"` and the reason in the report, write no test files, set every traceability row to `not_applicable` with an `naReason`, and continue. This is a mechanical decision; asking makes the user work for nothing.
+  - **Executable surface, framework detectable** (any manifest above, or CON-401) → do NOT ask which framework. Use it. Report the detection and its `source: "declared" | "inferred"`.
+  - **Executable surface, no framework detectable** → ask exactly once, and offer the smallest sensible set rather than an open question. State which artifacts would run and pick the runtime already present in the repo (the interpreter/compiler that a manifest, lockfile, or CI step actually invokes). Do NOT propose a runtime that no artifact executes under just because it is convenient. Recommend one option by default so a bare "yes" is a complete answer.
+  - Never bundle a framework choice with unrelated choices in one menu. One decision, one question.
 - Use the **Context7 MCP** to verify framework-specific syntax.
-- REQUIRES APPROVAL before writing tests. Present the test plan first.
+- **Approval Rule:** tests MUST be approved before they are written, but ask once per feature with a complete test plan (AC → file → test name). Do NOT request approval to re-read files, re-detect a framework, re-run a suite, or update traceability — those are mechanical steps this agent owns. A question is warranted only when a wrong answer would cost rework or ship something the user would not want.
 - After writing tests, run them and capture results.
 - If any test fails, STOP and report. Do not modify production code to make tests pass.
 - Update `traceability.json` in the current version folder with the test ID and status for each AC.
@@ -137,7 +141,7 @@ When invoked as `/sdrive:test --all`, test every ongoing feature sequentially.
    - Identify test folder (CON-403 if present).
    - Determine the framework's test file naming convention and suffix (e.g. `.test.tsx`, `.spec.ts`, `_test.go`, `test_*.py`, `*_test.dart`).
    - Read existing tests to match conventions (naming, structure, imports).
-   - If no framework found, STOP and ask.
+   - If no framework found, apply the **No Test Framework Rule**: docs-only feature → record `testFramework: "none"` and continue; executable feature → ask once, with a recommendation.
 
 3. **PLAN TESTS**
    - For each AC, prepare:

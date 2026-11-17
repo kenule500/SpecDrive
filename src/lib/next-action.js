@@ -17,13 +17,26 @@ function whereFor(command) {
   return /^\/sdrive:/.test(String(command || "")) ? CHAT : TERMINAL;
 }
 
+const HUMAN = "human";
+const AGENT = "agent";
+
+// Who runs the command. `where` names the medium; this names the hand.
+//   A /sdrive:* prompt needs the host to load it (no agent may start another).
+//   sdrive approve is the governance sign-off itself. Everything else is a shell
+//   command an agent holding a terminal runs itself (CON-715).
+function whoFor(command) {
+  const text = String(command || "");
+
+  return /^\/sdrive:/.test(text) || /^sdrive approve(\s|$)/.test(text) ? HUMAN : AGENT;
+}
+
 function normalize(next) {
   if (!next) {
     return null;
   }
 
   if (typeof next === "string") {
-    return { command: next, where: whereFor(next), reason: null };
+    return { command: next, where: whereFor(next), who: whoFor(next), reason: null };
   }
 
   if (!next.command) {
@@ -33,6 +46,7 @@ function normalize(next) {
   return {
     command: String(next.command),
     where: next.where || whereFor(next.command),
+    who: next.who || whoFor(next.command),
     reason: next.reason || null
   };
 }
@@ -134,7 +148,9 @@ function notice(next) {
   }
 
   const lines = [`Next Action: ${action.command}`];
-  lines.push(`   where: on the ${action.where === CHAT ? "chat" : "terminal"}`);
+  const medium = action.where === CHAT ? "chat" : "terminal";
+  const hand = action.who === HUMAN ? "human - a sign-off" : "agent - no sign-off";
+  lines.push(`   where: on the ${medium} (who: ${hand})`);
 
   if (action.reason) {
     lines.push(`   why: ${action.reason}`);
@@ -155,9 +171,12 @@ function print(next, { stream = "stdout" } = {}) {
 }
 
 module.exports = {
+  AGENT,
   CHAT,
+  HUMAN,
   TERMINAL,
   whereFor,
+  whoFor,
   normalize,
   resolveNext,
   resolveFailure,
