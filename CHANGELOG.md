@@ -11,7 +11,7 @@ a major release with a migration.
 
 ## Unreleased
 
-## 1.1.0-next.2 — 2026-11-19
+## 1.1.0-next.3 — 2026-11-19
 
 **Staging prerelease: every command finishes its whole work list in one run.**
 
@@ -49,6 +49,11 @@ IDs and rows are preserved exactly.
 
 ### Fixed
 
+- **Prereleases can be published by CI again.** The publish workflow ran
+  `npm stage publish` with no dist-tag, and npm refuses to stage a prerelease
+  without one — so every prerelease tag failed at the final step. The workflow now
+  derives the tag from the version: a prerelease goes to `staging`, a stable
+  version to `latest`. A prerelease still cannot reach `latest`.
 - `.sdrive/agents/` is back in sync with `agents/` (`npm run dogfood`).
 
 ---
