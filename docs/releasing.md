@@ -65,16 +65,27 @@ New behavior is a **minor**; a fix is a **patch**.
 
 ### Prereleases
 
-A prerelease version (`1.1.0-rc.1`) must never become `latest`. The publish workflow
-runs `npm stage publish` without a tag, so a prerelease would be staged as `latest`
-unless the final step is changed to:
+A prerelease version (`1.1.0-next.2`) must never become `latest`. npm enforces part
+of this itself: it **refuses to stage a prerelease at all** without an explicit tag,
+failing with
+
+```text
+npm error You must specify a tag using --tag when publishing a prerelease version.
+```
+
+The publish workflow therefore derives the dist-tag from the version — a version
+containing a `-` goes to `staging`, anything else goes to `latest`:
 
 ```bash
-npm stage publish --tag next
+case "$PKG_VERSION" in
+  *-*) DIST_TAG="staging" ;;
+  *)   DIST_TAG="latest" ;;
+esac
+npm stage publish --tag "$DIST_TAG"
 ```
 
 Keep the stable release on `latest`; install prereleases explicitly with
-`npm i -g specdrive-cli@next`.
+`npm i -g specdrive-cli@staging`.
 
 ## One-time setup
 

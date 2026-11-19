@@ -92,5 +92,16 @@ jobs:
       # this lands the version in npm's staging queue rather than on the registry.
       # A maintainer must approve it with 2FA before it becomes public - that
       # approval is the release gate.
+      #
+      # npm refuses to stage a prerelease without an explicit --tag, so the tag is
+      # derived from the version: a prerelease goes to `staging` and can never
+      # become `latest`; a stable version goes to `latest`.
       - name: Stage the release for 2FA approval
-        run: npm stage publish
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          case "$PKG_VERSION" in
+            *-*) DIST_TAG="staging" ;;
+            *)   DIST_TAG="latest" ;;
+          esac
+          echo "Staging $PKG_VERSION on dist-tag '$DIST_TAG'"
+          npm stage publish --tag "$DIST_TAG"
