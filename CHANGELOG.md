@@ -11,6 +11,48 @@ a major release with a migration.
 
 ## Unreleased
 
+## 1.1.0-next.2 — 2026-11-19
+
+**Staging prerelease: every command finishes its whole work list in one run.**
+
+Install it with `npm i specdrive-cli@staging`. It is not on `latest`.
+
+**A command may no longer declare itself done from its own impression of progress.**
+
+`/sdrive:apply` used to implement part of a feature and stop, leaving the rest for
+a second run and a reminder from you. The cause was not apply-specific: any
+command that owns a list of items could end the run with items still open, because
+"continue until everything is complete" was prose the agent could skip.
+
+### Added
+
+- **Single-Run Completion Rule** in all 14 work-producing commands. Every in-scope
+  item is finished in one run. A long run is never a reason to stop; the only
+  legitimate stops are a human approval gate, a real blocker, a missing
+  prerequisite, or your explicit instruction. An early exit must name every
+  remaining item by ID and count.
+- **A mandatory exit audit** in each of those commands. Before wrapping up, the
+  agent re-reads its source of truth **fresh from disk** — `tasks.json`,
+  `spec.json`, `traceability.json`, the findings ledger, the screen directory —
+  enumerates the gaps, and loops back until the list is empty. Completion is a
+  claim the audit has to support, not a feeling.
+
+  Covered: `propose`, `apply`, `test`, `cascade`, `update-propose`, `document`,
+  `performance`, `security`, `debug`, `onboarding`, `discover-skills`, `worktree`,
+  `uiux`, `product-plan`.
+
+Existing approval gates are unchanged — Gate 1 and Gate 2, test-plan approval,
+fix approval in `debug`/`performance`/`security`, commit and push approval, and
+per-screen approval still stop for you. Withdrawn acceptance criteria and
+descoped tasks stay exempt, and `update-propose` audits only new items so existing
+IDs and rows are preserved exactly.
+
+### Fixed
+
+- `.sdrive/agents/` is back in sync with `agents/` (`npm run dogfood`).
+
+---
+
 ## 1.1.0-next.0 — 2026-11-15
 
 **Staging prerelease: delegated approvals and the cold review packet, published on the `staging` dist-tag.**
