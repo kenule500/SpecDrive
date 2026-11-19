@@ -11,6 +11,86 @@ a major release with a migration.
 
 ## Unreleased
 
+## 1.1.0 — 2026-11-19
+
+**Every command finishes its whole work list in one run, and the mechanical gates can move at agent speed.**
+
+This is the stable promotion of the `1.1.0-next.0` … `1.1.0-next.3` prereleases. It
+is on `latest`, so `npm i -g specdrive-cli` gets it. Nothing here breaks a public
+contract: CLI names and flags, `--json` payloads, exit codes `0`–`9`, the `.sdrive/`
+layout, the governance schemas, and the MCP tools are all unchanged.
+
+**After upgrading, run `sdrive update` in each existing project.** The CLI upgrade
+alone does not refresh `.sdrive/`; the new completion rules ship as agent files, so
+a project keeps its old behaviour until it is updated. Your specs and governance
+are not touched.
+
+### Added
+
+- **Single-Run Completion Rule** in all 14 work-producing commands. Every in-scope
+  item is finished in one run. A long run is never a reason to stop; the only
+  legitimate stops are a human approval gate, a real blocker, a missing
+  prerequisite, or your explicit instruction. An early exit must name every
+  remaining item by ID and count.
+
+  `/sdrive:apply` used to implement part of a feature and stop, leaving the rest
+  for a second run and a reminder from you. The cause was not apply-specific: any
+  command that owns a list of items could end the run with items still open,
+  because "continue until everything is complete" was prose the agent could skip.
+
+- **A mandatory exit audit** in each of those commands. Before wrapping up, the
+  agent re-reads its source of truth **fresh from disk** — `tasks.json`,
+  `spec.json`, `traceability.json`, the findings ledger, the screen directory —
+  enumerates the gaps, and loops back until the list is empty. Completion is a
+  claim the audit has to support, not a feeling.
+
+  Covered: `propose`, `apply`, `test`, `cascade`, `update-propose`, `document`,
+  `performance`, `security`, `debug`, `onboarding`, `discover-skills`, `worktree`,
+  `uiux`, `product-plan`.
+
+- **Delegated approvals** for the mechanical gates. Set
+  `governance.approvalMode: "delegated"` and list gates in
+  `governance.delegatedGates`; an agent can then run
+  `sdrive approve <feature> <gate> --delegated --reason "..."` after checks pass.
+  The history records `by: "agent:<git-user>"`, `delegated: true`, and the
+  reason. `review` can never be delegated, and `archive` remains human.
+
+- **Cold review packet** (`sdrive review:cold <feature>`) and optional
+  `/sdrive:review --cold`. The packet contains only spec, plan, tasks, and
+  acceptance criteria so a fresh reviewer can report missing context. It is
+  advisory: no gate, no `review.json`, no PASS/FAIL change.
+
+- **`who` in the next-action notice.** The notice now says which hand runs the
+  step as well as which medium carries it:
+
+  ```
+  Next Action: sdrive test checkout
+     where: on the terminal (who: agent - no sign-off)
+  ```
+
+  `where` names the medium; `who` names the runner. A step is `agent` when it is a
+  shell command a terminal holder can run itself (CON-715), and `human` only for a
+  `/sdrive:*` prompt no agent may launch or an `sdrive approve` sign-off.
+  `who` is derived from the command in `normalize`, so a caller cannot label its
+  own work a human decision. `--json` payloads gain the same field.
+
+Existing approval gates are unchanged — Gate 1 and Gate 2, test-plan approval,
+fix approval in `debug`/`performance`/`security`, commit and push approval, and
+per-screen approval still stop for you. Withdrawn acceptance criteria and
+descoped tasks stay exempt, and `update-propose` audits only new items so existing
+IDs and rows are preserved exactly.
+
+### Fixed
+
+- **Prereleases can be published by CI again.** The publish workflow ran
+  `npm stage publish` with no dist-tag, and npm refuses to stage a prerelease
+  without one — so every prerelease tag failed at the final step. The workflow now
+  derives the tag from the version: a prerelease goes to `staging`, a stable
+  version to `latest`. A prerelease still cannot reach `latest`.
+- `.sdrive/agents/` is back in sync with `agents/` (`npm run dogfood`).
+
+---
+
 ## 1.1.0-next.3 — 2026-11-19
 
 **Staging prerelease: every command finishes its whole work list in one run.**
