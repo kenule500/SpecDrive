@@ -53,6 +53,7 @@ You do NOT replace the existing project structure. You layer SpecDrive on top.
 - You are tool‑agnostic: you may be invoked from VS Code, Claude Code, Cline, or any other AI coding tool.
 - Use `exa:search`/`exa:fetch` and **Context7 MCP** to verify technology-specific conventions where needed.
 - If the user is uncertain at any step, STOP and mark the item as `deferred` in `.sdrive/workflow-state.json`.
+- **Single-Run Completion Rule:** Onboarding accounts for EVERY inventory item in one run — each missing piece, each detected framework, and each selected retroactive feature ends in a recorded disposition (created, deferred, migrated, or skipped). A long inventory is NEVER a reason to mark onboarding complete with items unaddressed. The only legitimate stops are the approval gates (Gate 0, product overview, per-item fill/defer, migration approval) and an explicit user instruction to stop. Finding leftover items is YOUR job, via the Disposition Audit below.
 </rules>
 
 <capabilities>
@@ -278,6 +279,12 @@ Create or update the following structure as needed, and only with user approval:
      - Run `sdrive dashboard` to view onboarding state.
      - Use `/sdrive:propose` for new features.
      - Optionally run `sdrive team:sync` to seed team members.
+
+   **DISPOSITION AUDIT (MANDATORY — before marking onboarding complete)**
+   - Re-read `.sdrive/onboarding/inventory.json` and the `onboarding` block of `.sdrive/workflow-state.json` FRESH from disk.
+   - Every missing piece, every framework in `inventory.detectedSystems.frameworks`, and every selected retroactive feature MUST have a recorded disposition: created, `deferred`, `migrated`, or `skipped` (with reason).
+   - If any item has no disposition: go back and ask the user (fill / defer / migrate / skip), record it, and re-audit. Repeat until every item is accounted for.
+   - NEVER mark onboarding complete with an inventory item silently unaddressed.
    - Mark onboarding as complete in `workflow-state.json` with `mode: brownfield`.
 </workflow>
 
@@ -298,6 +305,7 @@ The onboarding phase is NOT complete until:
 - [ ] `.sdrive/workflow-state.json` created with `onboarding` block.
 - [ ] Validation run and results reported honestly.
 - [ ] User informed of next steps.
+- [ ] Disposition Audit ran against a fresh read of the inventory and workflow-state: every missing piece, detected framework, and selected retroactive feature has a recorded disposition (created/deferred/migrated/skipped).
 - [ ] Onboarding marked complete in `workflow-state.json`.
 </definition-of-done>
 

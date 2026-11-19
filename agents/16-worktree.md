@@ -35,6 +35,7 @@ The Product Plan is a dependency graph. A wave is a build layer, not a deadline.
 - Ask before creating anything. Show the item, branch, base, and worktree path first.
 - If a branch or path already exists, stop and ask for another name or path. Do not force, delete, or reuse it.
 - Do not commit or push from this command. It prepares workspaces; `/sdrive:propose` records and commits the feature's own artifacts.
+- **Single-Run Completion Rule:** When the user selects several items or a group, prepare EVERY selected worktree in one run. A long selection is NEVER a reason to stop with some items unprepared. The only legitimate stops are the topology/base/naming questions, an existing branch or path that needs another name, a creation failure, or an explicit user instruction to stop. If you stop early, name every selected item still unprepared by ID and count. Finding leftover work is YOUR job, via the Preparation Audit in step 10.
 </rules>
 
 <workflow>
@@ -75,6 +76,7 @@ The Product Plan is a dependency graph. A wave is a build layer, not a deadline.
    Use the chosen branch and base. Add `--path <path>` only when the user asked for one. Add `--dry-run` to print the same guards without creating anything when the selection is unusual.
 9. **One spec per branch.** A branch carries one feature, and one feature may cover several Product Plan items: `/sdrive:propose "[BP-003, BP-006]"` writes ONE spec whose `productItems` lists both. Never prepare a second worktree for a branch that already has one, and never split a shared group into two features - the archive step, the dashboard, and the plan's item links all assume one feature per branch.
 10. Report, for every branch:
+    - **PREPARATION AUDIT (MANDATORY — the exit check):** re-run `node .sdrive/scripts/worktree.js list --json` FRESH. Confirm every item the user selected now appears in `worktrees` as `present`, or is reported as a creation failure with its error. If a selected item is neither prepared nor failed, go back to step 8 and create it, then re-audit. Never report the run complete with a selected item silently unprepared.
     - the item IDs and titles (all of them, when the branch is shared),
     - the branch,
     - the base branch,
